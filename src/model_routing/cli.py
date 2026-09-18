@@ -73,6 +73,7 @@ def cmd_estimate(args: argparse.Namespace) -> int:
         out,
         limit=args.limit,
         trials=args.trials,
+        sample=args.sample,
         verbose=False,
     )
     runner.run()
@@ -137,6 +138,13 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    from model_routing.server import serve
+
+    serve(Path.cwd(), Path(args.results).resolve(), args.port)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="model-routing", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -187,6 +195,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     d.add_argument("--open", action="store_true", help="open in the default browser")
     d.set_defaults(fn=cmd_dashboard)
+
+    lab = sub.add_parser("serve", help="launch the local experiment lab")
+    lab.add_argument("--port", type=int, default=8765)
+    lab.add_argument("--results", default="results")
+    lab.set_defaults(fn=cmd_serve)
 
     args = p.parse_args(argv)
     return int(args.fn(args))

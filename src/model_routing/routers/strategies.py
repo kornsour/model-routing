@@ -179,7 +179,8 @@ class CascadeRouter:
             if last:
                 break
             if self.escalate_on == "confidence":
-                ok = rec.ok and "confidence: high" in rec.output.lower()
+                match = _CONFIDENCE_RE.search(rec.output)
+                ok = rec.ok and match is not None and match.group(1).lower() == "high"
             else:
                 ok = rec.ok and grade(task, rec)[0]
             if ok:

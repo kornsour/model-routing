@@ -2,7 +2,7 @@
 .DEFAULT_GOAL := help
 PY := uv run
 
-.PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard
+.PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -51,3 +51,6 @@ dashboard: ## Index results/ into results/index.sqlite and open results/dashboar
 clean: ## Remove caches
 	rm -rf .pytest_cache .ruff_cache
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +
+
+lab: ## Serve the local experiment platform at http://127.0.0.1:8765
+	$(PY) model-routing serve

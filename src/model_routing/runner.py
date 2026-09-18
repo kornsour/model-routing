@@ -15,6 +15,7 @@ over-budget run still leaves usable data.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import platform
 import shutil
@@ -93,6 +94,8 @@ class Runner:
         if self.cfg.source:
             shutil.copy(self.cfg.source, self.out_dir / "config.toml")
         meta = {
+            "task_sha256": hashlib.sha256(self.cfg.tasks.read_bytes()).hexdigest(),
+            "pricing": {m: vars(self.prices.get(m)) for m in self.prices.models()},
             "experiment": self.cfg.name,
             "hypothesis": self.cfg.hypothesis,
             "started_at": datetime.now(UTC).isoformat(),
@@ -121,6 +124,8 @@ class Runner:
         schema: dict[str, Any] | None = None,
         with_context: bool | None = None,
     ) -> CallRecord:
+        if self.budget_usd is not None and self.spent_usd >= self.budget_usd:
+            raise BudgetExceeded("budget exhausted before next call")
         cand = self.cfg.candidates[candidate_name]
         provider = self.providers[cand.provider]
         if with_context is None:
