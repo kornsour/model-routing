@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS calls (
     output TEXT,
     PRIMARY KEY (run_id, seq)
 );
+CREATE TABLE IF NOT EXISTS outcome_calls (
+    run_id TEXT NOT NULL, router TEXT NOT NULL, task_id TEXT NOT NULL,
+    trial INTEGER NOT NULL, seq INTEGER NOT NULL,
+    PRIMARY KEY (run_id, router, task_id, trial, seq)
+);
 CREATE INDEX IF NOT EXISTS idx_outcomes_router ON outcomes (run_id, router);
 CREATE INDEX IF NOT EXISTS idx_calls_task ON calls (run_id, task_id);
 """
@@ -118,6 +123,7 @@ def index_run(conn: sqlite3.Connection, run_dir: Path) -> str:
     outcomes = _read_jsonl(run_dir / "outcomes.jsonl")
     calls = _read_jsonl(run_dir / "calls.jsonl")
     with conn:
+        conn.execute("DELETE FROM outcome_calls WHERE run_id = ?", (run_id,))
         conn.execute("DELETE FROM outcomes WHERE run_id = ?", (run_id,))
         conn.execute("DELETE FROM calls WHERE run_id = ?", (run_id,))
         conn.execute(
@@ -193,6 +199,14 @@ def index_run(conn: sqlite3.Connection, run_dir: Path) -> str:
                 for c in calls
             ],
         )
+        conn.executemany(
+            "INSERT INTO outcome_calls VALUES (?,?,?,?,?)",
+            [
+                (run_id, o["router"], o["task_id"], o["trial"], c["seq"])
+                for o in outcomes
+                for c in o.get("calls", [])
+            ],
+        )
     return run_id
 
 
@@ -207,7 +221,7 @@ def index_results(results_dir: str | Path, db_path: str | Path) -> list[str]:
         ]
         with conn:
             for rid in stale:
-                for table in ("outcomes", "calls", "runs"):
+                for table in ("outcome_calls", "outcomes", "calls", "runs"):
                     conn.execute(f"DELETE FROM {table} WHERE run_id = ?", (rid,))
         return ids
     finally:
@@ -257,8 +271,17 @@ def run_outcomes(conn: sqlite3.Connection, run_id: str) -> list[dict[str, Any]]:
         # this task not yet claimed by an earlier outcome of the same task.
         o["calls"] = []
         outcomes.append(o)
+    links: dict[tuple[str, str, int], list[int]] = {}
+    for row in conn.execute("SELECT * FROM outcome_calls WHERE run_id=? ORDER BY seq", (run_id,)):
+        links.setdefault((row["router"], row["task_id"], row["trial"]), []).append(row["seq"])
+    by_seq = {c["seq"]: c for pool in calls_by_task.values() for c in pool}
     claimed: dict[str, int] = {}
     for o in outcomes:
+        key = (o["router"], o["task_id"], o["trial"])
+        if key in links:
+            o["calls"] = [by_seq[seq] for seq in links[key] if seq in by_seq]
+            claimed[o["task_id"]] = claimed.get(o["task_id"], 0) + len(o["calls"])
+            continue
         pool = calls_by_task.get(o["task_id"], [])
         start = claimed.get(o["task_id"], 0)
         n = _calls_for_outcome(o, pool[start:])

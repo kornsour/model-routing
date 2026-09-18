@@ -14,3 +14,10 @@ One TOML per experiment; `model-routing run <file>` executes it and writes
 
 Always `model-routing estimate <file>` first; it prints a list-price estimate
 without spending anything. Then `run` with `--limit` and `--budget-usd`.
+
+## Interactive experiment platform
+
+Use `make lab` to configure, estimate, save, and launch same-vendor adoption
+or routing-design experiments in a local UI. See
+[platform design and experiment review](../docs/experiments/platform.md) for
+quality gates, current capabilities, and the architecture/training roadmap.

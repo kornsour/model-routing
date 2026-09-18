@@ -1,0 +1,39 @@
+<section class="card" style="margin-top:28px">
+  <div class="small muted">EXPERIMENT LAB · LOCAL SQLITE</div>
+  <h2 style="margin-top:8px">Find savings worth keeping.</h2>
+  <p>Compare one vendor’s models on the same work. Count a saving only when the answer quality holds up.</p>
+  <form id="plan">
+    <div class="grid">
+      <label>Research question<select name="track"><option value="adoption">1 · Same-vendor adoption</option><option value="research">2 · Routing design research</option></select></label>
+      <label>Model family<select name="vendor"><option value="anthropic">Anthropic · Haiku 4.5 / Sonnet 5 / Opus 5</option><option value="openai">OpenAI · GPT-5.6 Luna / Terra / Sol</option></select></label>
+      <label>Tasks (evenly spaced)<input name="limit" type="number" min="1" max="1000" value="12" required></label>
+      <label>Trials<input name="trials" type="number" min="1" max="20" value="3" required></label>
+      <label>Execution order<select name="order"><option value="by_router">One strategy at a time</option><option value="by_task">Interleave by task</option></select></label>
+    </div>
+    <details><summary>ⓘ What does each track test?</summary><p>Adoption compares every single-model baseline, strongest model at low effort, free heuristic routing, a paid small-model classifier, and a confidence cascade. Each vendor runs separately. Research adds difficulty-label routing and an answer-key cascade as privileged reference strategies. These references cannot establish deployable savings.</p><p>The bundled workload uses deterministic checks. A passing rewrite or synthesis check does not establish human usefulness. Before a leadership decision, use representative work and blinded human review against a written rubric.</p></details>
+    <details><summary>Quality and savings criteria</summary><div class="grid">
+      <label>Minimum pass rate (0–1)<input name="min_quality" type="number" min="0" max="1" step=".01" value=".95" required></label>
+      <label>Allowed quality loss (0–1)<input name="max_drop" type="number" min="0" max="1" step=".01" value=".02" required></label>
+      <label>Minimum cost saving (0–1)<input name="min_saving" type="number" min="0" max="1" step=".01" value=".10" required></label>
+    </div><p>Compare matched task/trial pairs with all-strong. A 0.02 loss means two percentage points. Incomplete runs cannot pass the gate. Results are descriptive; repeated trials on the same tasks are not independent evidence.</p></details>
+    <details><summary>ⓘ Cost, cache, and native product limits</summary><p>Estimates use guessed output lengths, not a spending guarantee. The budget stops execution after a completed call, so the last call can exceed it. CLI token costs are a proxy, not your company’s invoice. This platform does not configure routing inside Cowork or ChatGPT Work. Caches may carry between strategies; a five-minute wait does not expire a one-hour cache.</p></details>
+    <div class="toolbar" style="margin-top:16px"><button type="submit">1. Estimate &amp; save plan</button><label>Run budget ($)<input id="budget" type="number" min=".01" step=".01" value="1" required></label><label><input id="fake" type="checkbox" checked> Simulation (no provider calls)</label><button id="launch" type="button" disabled>2. Start experiment</button></div>
+  </form>
+  <p id="planStatus" role="status" aria-live="polite">Choose a track, then estimate. No provider calls are made until you start a live run.</p>
+  <details><summary>Research roadmap: architecture and training</summary><p>Available now: effort allocation, classifier overhead, cascade behavior, and privileged reference strategies. Next experiments: train a cheap success predictor on per-model outcomes; calibrate abstention on a separate validation set; distill a task specialist; compare specialist→generalist routing. Keep train, validation, and test task families disjoint. Charge training and verification costs, then report the request volume needed to break even. This version does not train or change vendor model weights.</p></details>
+  <h3>Saved plans &amp; runs</h3><div id="jobs" style="overflow:auto"></div>
+</section>
+<script>
+(() => {
+const form = document.getElementById('plan'), status = document.getElementById('planStatus'), launch = document.getElementById('launch');
+let estimateId = null, resultsSnapshot = '';
+const escapeText = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function post(path, data) {const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Lab-Token':'__TOKEN__'},body:JSON.stringify(data)});const v=await r.json();if(!r.ok)throw Error(v.error);return v;}
+form.addEventListener('input', e => {if(e.target.name){estimateId=null;launch.disabled=true;}});
+form.addEventListener('submit', async e => {e.preventDefault();launch.disabled=true;status.textContent='Estimating…';try {const values=Object.fromEntries(new FormData(form));const r=await post('/api/estimate',values);estimateId=r.id;launch.disabled=false;status.textContent=`Plan saved · ${r.tasks} tasks × ${r.routers} strategies · estimate $${r.estimate.toFixed(4)} (approximate).`;await refresh();}catch(e){status.textContent=e.message;}});
+launch.addEventListener('click',async()=>{launch.disabled=true;try{await post('/api/start',{id:estimateId,budget:Number(document.getElementById('budget').value),fake:document.getElementById('fake').checked});estimateId=null;status.textContent='Experiment started. Status and results refresh automatically.';await refresh();}catch(e){status.textContent=e.message;launch.disabled=!estimateId;}});
+async function refresh(){const r=await fetch('/api/jobs');if(!r.ok)throw Error('Could not load jobs');const jobs=await r.json();document.getElementById('jobs').innerHTML='<table><thead><tr><th>Plan</th><th>State</th><th>Estimate</th><th>Details</th></tr></thead><tbody>'+jobs.map(j=>{const s=JSON.parse(j.spec);return `<tr><td>${escapeText(s.track || 'adoption')} · ${escapeText(s.vendor || 'anthropic')}<div class="small muted">${escapeText(j.created.slice(0,16))}</div></td><td>${escapeText(j.state)}${s.fake?' · simulation':''}</td><td>$${Number(j.estimate).toFixed(4)}</td><td>${escapeText(j.error || '')}${j.state==='estimated'?`<button data-resume="${escapeText(j.id)}">Load plan</button>`:''}</td></tr>`}).join('')+'</tbody></table>';document.querySelectorAll('[data-resume]').forEach(b=>b.onclick=()=>{const j=jobs.find(j=>j.id===b.dataset.resume);const s=JSON.parse(j.spec);for(const [k,v]of Object.entries(s)){const el=form.elements.namedItem(k);if(el)el.value=v;}estimateId=j.id;launch.disabled=false;status.textContent='Saved estimate loaded. Set a budget and choose simulation or live execution.';});}
+setInterval(async()=>{try{await refresh();const r=await fetch('/api/results');if(r.ok){const v=await r.json();const next=JSON.stringify(v.runs);if(next!==resultsSnapshot){resultsSnapshot=next;DATA.runs=v.runs;fillRunSelect();renderOverview();renderRun();}}}catch(e){status.textContent='Connection lost. Reload after restarting the local server.';}},5000);
+refresh().catch(e=>{status.textContent=e.message;});
+})();
+</script>

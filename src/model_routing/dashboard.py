@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from model_routing.findings import compute_findings, stats_for_dashboard
+from model_routing.quality import compare
 from model_routing.report import aggregate, candidate_table, pareto
 from model_routing.store import connect, list_runs, run_outcomes
 
@@ -32,6 +33,20 @@ def build_payload(db_path: str | Path, include_synthetic: bool = False) -> dict[
             cost_by_type = _cost_by_token_type(outcomes, meta)
             runs.append(
                 {
+                    "quality": compare(
+                        outcomes,
+                        "all_strong",
+                        (r["n_tasks"] or 0) * (r["trials"] or 1),
+                        min_quality=float(meta.get("lab_spec", {}).get("min_quality", 0.95)),
+                        max_drop=float(meta.get("lab_spec", {}).get("max_drop", 0.02)),
+                        min_saving=float(meta.get("lab_spec", {}).get("min_saving", 0.10)),
+                        run_complete=len(outcomes)
+                        == (r["n_tasks"] or 0) * (r["trials"] or 1) * len(routers),
+                    )
+                    if "lab_spec" in meta
+                    else [],
+                    "track": meta.get("lab_spec", {}).get("track", "legacy"),
+                    "vendor": meta.get("lab_spec", {}).get("vendor", "legacy"),
                     "run_id": r["run_id"],
                     "experiment": r["experiment"],
                     "stamp": r["stamp"],
@@ -44,7 +59,10 @@ def build_payload(db_path: str | Path, include_synthetic: bool = False) -> dict[
                     "synthetic": bool(r["synthetic"]),
                     "providers": meta.get("providers", {}),
                     "n_outcomes": len(outcomes),
-                    "total_cost": sum(o["cost_usd"] or 0 for o in outcomes),
+                    "total_cost": conn.execute(
+                        "SELECT COALESCE(SUM(cost_usd_list),0) FROM calls WHERE run_id=?",
+                        (r["run_id"],),
+                    ).fetchone()[0],
                     "routers": {n: {"kind": x.get("kind")} for n, x in routers.items()},
                     "stats": stats_for_dashboard(outcomes, front),
                     "candidates": candidate_table(outcomes),
@@ -92,7 +110,7 @@ def _cost_by_token_type(
     outcomes: list[dict[str, Any]], meta: dict[str, Any]
 ) -> dict[str, dict[str, float]]:
     """Per router: dollars split into uncached input / cache read / cache write / output."""
-    from model_routing.pricing import PriceTable
+    from model_routing.pricing import Price, PriceTable
 
     prices = PriceTable.load()
     out: dict[str, dict[str, float]] = {}
@@ -102,6 +120,10 @@ def _cost_by_token_type(
         )
         for c in o["calls"]:
             p = prices.get(c.get("resolved_model") or c["model"]) or prices.get(c["model"])
+            snapshot = meta.get("pricing", {})
+            saved = snapshot.get(c.get("resolved_model")) or snapshot.get(c["model"])
+            if saved:
+                p = Price(**saved)
             if p is None:
                 continue
             u = c["usage"]
@@ -150,7 +172,7 @@ TEMPLATE = r"""<!doctype html>
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --surface: #1a1a19; --surface-2: #242423; --border: #34343200;
+    --surface: #1a1a19; --surface-2: #242423; --border: #343432;
     --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e87;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
     --grid: #2c2c2a;
@@ -163,6 +185,7 @@ TEMPLATE = r"""<!doctype html>
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
   --grid: #2c2c2a;
 }
+label { display:inline-flex; flex-direction:column; gap:6px; } input, select, button { font:inherit; color:var(--text); background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:8px; } button { cursor:pointer; } button:disabled { opacity:.5; cursor:default; } details { margin:14px 0; } summary { cursor:pointer; } :focus-visible { outline:2px solid var(--s1); outline-offset:3px; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--surface); color: var(--text);
   font: 14px/1.45 -apple-system, "Segoe UI", Inter, Roboto, sans-serif; }
@@ -201,6 +224,9 @@ pre { white-space: pre-wrap; word-break: break-word; background: var(--surface);
 <header>
   <div><h1>Model routing runs</h1><div class="muted small">Generated __GENERATED__ · from <code>results/</code> via the SQLite index · rebuild with <code>make dashboard</code></div></div>
   <div class="toolbar">
+    <label>Theme <select id="theme"><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+    <label>Track <select id="trackFilter"><option value="">All</option><option value="adoption">Adoption</option><option value="research">Research</option><option value="legacy">Legacy</option></select></label>
+    <label>Vendor <select id="vendorFilter"><option value="">All</option><option value="anthropic">Anthropic</option><option value="openai">OpenAI</option><option value="legacy">Legacy</option></select></label>
     <label>Run <select id="runSel"></select></label>
     <label><input type="checkbox" id="showSynth"> show fake/estimate runs</label>
   </div>
@@ -217,12 +243,16 @@ const $ = (s, el=document) => el.querySelector(s);
 const money = x => x == null ? '–' : '$' + x.toFixed(4);
 const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+try { $('#theme').value = localStorage.getItem('theme') || 'auto'; } catch {}
+function applyTheme() { document.documentElement.dataset.theme = $('#theme').value; }
+applyTheme();
+$('#theme').addEventListener('change', () => { applyTheme(); try { localStorage.setItem('theme', $('#theme').value); } catch {} });
 const tip = $('#tip');
 function showTip(e, html) { tip.innerHTML = html; tip.style.display = 'block'; moveTip(e); }
 function moveTip(e) { const x = Math.min(e.clientX + 14, window.innerWidth - 330); tip.style.left = x + 'px'; tip.style.top = (e.clientY + 14) + 'px'; }
 function hideTip() { tip.style.display = 'none'; }
 
-function visibleRuns() { const s = $('#showSynth').checked; return DATA.runs.filter(r => s || !r.synthetic); }
+function visibleRuns() { const s = $('#showSynth').checked; return DATA.runs.filter(r => (s || !r.synthetic) && (!$('#trackFilter').value || r.track === $('#trackFilter').value) && (!$('#vendorFilter').value || r.vendor === $('#vendorFilter').value)); }
 
 function renderOverview() {
   const runs = visibleRuns();
@@ -249,7 +279,7 @@ function renderOverview() {
     </div>
     <h2>Evidence across runs</h2>
     <div class="card"><table><thead><tr><th>Claim</th><th class="num">supported</th><th class="num">contradicted</th><th class="num">mixed</th><th class="num">insufficient</th></tr></thead><tbody>${vRows}</tbody></table>
-    <p class="muted small">Counts of per-run verdicts. Each run is one trial on a sample; a claim needs consistent verdicts across runs, and more trials, before it is a finding.</p></div>
+    <p class="muted small">Counts of per-run verdicts. These exploratory counts mix workloads unless filtered. Runs can contain multiple trials; overlapping tasks are not independent evidence.</p></div>
     <h2>Run history</h2>
     <div class="card"><table><thead><tr><th>run</th><th>started</th><th class="num">tasks</th><th class="num">outcomes</th><th class="num">spend</th><th>best cost/pass at top pass rate</th></tr></thead><tbody>
       ${runs.map(r => { const top = Math.max(...r.stats.map(s => s.pass_rate)); const best = r.stats.filter(s => s.pass_rate === top && s.cost_per_pass != null).sort((a,b)=>a.cost_per_pass-b.cost_per_pass)[0];
@@ -337,6 +367,7 @@ function renderRun() {
       <div class="card tile"><div class="label">Spend (list price)</div><div class="value">${money(run.total_cost)}</div><div class="sub">${Object.entries(run.providers).map(([k, v]) => `${k}: ${v || 'n/a'}`).join(' · ')}</div></div>
       <div class="card tile"><div class="label">On the frontier</div><div class="value">${run.stats.filter(s => s.pareto).map(s => esc(s.router)).join(', ') || '–'}</div><div class="sub">not dominated on pass rate and cost/task</div></div>
     </div>
+    ${run.quality?.length ? `<h2>Quality-gated savings · ${esc(run.track)}</h2><details><summary>ⓘ How to read this comparison</summary><p>Matched tasks and trials against all_strong. Quality is deterministic grader pass rate, not a human quality rating. Promising means the chosen thresholds passed on this sample; it is not statistical proof. Oracle and answer-key strategies are research references. Any partial run needs a complete rerun.</p></details><div class="card" style="overflow:auto"><table><thead><tr><th>Strategy</th><th>Pairs</th><th>Pass rate</th><th>Quality change</th><th>Cost saving</th><th>New failures</th><th>Assessment</th></tr></thead><tbody>${run.quality.map(q=>`<tr><td>${esc(q.router)}</td><td>${q.paired}</td><td>${pct(q.quality)}</td><td>${(q.quality_delta*100).toFixed(1)} pp</td><td>${pct(q.saving)}</td><td>${q.regressions}</td><td>${esc(q.router.startsWith('oracle') || q.router.startsWith('answer_key') ? 'Research reference · ' : '')}${esc(run.synthetic ? 'Simulation only' : q.status)}</td></tr>`).join('')}</tbody></table></div>` : ''}
     <h2>What the data says</h2>
     <div class="card"><table><thead><tr><th>#</th><th>Claim</th><th>Verdict</th><th>Evidence from this run</th></tr></thead><tbody>${findRows}</tbody></table></div>
     <h2>Routers</h2>
@@ -373,6 +404,7 @@ function fillRunSelect() {
   visibleRuns().forEach(r => { const o = document.createElement('option'); o.value = r.run_id; o.textContent = `${r.experiment} · ${r.stamp}${r.synthetic ? ' (synthetic)' : ''}`; sel.appendChild(o); });
   if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
 }
+['#trackFilter','#vendorFilter'].forEach(id=>$(id).addEventListener('change',()=>{fillRunSelect();renderOverview();renderRun();}));
 $('#runSel').addEventListener('change', renderRun);
 $('#showSynth').addEventListener('change', () => { fillRunSelect(); renderOverview(); renderRun(); });
 fillRunSelect(); renderOverview(); renderRun();
