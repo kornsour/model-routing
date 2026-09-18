@@ -1,10 +1,6 @@
 # model-routing
 
-An experiment harness for answering one question with numbers instead of
-price lists: **does routing work across models of different sizes actually
-lower cost per completed task?** It starts with LLMs (Claude and OpenAI
-models driven headless through the `claude` and `codex` CLIs on a personal
-login) and is structured to extend to tabular, vision, and search models.
+Experiment harness for model routing
 
 Read [`docs/experiments/llm-routing.md`](docs/experiments/llm-routing.md) for
 the hypotheses and how to read a result, and
@@ -22,9 +18,7 @@ make dashboard                               # index results/ -> SQLite, open th
 ```
 
 Requires the `claude` CLI logged in (Pro/Max) and, for cross-vendor
-experiments, the `codex` CLI logged in (ChatGPT). No API keys. Spend is
-metered against the plan allowance at API rates, so every run prints
-list-price cost and stops at `--budget-usd`.
+experiments, the `codex` CLI logged in (ChatGPT).
 
 ## Layout
 
@@ -48,12 +42,12 @@ results/          run output (git-ignored); promote findings to docs/experiments
 
 ## Experiments
 
-| Config | Question |
-|---|---|
-| `exp01_baselines` | Cost per completed task for each single model, including the frontier model at low effort |
-| `exp02_routing` | Oracle, heuristic, classifier, and cascade routers vs. those baselines, with cache fragmentation visible |
-| `exp03_cache_order` | Does interleaving requests across models change the cache picture? |
-| `exp04_cross_vendor` | The Codex harness floor and a cross-vendor cascade |
+| Config               | Question                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `exp01_baselines`    | Cost per completed task for each single model, including the frontier model at low effort                |
+| `exp02_routing`      | Oracle, heuristic, classifier, and cascade routers vs. those baselines, with cache fragmentation visible |
+| `exp03_cache_order`  | Does interleaving requests across models change the cache picture?                                       |
+| `exp04_cross_vendor` | The Codex harness floor and a cross-vendor cascade                                                       |
 
 ## Conventions
 
