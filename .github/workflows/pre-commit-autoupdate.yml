@@ -1,0 +1,51 @@
+name: Pre-commit autoupdate
+
+# Keeps pinned pre-commit hook revs (ruff-pre-commit in particular) tracking
+# the versions CI installs. Runs `pre-commit autoupdate` monthly and opens a PR
+# with any bumps, so nobody has to remember to check by hand.
+on:
+  schedule:
+    - cron: "0 6 1 * *" # 06:00 UTC on the 1st of every month
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  autoupdate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+
+      - name: Run pre-commit autoupdate
+        run: |
+          pip install pre-commit
+          pre-commit autoupdate
+
+      - name: Open PR with any rev bumps
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- .pre-commit-config.yaml; then
+            echo "No hook updates available."
+            exit 0
+          fi
+
+          branch="pre-commit-autoupdate/$(date +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git commit -am "chore: pre-commit autoupdate"
+          git push origin "$branch"
+
+          gh pr create \
+            --title "chore: pre-commit autoupdate" \
+            --body "Automated monthly \`pre-commit autoupdate\`, so pinned hook revs (\`ruff-pre-commit\` in particular) keep tracking the ruff version CI installs. Review the diff and merge once checks pass." \
+            --label dependencies \
+            --base main \
+            --head "$branch"
