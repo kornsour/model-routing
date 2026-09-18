@@ -1,0 +1,39 @@
+# Experiment 3 - does request ordering (cache warmth) change the answer?
+#
+# Identical to a slice of exp02 but with order = "by_task": every router
+# handles task 1, then every router handles task 2, ... This interleaves
+# models the way mixed production traffic does, so no router gets a long
+# warm streak on one model. Run exp02 and exp03 back to back and compare the
+# cache-hit and cost columns for the same router names. `tags = ["context"]`
+# restricts the run to the handbook tasks, where the shared ~4k-token prefix
+# is what gets cached (or not).
+
+[experiment]
+name = "exp03_cache_order"
+tasks = "tasks/llm/knowledge_work.jsonl"
+trials = 1
+order = "by_task"
+tags = ["context"]
+hypothesis = "Interleaving models across requests lowers cache hit rate for single-model and routed configurations alike, narrowing the caching advantage of a single model."
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[[routers]]
+name = "all_sonnet"
+kind = "static"
+candidate = "sonnet"
+
+[[routers]]
+name = "oracle"
+kind = "oracle"
+map = { easy = "haiku", medium = "sonnet", hard = "opus", default = "sonnet" }

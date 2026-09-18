@@ -1,0 +1,67 @@
+# Experiment 4 - cross-vendor routing with the Codex CLI in the mix.
+#
+# Codex headless carries ~18k tokens of harness scaffolding per call (skills,
+# instructions), partly served from OpenAI's automatic prompt cache. That floor
+# is real cost for anyone routing to Codex from a script, and it dwarfs the
+# ~600-token Claude CLI floor. This experiment makes the floor visible: compare
+# mean prompt tokens per call in the per-candidate table.
+#
+# Codex has no cost in its JSON output; cost here is list price from
+# src/model_routing/data/pricing.toml (fetched 2026-09-18).
+
+[experiment]
+name = "exp04_cross_vendor"
+tasks = "tasks/llm/knowledge_work.jsonl"
+trials = 1
+order = "by_router"
+hypothesis = "A cheap OpenAI tier looks cheaper per token but the Codex harness floor makes its cost per completed task comparable to Claude Haiku; cross-vendor cascades forfeit all cache reuse."
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.opus_low]
+provider = "claude_cli"
+model = "opus"
+effort = "low"
+
+[candidates.gpt_luna]
+provider = "codex_cli"
+model = "gpt-5.6-luna"
+effort = "low"
+
+[candidates.gpt_terra]
+provider = "codex_cli"
+model = "gpt-5.6-terra"
+effort = "medium"
+
+[candidates.gpt_sol]
+provider = "codex_cli"
+model = "gpt-5.6-sol"
+effort = "medium"
+
+[[routers]]
+name = "all_gpt_luna"
+kind = "static"
+candidate = "gpt_luna"
+
+[[routers]]
+name = "all_gpt_terra"
+kind = "static"
+candidate = "gpt_terra"
+
+[[routers]]
+name = "all_gpt_sol"
+kind = "static"
+candidate = "gpt_sol"
+
+[[routers]]
+name = "all_haiku"
+kind = "static"
+candidate = "haiku"
+
+[[routers]]
+name = "cascade_luna_opus_low"
+kind = "cascade"
+chain = ["gpt_luna", "opus_low"]
+escalate_on = "grader"
