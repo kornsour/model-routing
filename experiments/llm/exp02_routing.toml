@@ -1,0 +1,75 @@
+# Experiment 2 - routing strategies vs. the baselines, same tasks, same order.
+#
+# The oracle router uses the human difficulty label and is the ceiling for any
+# difficulty-based router. The heuristic router is free. The classifier router
+# pays a Haiku call per task to decide (billed as router overhead). The two
+# cascades try Haiku first and escalate: one when a real checker says the
+# answer is wrong (needs a checker in production), one when the model says it
+# is unsure (no checker needed, but self-reports are unreliable).
+#
+# Cache story: the shared handbook context is ~4k tokens. all_sonnet writes it
+# to cache once and reads it on every later handbook task. The routers split
+# those tasks across three models, so each model pays its own cache write and
+# the read share drops. Compare the "cache hit" column across routers.
+
+[experiment]
+name = "exp02_routing"
+tasks = "tasks/llm/knowledge_work.jsonl"
+trials = 1
+order = "by_router"
+hypothesis = "Routing lowers cost per request but router overhead, escalation retries, and cache fragmentation erode the saving on cost per completed task; the frontier model at low effort is on the Pareto frontier."
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[candidates.opus_low]
+provider = "claude_cli"
+model = "opus"
+effort = "low"
+
+[[routers]]
+name = "all_sonnet"
+kind = "static"
+candidate = "sonnet"
+
+[[routers]]
+name = "all_opus_low"
+kind = "static"
+candidate = "opus_low"
+
+[[routers]]
+name = "oracle"
+kind = "oracle"
+map = { easy = "haiku", medium = "sonnet", hard = "opus", default = "sonnet" }
+
+[[routers]]
+name = "heuristic"
+kind = "heuristic"
+map = { easy = "haiku", medium = "sonnet", hard = "opus", default = "sonnet" }
+
+[[routers]]
+name = "classifier_haiku"
+kind = "classifier"
+classifier = "haiku"
+map = { easy = "haiku", medium = "sonnet", hard = "opus", default = "sonnet" }
+
+[[routers]]
+name = "cascade_checker"
+kind = "cascade"
+chain = ["haiku", "opus"]
+escalate_on = "grader"
+
+[[routers]]
+name = "cascade_confidence"
+kind = "cascade"
+chain = ["haiku", "opus"]
+escalate_on = "confidence"

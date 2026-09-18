@@ -1,0 +1,51 @@
+# Experiment 1 - single-model baselines.
+#
+# Every routing claim is measured against these. Note the fourth baseline:
+# the frontier model at LOW effort. The cost-optimization literature (and the
+# bundled claude-api skill) says to measure that before building any
+# multi-model cascade, because a strong model at low effort often matches a
+# cheaper model's cost with better accuracy AND keeps one cache namespace.
+
+[experiment]
+name = "exp01_baselines"
+tasks = "tasks/llm/knowledge_work.jsonl"
+trials = 1
+order = "by_router"
+hypothesis = "Per-token price lists do not predict cost per completed task; the frontier model at low effort is competitive with the mid tier."
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[candidates.opus_low]
+provider = "claude_cli"
+model = "opus"
+effort = "low"
+
+[[routers]]
+name = "all_haiku"
+kind = "static"
+candidate = "haiku"
+
+[[routers]]
+name = "all_sonnet"
+kind = "static"
+candidate = "sonnet"
+
+[[routers]]
+name = "all_opus"
+kind = "static"
+candidate = "opus"
+
+[[routers]]
+name = "all_opus_low"
+kind = "static"
+candidate = "opus_low"

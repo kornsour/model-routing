@@ -1,7 +1,7 @@
 [project]
-name = "python-template"
+name = "model-routing"
 version = "0.1.0"
-description = "A batteries-included Python project template: uv + hatchling, ruff, pyright, pytest, pre-commit, and cost-savvy centralized CI + Dependabot."
+description = "Experiment harness for measuring model-routing tradeoffs: cost per completed task, cache economics, and router overhead across LLM providers (and, later, other ML paradigms)."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -20,12 +20,15 @@ dev = [
     "pre-commit>=4.6.2",
 ]
 
+[project.scripts]
+model-routing = "model_routing.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/python_template"]
+packages = ["src/model_routing"]
 
 [tool.ruff]
 line-length = 100
@@ -33,6 +36,10 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Embedded HTML/JS template; line length is not meaningful there.
+"src/model_routing/dashboard.py" = ["E501"]
 
 [tool.pyright]
 include = ["src", "tests"]

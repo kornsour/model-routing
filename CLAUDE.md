@@ -1,6 +1,26 @@
 # Project conventions
 
-Python project scaffolded from `kornsour/python-template`.
+Python project scaffolded from `kornsour/python-template`. It is an experiment
+harness for model-routing tradeoffs; see `README.md` and
+`docs/experiments/llm-routing.md` before changing routers, providers, or the
+report.
+
+## Experiment harness rules
+
+- **Spend is real.** LLM providers run `claude -p` / `codex exec` on the
+  operator's personal login, metered at API rates. Never run an experiment
+  without `model-routing estimate` first and `--budget-usd` on the run. Never
+  ship the subscription path anywhere but this laptop.
+- **Every call is recorded.** Providers must return normalized `Usage`
+  (uncached input, cache read, cache write, output, reasoning) and the
+  provider's own cost when it reports one; the runner prices every call from
+  `src/model_routing/data/pricing.toml`. Add a price row before adding a model.
+- **The headline metric is cost per completed task**, not cost per request.
+  Router overhead calls are billed to the task (`role = "router"`).
+- **Ordering is an experimental variable** (prompt caches are model-scoped
+  and expire). Keep `order` explicit in configs; do not parallelize calls.
+- **Graders are deterministic.** No LLM-as-judge unless a task set says so.
+- `results/` is git-ignored. Promote findings to `docs/experiments/findings/`.
 
 - **Env & deps:** `uv`. `make setup` runs `uv sync --extra dev`, installing
   exactly what `uv.lock` pins. Add runtime deps to `[project.dependencies]`;
