@@ -13,6 +13,14 @@ trials = 1
 order = "by_router"
 hypothesis = "Per-token price lists do not predict cost per completed task; the frontier model at low effort is competitive with the mid tier."
 
+# Auth: "subscription" (default) uses the local claude/codex login and scrubs
+# API-key env vars; "api_key" reads the key from the named env var.
+# [auth]
+# mode = "subscription"
+# [auth.codex_cli]
+# mode = "api_key"
+# api_key_env = "OPENAI_API_KEY"
+
 [candidates.haiku]
 provider = "claude_cli"
 model = "haiku"

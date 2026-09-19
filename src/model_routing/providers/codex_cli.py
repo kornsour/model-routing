@@ -27,7 +27,10 @@ from model_routing.types import Usage
 class CodexCliProvider:
     name = "codex_cli"
 
-    def __init__(self, binary: str = "codex", timeout_s: int = 600):
+    def __init__(
+        self, binary: str = "codex", timeout_s: int = 600, env: dict[str, str] | None = None
+    ):
+        self.env = env
         self.binary = binary
         self.timeout_s = timeout_s
 
@@ -92,6 +95,7 @@ class CodexCliProvider:
                 timeout=self.timeout_s,
                 check=False,
                 stdin=subprocess.DEVNULL,
+                env=self.env,
             )
         except subprocess.TimeoutExpired:
             return ProviderResult("", Usage(), int((time.monotonic() - t0) * 1000), error="timeout")

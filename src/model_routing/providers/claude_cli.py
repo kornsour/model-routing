@@ -34,7 +34,14 @@ DEFAULT_SYSTEM = "You are a careful assistant. Answer the request directly and c
 class ClaudeCliProvider:
     name = "claude_cli"
 
-    def __init__(self, binary: str = "claude", timeout_s: int = 600, max_budget_usd: float = 1.0):
+    def __init__(
+        self,
+        binary: str = "claude",
+        timeout_s: int = 600,
+        max_budget_usd: float = 1.0,
+        env: dict[str, str] | None = None,
+    ):
+        self.env = env
         self.binary = binary
         self.timeout_s = timeout_s
         self.max_budget_usd = max_budget_usd
@@ -95,7 +102,12 @@ class ClaudeCliProvider:
         t0 = time.monotonic()
         try:
             proc = subprocess.run(
-                args, capture_output=True, text=True, timeout=self.timeout_s, check=False
+                args,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_s,
+                check=False,
+                env=self.env,
             )
         except subprocess.TimeoutExpired:
             return ProviderResult("", Usage(), int((time.monotonic() - t0) * 1000), error="timeout")

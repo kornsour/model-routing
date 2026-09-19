@@ -25,5 +25,6 @@ def make_provider(name: str, **kwargs: Any) -> Provider:
     if name == "codex_cli":
         return CodexCliProvider(**kwargs)
     if name == "fake":
+        kwargs.pop("env", None)
         return FakeProvider(**kwargs)
     raise ValueError(f"unknown provider {name!r} (known: claude_cli, codex_cli, fake)")
