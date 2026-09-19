@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from model_routing.auth import AuthConfig, parse_auth
 from model_routing.types import Candidate
 
 
@@ -22,7 +23,11 @@ class ExperimentConfig:
     limit: int | None = None
     tags: tuple[str, ...] = ()
     provider_options: dict[str, dict[str, Any]] = field(default_factory=dict)
+    auth: dict[str, AuthConfig] = field(default_factory=lambda: {"*": AuthConfig()})
     source: Path | None = None
+
+    def auth_for(self, provider: str) -> AuthConfig:
+        return self.auth.get(provider, self.auth["*"])
 
     def validate(self) -> None:
         for r in self.routers:
@@ -72,6 +77,7 @@ def load_config(path: str | Path) -> ExperimentConfig:
         limit=exp.get("limit"),
         tags=tuple(exp.get("tags", ())),
         provider_options=dict(data.get("providers", {})),
+        auth=parse_auth(data.get("auth", {})),
         source=path,
     )
     cfg.validate()

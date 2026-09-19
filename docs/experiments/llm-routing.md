@@ -165,3 +165,12 @@ sqlite3 results/index.sqlite "select router, avg(passed), sum(cost_usd) from out
 `results/` is git-ignored. When a run says something, copy its `summary.md`
 into `docs/experiments/findings/<date>-<experiment>.md` with two or three
 sentences of interpretation and the run's `meta.json` provider versions.
+
+## Auth: subscription or API key
+
+Experiment configs take an optional `[auth]` section (see `src/model_routing/auth.py`).
+`mode = "subscription"` (default) runs `claude -p` / `codex exec` on the local login and
+removes `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` etc. from the child environment.
+`mode = "api_key"` reads the key from `api_key_env` (default `ANTHROPIC_API_KEY` for Claude,
+`OPENAI_API_KEY` for Codex) and passes it to the CLI; keys never live in the config file.
+Override per provider with `[auth.claude_cli]` / `[auth.codex_cli]`.

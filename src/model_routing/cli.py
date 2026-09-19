@@ -26,7 +26,10 @@ def _providers_for(cfg, fake: bool) -> dict[str, Provider]:
     names = {c.provider for c in cfg.candidates.values()}
     if fake:
         return {n: FakeProvider(floor_tokens=_floor(n)) for n in names}
-    return {n: make_provider(n, **cfg.provider_options.get(n, {})) for n in names}
+    return {
+        n: make_provider(n, **cfg.provider_options.get(n, {}), env=cfg.auth_for(n).child_env(n))
+        for n in names
+    }
 
 
 def _floor(provider: str) -> int:
