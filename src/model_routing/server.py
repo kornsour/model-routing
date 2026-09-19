@@ -50,7 +50,10 @@ def serve(root: Path, results: Path, port: int = 8765) -> None:
                 controls = (
                     Path(__file__).with_name("lab.html").read_text().replace("__TOKEN__", token)
                 )
-                page = page.replace('<section id="overview">', controls + '<section id="overview">')
+                page = page.replace(
+                    '<section id="lab" data-page-panel="overview"></section>',
+                    '<section id="lab" data-page-panel="overview">' + controls + "</section>",
+                )
                 self.reply(200, page, "text/html")
             elif path == "/api/jobs":
                 self.reply(200, json.dumps(lab.jobs()))

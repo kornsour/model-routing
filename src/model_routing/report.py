@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from model_routing.pricing import normalize_recorded_costs
+
 
 @dataclass
 class RouterStats:
@@ -72,7 +74,7 @@ def load_outcomes(run_dir: str | Path) -> list[dict[str, Any]]:
         for line in f:
             if line.strip():
                 rows.append(json.loads(line))
-    return rows
+    return normalize_recorded_costs(rows)
 
 
 def aggregate(outcomes: list[dict[str, Any]]) -> list[RouterStats]:

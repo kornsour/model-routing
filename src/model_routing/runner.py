@@ -29,7 +29,7 @@ from typing import Any
 from model_routing import __version__
 from model_routing.config import ExperimentConfig
 from model_routing.graders import grade as grade_spec
-from model_routing.pricing import PriceTable
+from model_routing.pricing import PriceTable, embedded_list_cost
 from model_routing.providers.base import Provider
 from model_routing.routers import make_router
 from model_routing.tasks import ContextStore, load_tasks
@@ -93,8 +93,23 @@ class Runner:
     def _write_meta(self) -> None:
         if self.cfg.source:
             shutil.copy(self.cfg.source, self.out_dir / "config.toml")
+        context_hashes = {}
+        for name in sorted({task.context for task in self.tasks if task.context}):
+            context = self.cfg.tasks.parent / "context" / name
+            context_hashes[name] = hashlib.sha256(context.read_bytes()).hexdigest()
         meta = {
             "task_sha256": hashlib.sha256(self.cfg.tasks.read_bytes()).hexdigest(),
+            "context_sha256": context_hashes,
+            "task_manifest": [
+                {
+                    "id": task.id,
+                    "difficulty": task.difficulty,
+                    "category": task.category,
+                    "context": task.context,
+                    "grader_type": task.grader.get("type"),
+                }
+                for task in self.tasks
+            ],
             "pricing": {m: vars(self.prices.get(m)) for m in self.prices.models()},
             "experiment": self.cfg.name,
             "hypothesis": self.cfg.hypothesis,
@@ -166,6 +181,11 @@ class Runner:
             started_at=started,
             raw=res.raw,
         )
+        # Claude Code may make a hidden helper-model call. Its top-level usage
+        # covers only the requested model, but modelUsage is a list-price ledger
+        # for every model consumed by the command. Charge the whole invocation.
+        cost = embedded_list_cost(rec.to_dict()) or cost
+        rec.cost_usd_list = cost
         self._calls_fh.write(json.dumps(rec.to_dict(), default=str) + "\n")
         self._calls_fh.flush()
         self.spent_usd += cost
