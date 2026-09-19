@@ -1,6 +1,6 @@
 import json
 
-from model_routing.pricing import PriceTable
+from model_routing.pricing import PriceTable, embedded_list_cost, normalize_recorded_costs
 from model_routing.providers.claude_cli import ClaudeCliProvider, parse_result
 from model_routing.providers.codex_cli import CodexCliProvider, parse_jsonl
 from model_routing.types import Usage
@@ -81,6 +81,29 @@ def test_one_hour_ttl_cache_writes_match_cli_reported_cost():
     # Priced as a 5-minute write it would be ~37% less - the naive figure.
     naive = PriceTable.load().cost("claude-sonnet-5", Usage(2, 0, 2859, 4))
     assert naive < 0.0075
+
+
+def test_provider_list_ledger_includes_hidden_helper_models():
+    call = {
+        "role": "candidate",
+        "cost_usd_list": 0.002,
+        "raw": {
+            "modelUsage": {
+                "helper": {"costUSD": 0.001, "costBasis": "list"},
+                "requested": {"costUSD": 0.002, "costBasis": "list"},
+            }
+        },
+    }
+    assert embedded_list_cost(call) == 0.003
+    outcomes = [
+        {
+            "calls": [call],
+            "cost_usd": 0.002,
+            "router_cost_usd": 0.0,
+        }
+    ]
+    normalize_recorded_costs(outcomes)
+    assert outcomes[0]["cost_usd"] == 0.003
 
 
 def test_parse_claude_error_result():

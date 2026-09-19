@@ -6,6 +6,7 @@ import tomllib
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from typing import Any
 
 from model_routing.types import Usage
 
@@ -77,3 +78,32 @@ class PriceTable:
 
     def models(self) -> list[str]:
         return sorted({p.model for p in self._rows.values()})
+
+
+def embedded_list_cost(call: dict[str, Any]) -> float | None:
+    """List cost from a provider's per-model ledger, including hidden helper calls.
+
+    Claude Code can use an auxiliary Haiku call even when the requested model
+    is Sonnet or Opus. Its top-level token usage describes only the requested
+    model, while ``modelUsage`` and ``total_cost_usd`` include both. Use the
+    ledger only when every component explicitly says its basis is list price.
+    """
+    model_usage = (call.get("raw") or {}).get("modelUsage") or {}
+    if not model_usage or any(row.get("costBasis") != "list" for row in model_usage.values()):
+        return None
+    costs = [row.get("costUSD") for row in model_usage.values()]
+    if any(not isinstance(cost, int | float) for cost in costs):
+        return None
+    return float(sum(costs))
+
+
+def normalize_recorded_costs(outcomes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Correct old result rows whose list cost omitted provider helper models."""
+    for outcome in outcomes:
+        for call in outcome.get("calls", []):
+            call["cost_usd_list"] = embedded_list_cost(call) or call.get("cost_usd_list", 0.0)
+        outcome["cost_usd"] = sum(c["cost_usd_list"] for c in outcome.get("calls", []))
+        outcome["router_cost_usd"] = sum(
+            c["cost_usd_list"] for c in outcome.get("calls", []) if c.get("role") == "router"
+        )
+    return outcomes

@@ -65,9 +65,13 @@ def test_dashboard_html_is_self_contained(tmp_path: Path):
     index_results(results, db)
     payload = build_payload(db, include_synthetic=True)
     assert payload["runs"] and payload["runs"][0]["stats"]
+    assert payload["runs"][0]["validity"]["readiness"] == "Simulation only"
+    assert payload["runs"][0]["quality"]
     page = render_html(payload)
     assert "<script src" not in page and "https://" not in page.split("<script>")[0]
     assert payload["runs"][0]["run_id"] in page
+    assert "Study design: what this experiment can and cannot establish" in page
+    assert "task-clustered" in page
     out = tmp_path / "dash.html"
     assert (
         main(

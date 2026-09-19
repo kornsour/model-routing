@@ -12,6 +12,8 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from model_routing.pricing import embedded_list_cost, normalize_recorded_costs
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     run_id TEXT PRIMARY KEY,
@@ -120,8 +122,10 @@ def index_run(conn: sqlite3.Connection, run_dir: Path) -> str:
     stamp = run_dir.name
     run_id = f"{experiment}/{stamp}"
     synthetic = int(stamp.startswith(("fake-", "estimate-")))
-    outcomes = _read_jsonl(run_dir / "outcomes.jsonl")
+    outcomes = normalize_recorded_costs(_read_jsonl(run_dir / "outcomes.jsonl"))
     calls = _read_jsonl(run_dir / "calls.jsonl")
+    for call in calls:
+        call["cost_usd_list"] = embedded_list_cost(call) or call.get("cost_usd_list", 0.0)
     with conn:
         conn.execute("DELETE FROM outcome_calls WHERE run_id = ?", (run_id,))
         conn.execute("DELETE FROM outcomes WHERE run_id = ?", (run_id,))

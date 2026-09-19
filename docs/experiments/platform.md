@@ -11,6 +11,14 @@ Simulation is the default and makes no provider calls. Uncheck it to explicitly
 launch a real run after estimating. A budget is a post-call stop threshold,
 not a hard spending cap: the final in-flight call can overshoot.
 
+The platform has three report pages: the overview and experiment lab, a
+selected-run report, and a study-design/readiness review. Quality changes and
+cost savings use deterministic 95% task-clustered bootstrap intervals. All
+trials for a sampled task stay together, because repeated trials measure model
+variation and are not independent workload observations. The intervals
+describe sensitivity to the selected benchmark tasks; they do not make the
+task set representative of company work.
+
 Plans and job state live in `results/index.sqlite` alongside the existing
 run/outcome/call index. JSONL remains the source of truth for measurements.
 **Do not delete the database to rebuild the index:** it now contains saved
@@ -38,9 +46,16 @@ not evidence for a company rollout. Main issues addressed here:
   records without nested calls retain the old compatibility fallback.
 - Uncounted interrupted-call spend: run totals now include all recorded calls,
   including calls not attached to a completed outcome.
+- Hidden provider work: Claude Code may make an auxiliary Haiku call even when
+  Sonnet or Opus is requested. The harness uses the CLI's per-model list-cost
+  ledger when present, and the report shows the otherwise invisible difference
+  as provider-helper-model cost instead of undercounting it.
 - Reproducibility: new runs snapshot task-file hashes and price rows. Cost
   charts use the recorded prices when available; old charts retain current
   price fallback. New presets use explicit model IDs rather than aliases.
+- Auditability: new runs also record the selected task manifest and hashes for
+  every referenced context document, so a task-file hash cannot hide changed
+  shared source material.
 - CLI estimate ignored `--sample`: it now honors it. The UI defaults to evenly
   spaced sampling; this is reproducible, not randomized or population-weighted.
 
@@ -68,8 +83,9 @@ Before a leadership decision:
 3. Tune on development data and evaluate once on held-out task families.
    Repeated trials measure variation, not independent workload coverage.
 4. Report uncertainty clustered by task, category regressions and tail latency.
-   Current gates are descriptive; no confidence interval or significance claim
-   is made by this release.
+   The platform reports task-clustered bootstrap intervals. They are
+   descriptive for the benchmark and are not a significance or population
+   claim.
 5. Test actual native-product workflow quality and contract economics. CLI
    scaffolding, cache behavior, and API list prices are proxies. This platform
    cannot inject a router into Cowork or ChatGPT Work.

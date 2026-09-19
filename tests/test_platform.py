@@ -29,6 +29,9 @@ def test_quality_gate_rejects_cheaper_wrong_and_partial():
     q = {r["router"]: r for r in compare(rows, "all_strong", 4)}
     assert q["cheap"]["status"] == "quality failed"
     assert q["cheap"]["regressions"] == 2
+    assert q["cheap"]["task_clusters"] == 4
+    assert q["cheap"]["quality_delta_ci"] is not None
+    assert q["cheap"]["saving_ci"] is not None
     assert compare(rows, "all_strong", 5)[0]["status"] == "incomplete"
     assert compare(rows, "missing", 4)[0]["status"] == "incomplete"
 
@@ -95,3 +98,19 @@ def test_partial_run_never_qualifies_completed_subset():
     assert all(
         q["status"] == "incomplete" for q in compare(rows, "all_strong", 1, run_complete=False)
     )
+
+
+def test_uncertainty_clusters_repeated_trials_by_task():
+    rows = [
+        dict(router=router, task_id=task, trial=trial, passed=passed, cost_usd=cost)
+        for task, cheap_passed in [("a", True), ("b", False), ("c", True)]
+        for trial in range(3)
+        for router, passed, cost in [
+            ("all_strong", True, 1.0),
+            ("cheap", cheap_passed, 0.5),
+        ]
+    ]
+    cheap = next(r for r in compare(rows, "all_strong", 9) if r["router"] == "cheap")
+    assert cheap["task_clusters"] == 3
+    assert cheap["quality_delta_ci"] == [-1.0, 0.0]
+    assert cheap["saving_ci"] == [0.5, 0.5]

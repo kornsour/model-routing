@@ -127,6 +127,10 @@ first number in a verbose response.
 - Single runs on ~38 tasks are noisy. A one-task difference in pass rate is
   1 in 38. Use `--trials 3` before believing a small gap, and read the
   per-difficulty table: routers earn or lose their money on the hard tail.
+- Repeated trials are clustered by task in the platform's uncertainty
+  intervals. Three trials of one prompt are still one distinct task for
+  workload coverage; they measure response variability, not three independent
+  examples.
 - If `oracle` does not beat `all_sonnet` on cost/pass, either the difficulty
   labels are wrong or the task set has no cheap tail worth routing. Both are
   findings; fix the labels before blaming routing.
