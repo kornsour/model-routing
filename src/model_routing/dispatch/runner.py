@@ -367,7 +367,13 @@ class _FakeAgentProvider:
 
 
 def _fake_provider_factory(name: str, env: dict[str, str] | None = None) -> Any:
-    return _FakeAgentProvider()
+    """Prefer the tiered fake in ``agents`` (applies ``.fake_solution`` overlays so
+    simulated pass rates vary by model); fall back to the minimal in-module fake."""
+    try:
+        from model_routing.dispatch.agents import make_agent_provider
+    except ImportError:
+        return _FakeAgentProvider()
+    return make_agent_provider("fake", env=env)
 
 
 def _real_provider_factory(name: str, env: dict[str, str] | None = None) -> Any:
@@ -627,6 +633,10 @@ def run_dispatch(
                 else cand.model
             )
             cost = prices.cost(price_model, result.usage) if prices.get(price_model) else 0.0
+            if cost == 0.0 and result.cost_usd_reported:
+                # The Claude CLI zeroes ``usage`` on a budget-capped result while
+                # still reporting dollars; never price a paid session at $0.
+                cost = result.cost_usd_reported
             rec = SessionRecord(
                 task_id=task_id,
                 policy=policy_name,
@@ -716,6 +726,14 @@ def run_dispatch(
         stop_message = str(e)
         if verbose:
             print(f"STOPPED: {e}")
+    except Exception as e:
+        # Still leave a summary of whatever finished; the web app expects one.
+        sessions_fh.close()
+        outcomes_fh.close()
+        run_state = "failed"
+        emit_progress("", f"{type(e).__name__}: {e}")
+        summarize(out_dir)
+        raise
     finally:
         sessions_fh.close()
         outcomes_fh.close()
