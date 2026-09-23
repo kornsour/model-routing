@@ -121,6 +121,45 @@ only when net saving is positive and the quality gate passes. Vendor model
 internals cannot be changed through the current CLI providers; architecture
 research needs a provider exposing trainable models and reproducible checkpoints.
 
+## Dispatch routing lab
+
+`make app`, or double-click `scripts/Model Routing Lab.command`, launches the
+server and opens the browser straight to `/dispatch` (equivalent to
+`model-routing serve --open --page dispatch`). It is the operator-facing UI
+for the agentic, dispatch-time routing experiments in
+`docs/experiments/dispatch-routing.md` and `experiments/agentic/*.toml` — a
+separate surface from the single-shot lab at `/` (the two link to each
+other). It uses the `claude` / `codex` CLI logins already on the machine;
+nothing is entered into the page.
+
+Steps in the page:
+
+1. **Choose track** — pick Claude or ChatGPT (whichever CLI is signed in;
+   the other is disabled with a one-line fix hint) and a config. "Pilot"
+   presets a small, cheap sample to size variance; "Full" loads the
+   pre-registered sample, trial count and policy set for the confirmatory
+   run.
+2. **Size the run** — task sample, trials, which policies to include, and a
+   budget in dollars.
+3. **Estimate, simulate, or run** — "Estimate" and "Simulate" never call a
+   provider. "Run for real" is disabled until you estimate, and opens a
+   confirm dialog stating the dollar estimate, the budget cap, and that it
+   bills the selected subscription at API rates. The budget is a
+   post-session stop, not a hard cap: the in-flight session when the budget
+   is crossed can still overshoot it.
+
+Live progress (cells done, spend vs. budget, current cell, elapsed time, a
+cancel button) polls every two seconds while a run is active. Selecting a
+finished run shows a verdict card for the primary hypothesis (H-D1), a
+cost-per-completed-task-vs-pass-rate chart, a policy table, and cards for
+the secondary hypotheses, with a "copy summary as Markdown" button.
+Simulated runs are always marked with a banner.
+
+Only one dispatch run executes at a time; job state is written to
+`results/dispatch_jobs/<id>.json` (not `results/index.sqlite`), so history
+survives a server restart. A job still `running` when the server starts is
+marked `interrupted`; it is never silently resumed.
+
 ## Limits and operation
 
 Only one server process should use a results database. Calls within a live

@@ -7,15 +7,25 @@ import secrets
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 from model_routing.dashboard import build_payload, render_html
+from model_routing.dispatch.web import DispatchLab
 from model_routing.platform import Lab
 
 
-def serve(root: Path, results: Path, port: int = 8765) -> None:
+def serve(
+    root: Path,
+    results: Path,
+    port: int = 8765,
+    *,
+    open_browser: bool = False,
+    page: str = "",
+    token: str | None = None,
+) -> None:
     lab: Lab
-    token = secrets.token_urlsafe(32)
+    dispatch_lab: DispatchLab
+    token = token or secrets.token_urlsafe(32)
     server: ThreadingHTTPServer
 
     class Handler(BaseHTTPRequestHandler):
@@ -55,15 +65,41 @@ def serve(root: Path, results: Path, port: int = 8765) -> None:
                     '<section id="lab" data-page-panel="overview">' + controls + "</section>",
                 )
                 self.reply(200, page, "text/html")
+            elif path == "/dispatch":
+                page = (
+                    Path(__file__)
+                    .with_name("dispatch")
+                    .joinpath("web.html")
+                    .read_text()
+                    .replace("__TOKEN__", token)
+                )
+                self.reply(200, page, "text/html")
             elif path == "/api/jobs":
                 self.reply(200, json.dumps(lab.jobs()))
             elif path == "/api/results":
                 self.reply(200, json.dumps(build_payload(lab.db, include_synthetic=True)))
+            elif path == "/api/dispatch/status":
+                self.reply(200, json.dumps(dispatch_lab.status()))
+            elif path == "/api/dispatch/run":
+                qs = parse_qs(urlsplit(self.path).query)
+                dir_param = (qs.get("dir") or [""])[0]
+                try:
+                    self.reply(200, json.dumps(dispatch_lab.get_run(dir_param)))
+                except ValueError as exc:
+                    self.reply(400, json.dumps({"error": str(exc)}))
             else:
                 self.reply(404, "{}")
 
         def do_POST(self) -> None:
             if not self.allowed(True):
+                # Drain a small body first so the client sees the 403 rather than a reset.
+                try:
+                    pending = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    pending = 0
+                if 0 < pending <= 16000:
+                    self.rfile.read(pending)
+                self.close_connection = True
                 self.reply(403, json.dumps({"error": "Local session required"}))
                 return
             try:
@@ -76,6 +112,12 @@ def serve(root: Path, results: Path, port: int = 8765) -> None:
                 elif self.path == "/api/start":
                     lab.start(str(data["id"]), float(data["budget"]), data.get("fake") is True)
                     result = {"state": "running"}
+                elif self.path == "/api/dispatch/estimate":
+                    result = dispatch_lab.estimate(data)
+                elif self.path == "/api/dispatch/start":
+                    result = dispatch_lab.start(data)
+                elif self.path == "/api/dispatch/cancel":
+                    result = dispatch_lab.cancel()
                 else:
                     self.reply(404, "{}")
                     return
@@ -92,8 +134,14 @@ def serve(root: Path, results: Path, port: int = 8765) -> None:
 
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     lab = Lab(root, results)
+    dispatch_lab = DispatchLab(root, results)
     index_results(results, lab.db)
-    print(f"Experiment lab: http://127.0.0.1:{server.server_port}", flush=True)
+    base_url = f"http://127.0.0.1:{server.server_port}"
+    print(f"Experiment lab: {base_url}", flush=True)
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(f"{base_url}/{page.lstrip('/')}" if page else base_url)
     try:
         server.serve_forever()
     finally:

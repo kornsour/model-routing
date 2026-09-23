@@ -4,6 +4,10 @@ model-routing smoke  [--provider claude_cli|codex_cli] [--model M]
 model-routing estimate experiments/llm/exp01_baselines.toml
 model-routing run      experiments/llm/exp01_baselines.toml [--limit N] [--budget-usd X]
 model-routing report   results/<experiment>/<run>
+model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
+model-routing dispatch-run      experiments/agentic/exp05_dispatch.toml --budget-usd X
+model-routing dispatch-report   results/<experiment>/<run>
+model-routing harvest-chips
 """
 
 from __future__ import annotations
@@ -144,8 +148,86 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     from model_routing.server import serve
 
-    serve(Path.cwd(), Path(args.results).resolve(), args.port)
+    serve(
+        Path.cwd(),
+        Path(args.results).resolve(),
+        args.port,
+        open_browser=args.open,
+        page=args.page,
+    )
     return 0
+
+
+def cmd_dispatch_estimate(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.runner import estimate_dispatch, load_dispatch_config
+
+    cfg = load_dispatch_config(args.config)
+    est = estimate_dispatch(
+        cfg, sample=args.sample, trials=args.trials, policies=_split(args.policies)
+    )
+    print(f"Dispatch estimate for {cfg.name} ({est['cells']} cells, {est['sessions']} sessions):")
+    print(f"  low  ${est['usd_low']:.2f}")
+    print(f"  mid  ${est['usd_mid']:.2f}")
+    print(f"  high ${est['usd_high']:.2f}")
+    print("  by policy (mid):")
+    for name, usd in sorted(est["by_policy"].items(), key=lambda kv: -kv[1]):
+        print(f"    {name:<20} ${usd:.2f}")
+    print("\nAssumptions:")
+    for a in est["assumptions"]:
+        print(f"  - {a}")
+    return 0
+
+
+def cmd_dispatch_run(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.runner import estimate_dispatch, load_dispatch_config, run_dispatch
+
+    cfg = load_dispatch_config(args.config)
+    policies = _split(args.policies)
+    est = estimate_dispatch(cfg, sample=args.sample, trials=args.trials, policies=policies)
+    print(
+        f"Estimate before spending: ${est['usd_low']:.2f}-${est['usd_high']:.2f} "
+        f"(mid ${est['usd_mid']:.2f}) over {est['sessions']} sessions. "
+        f"Budget: ${args.budget_usd:.2f}."
+    )
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    out = Path(args.out) / cfg.name / (("fake-" if args.fake else "") + stamp)
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=args.budget_usd,
+        sample=args.sample,
+        trials=args.trials,
+        policies=policies,
+        fake=args.fake,
+        keep_sandboxes=args.keep_sandboxes,
+    )
+    from model_routing.dispatch.report import summarize
+
+    summary = summarize(out)
+    print(f"\n{summary['headline']}")
+    print(f"summary: {out / 'summary.md'}")
+    return 0
+
+
+def cmd_dispatch_report(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.report import summarize
+
+    summary = summarize(args.run_dir)
+    print(summary["headline"])
+    print(f"summary: {Path(args.run_dir) / 'summary.md'}")
+    return 0
+
+
+def cmd_harvest_chips(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.harvest import harvest_chips
+
+    n = harvest_chips(Path(args.projects_dir).expanduser(), Path(args.out))
+    print(f"harvested {n} task chip(s) -> {args.out}")
+    return 0
+
+
+def _split(value: str | None) -> list[str] | None:
+    return [v for v in value.split(",") if v] if value else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -202,7 +284,51 @@ def main(argv: list[str] | None = None) -> int:
     lab = sub.add_parser("serve", help="launch the local experiment lab")
     lab.add_argument("--port", type=int, default=8765)
     lab.add_argument("--results", default="results")
+    lab.add_argument(
+        "--open", action="store_true", help="open the browser once the server is ready"
+    )
+    lab.add_argument(
+        "--page",
+        default="",
+        choices=["", "dispatch"],
+        help="page to open with --open (default: the lab overview)",
+    )
     lab.set_defaults(fn=cmd_serve)
+
+    de = sub.add_parser("dispatch-estimate", help="dry-run cost estimate for a dispatch experiment")
+    de.add_argument("config")
+    de.add_argument("--sample", type=int, help="N tasks")
+    de.add_argument("--trials", type=int)
+    de.add_argument("--policies", help="comma-separated policy names (default: all in config)")
+    de.set_defaults(fn=cmd_dispatch_estimate)
+
+    dr = sub.add_parser("dispatch-run", help="run a dispatch experiment (agentic, sandboxed)")
+    dr.add_argument("config")
+    dr.add_argument(
+        "--budget-usd", type=float, required=True, help="stop when list-price spend exceeds this"
+    )
+    dr.add_argument("--sample", type=int, help="N tasks")
+    dr.add_argument("--trials", type=int)
+    dr.add_argument("--policies", help="comma-separated policy names (default: all in config)")
+    dr.add_argument("--fake", action="store_true", help="use the fake agent provider (no spend)")
+    dr.add_argument(
+        "--keep-sandboxes", action="store_true", help="do not delete sandbox copies after grading"
+    )
+    dr.add_argument("--out", default="results")
+    dr.set_defaults(fn=cmd_dispatch_run)
+
+    drp = sub.add_parser(
+        "dispatch-report", help="(re)build summary.json/md for a dispatch run directory"
+    )
+    drp.add_argument("run_dir")
+    drp.set_defaults(fn=cmd_dispatch_report)
+
+    hc = sub.add_parser(
+        "harvest-chips", help="scan local Claude Code transcripts for spawned task chips"
+    )
+    hc.add_argument("--projects-dir", default="~/.claude/projects")
+    hc.add_argument("--out", default="tasks/agentic/private/harvested.jsonl")
+    hc.set_defaults(fn=cmd_harvest_chips)
 
     args = p.parse_args(argv)
     return int(args.fn(args))

@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"thread-codex-sanitized-2"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Looking into it."}}
+{"type":"turn.failed","error":"model overloaded, please retry"}

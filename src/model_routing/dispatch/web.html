@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dispatch routing lab</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface: #fcfcfb; --surface-2: #f3f2ef; --border: #e2e1dc;
+  --text: #0b0b0b; --text-2: #52514e; --text-3: #7a7974;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --good: #0ca30c; --warn: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --grid: #e8e7e3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface: #1a1a19; --surface-2: #242423; --border: #343432;
+    --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e87;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --grid: #2c2c2a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface: #1a1a19; --surface-2: #242423; --border: #343432;
+  --text: #ffffff; --text-2: #c3c2b7; --text-3: #8f8e87;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --grid: #2c2c2a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--surface); color: var(--text);
+  font: 14px/1.45 -apple-system, "Segoe UI", Inter, Roboto, sans-serif; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 64px; }
+a { color: var(--s1); }
+header { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+h1 { font-size: 20px; margin: 0; }
+h2 { font-size: 16px; margin: 26px 0 10px; }
+h3 { font-size: 13px; margin: 14px 0 6px; color: var(--text-2); font-weight: 600; }
+.muted { color: var(--text-3); } .small { font-size: 12px; }
+.pillbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 16px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--surface-2); }
+.pill.ok { color: var(--good); border-color: var(--good); }
+.pill.bad { color: var(--critical); border-color: var(--critical); }
+.pill.unknown { color: var(--warn); border-color: var(--warn); }
+.pill .hint { font-weight: 400; color: var(--text-3); }
+.card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+label { display: inline-flex; flex-direction: column; gap: 5px; font-size: 13px; }
+input, select, button, textarea { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+button { cursor: pointer; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--s1); color: #fff; border-color: var(--s1); font-weight: 600; }
+button.danger { background: var(--critical); color: #fff; border-color: var(--critical); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.track-choice { display: flex; gap: 10px; flex-wrap: wrap; }
+.track-choice label { flex-direction: row; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface); }
+.track-choice input[type=radio]:disabled + span { color: var(--text-3); }
+.policies { display: grid; gap: 6px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.policies label { flex-direction: row; align-items: flex-start; gap: 8px; font-weight: 400; }
+.step-title { display: flex; align-items: center; gap: 8px; }
+.step-num { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 999px; background: var(--s1); color: #fff; font-size: 12px; font-weight: 700; }
+progress { width: 100%; height: 14px; accent-color: var(--s1); }
+.verdict { border-radius: 10px; padding: 16px; border: 2px solid var(--border); }
+.verdict.supported { border-color: var(--good); }
+.verdict.not_supported { border-color: var(--critical); }
+.verdict.inconclusive { border-color: var(--warn); }
+.verdict .label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+.verdict .headline { font-size: 20px; font-weight: 700; margin: 4px 0 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; table-layout: auto; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+th { color: var(--text-2); font-weight: 600; white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-wrap { overflow-x: auto; }
+.policy-code { border-bottom: 1px dotted var(--text-3); cursor: help; white-space: nowrap; font-weight: 600; }
+.policy-legend { display: grid; gap: 2px 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 4px 0 0; }
+.hyp-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.hyp-card { border-left: 4px solid var(--text-3); padding: 8px 10px; background: var(--surface); border-radius: 6px; }
+.hyp-card.supported { border-left-color: var(--good); }
+.hyp-card.not_supported { border-left-color: var(--critical); }
+.hyp-card.inconclusive { border-left-color: var(--warn); }
+.banner { border: 2px dashed var(--s4); border-radius: 8px; padding: 10px 14px; font-weight: 600; margin-bottom: 14px; color: var(--s4); }
+details { margin: 6px 0; }
+summary { cursor: pointer; color: var(--text-2); }
+svg text { fill: var(--text-2); font-size: 11px; }
+svg .axis { stroke: var(--grid); stroke-width: 1; }
+.dot-oracle { stroke: var(--s4); stroke-width: 2; }
+dialog { border: 1px solid var(--border); border-radius: 10px; color: var(--text); background: var(--surface); max-width: 420px; padding: 18px; }
+dialog::backdrop { background: rgba(0,0,0,.4); }
+.nav-link { font-size: 13px; }
+@media (max-width: 480px) {
+  .wrap { padding: 14px 12px 48px; }
+  h1 { font-size: 18px; }
+  .card { padding: 10px 12px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>Dispatch routing lab</h1>
+    <div class="muted small">Agentic, multi-turn dispatch-time routing experiments · billed at API rates on your own subscription</div>
+  </div>
+  <div class="row">
+    <a class="nav-link" href="/">&larr; Overview &amp; lab</a>
+    <label>Theme <select id="theme"><option value="auto">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+  </div>
+</header>
+<div class="pillbar" id="authPills"></div>
+
+<section class="card">
+  <div class="step-title"><span class="step-num">1</span><h2 style="margin:0">Choose track</h2></div>
+  <div class="track-choice" id="trackChoice"></div>
+  <div class="row" style="margin-top:10px">
+    <label>Config
+      <select id="configSelect"></select>
+    </label>
+    <label>Scope
+      <select id="scopeSelect">
+        <option value="pilot">Pilot (small, cheap, sizes variance)</option>
+        <option value="full">Full (pre-registered confirmatory run)</option>
+      </select>
+    </label>
+  </div>
+  <p class="small muted" id="configDetail"></p>
+</section>
+
+<section class="card">
+  <div class="step-title"><span class="step-num">2</span><h2 style="margin:0">Size the run</h2></div>
+  <div class="grid">
+    <label>Tasks sampled<input id="sample" type="number" min="1" step="1"></label>
+    <label>Trials<input id="trials" type="number" min="1" step="1"></label>
+    <label>Budget ($)<input id="budget" type="number" min="0" step="0.01" value="1.00"></label>
+  </div>
+  <h3>Policies</h3>
+  <div class="policies" id="policyList"></div>
+</section>
+
+<section class="card">
+  <div class="step-title"><span class="step-num">3</span><h2 style="margin:0">Estimate, simulate, or run</h2></div>
+  <div class="row">
+    <button id="btnEstimate">Estimate (free)</button>
+    <button id="btnSimulate">Simulate (free, fake data)</button>
+    <button id="btnRun" class="primary" disabled>Run for real</button>
+    <button id="btnCancel" class="danger" hidden>Cancel run</button>
+  </div>
+  <div id="estimateResult" class="small" style="margin-top:10px"></div>
+  <p id="labStatus" role="status" aria-live="polite" class="small muted">Choose a track and config, then estimate.</p>
+</section>
+
+<section class="card" id="progressCard" hidden>
+  <h2 style="margin-top:0">Live progress</h2>
+  <progress id="progressBar" value="0" max="1"></progress>
+  <div class="row small muted" style="margin-top:8px">
+    <span id="progDone">0 / 0 cells</span>
+    <span id="progSpent">$0.0000 spent</span>
+    <span id="progElapsed">0s elapsed</span>
+  </div>
+  <p class="small" id="progCurrent"></p>
+</section>
+
+<section class="card">
+  <h2 style="margin-top:0">Run history</h2>
+  <div class="table-wrap"><table id="historyTable"><thead><tr><th>Run</th><th>When</th><th class="num">Spent</th><th>Headline</th><th></th></tr></thead><tbody></tbody></table></div>
+</section>
+
+<section id="runView"></section>
+
+<dialog id="confirmDialog">
+  <h3 style="margin-top:0">Confirm real run</h3>
+  <p id="confirmText" class="small"></p>
+  <div class="row" style="justify-content:flex-end">
+    <button id="confirmCancel">Cancel</button>
+    <button id="confirmGo" class="primary">Start real run</button>
+  </div>
+</dialog>
+
+<div class="tip" id="tip" style="position:fixed;pointer-events:none;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);display:none;max-width:320px;z-index:10"></div>
+</div>
+<script>
+(() => {
+const TOKEN = '__TOKEN__';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = x => x == null ? '–' : '$' + Number(x).toFixed(4);
+const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
+const ci = x => x ? `${(x[0]*100).toFixed(1)}–${(x[1]*100).toFixed(1)}%` : 'n/a';
+
+try { document.getElementById('theme').value = localStorage.getItem('theme') || 'auto'; } catch {}
+function applyTheme() { document.documentElement.dataset.theme = document.getElementById('theme').value; }
+applyTheme();
+document.getElementById('theme').addEventListener('change', () => {
+  applyTheme();
+  try { localStorage.setItem('theme', document.getElementById('theme').value); } catch {}
+});
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const v = await r.json();
+  if (!r.ok) throw new Error(v.error || 'Request failed');
+  return v;
+}
+async function post(path, data) {
+  return api(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Lab-Token': TOKEN },
+    body: JSON.stringify(data),
+  });
+}
+
+const POLICY_DESCRIPTIONS = {
+  A: 'Keep going in the same session',
+  A_switch: 'Same session, switch model mid-way',
+  B: 'Hand off on the same big model (today’s default)',
+  C1: 'Parent picks the model (the idea being tested)',
+  C2: 'A cheap classifier picks the model, no parent context',
+  D: 'Start cheap, escalate only if checks fail',
+  D_ideal: 'Start cheap, escalate using the hidden tests as a perfect checker (upper bound, not deployable)',
+  static_haiku: 'Always the small model',
+  static_haiku_terse: 'Small model, terse brief',
+  static_sonnet: 'Always the mid model',
+  static_opus_low: 'Always the big model, low effort',
+  oracle: 'Cheapest model that passed, in hindsight (computed, not run)',
+};
+// Graceful fallback for policy names the page doesn't know about yet.
+function policyDescription(name) {
+  if (POLICY_DESCRIPTIONS[name]) return POLICY_DESCRIPTIONS[name];
+  if (name.startsWith('static_')) return 'Fixed model: ' + name.slice(7).replace(/_/g, ' ');
+  return name.replace(/_/g, ' ');
+}
+function policyLabel(name) { return `${name} — ${policyDescription(name)}`; }
+
+let STATUS = null;
+let selectedConfig = null;
+let lastEstimate = null;
+let pollTimer = null;
+let runStartedAt = null;
+
+function renderAuthPills() {
+  const auth = STATUS.auth || {};
+  const el = document.getElementById('authPills');
+  const one = (label, info, hint) => {
+    if (!info) return `<span class="pill unknown">${label}: unknown</span>`;
+    let cls = 'unknown', text = 'unknown';
+    if (!info.installed) { cls = 'bad'; text = 'CLI missing'; }
+    else if (info.logged_in === true) { cls = 'ok'; text = 'signed in'; }
+    else if (info.logged_in === false) { cls = 'bad'; text = 'not signed in'; }
+    return `<span class="pill ${cls}">${label}: ${text}${cls !== 'ok' ? ` <span class="hint">(${esc(hint)})</span>` : ''}</span>`;
+  };
+  el.innerHTML = one('Claude subscription', auth.claude, 'run: claude login') +
+    one('ChatGPT subscription', auth.codex, 'run: codex login');
+}
+
+function trackReady(track) {
+  const auth = STATUS.auth || {};
+  if (track === 'claude') return !!(auth.claude && auth.claude.installed && auth.claude.logged_in);
+  if (track === 'codex') return !!(auth.codex && auth.codex.installed && auth.codex.logged_in);
+  return false;
+}
+
+function renderTrackChoice() {
+  const el = document.getElementById('trackChoice');
+  const tracks = [['claude', 'Claude (claude CLI)'], ['codex', 'ChatGPT (codex CLI)']];
+  el.innerHTML = tracks.map(([id, label]) => {
+    const ready = trackReady(id);
+    return `<label><input type="radio" name="track" value="${id}" ${ready ? '' : 'disabled'}> <span>${esc(label)}${ready ? '' : ' — not ready'}</span></label>`;
+  }).join('');
+  const firstReady = tracks.map(t => t[0]).find(trackReady);
+  const radios = el.querySelectorAll('input[name=track]');
+  radios.forEach(r => r.addEventListener('change', onTrackChange));
+  if (firstReady) {
+    const target = [...radios].find(r => r.value === firstReady);
+    if (target) target.checked = true;
+  }
+  onTrackChange();
+}
+
+// Called on every status poll (not just the first load): update readiness
+// without rebuilding the track radios / config select, which would discard
+// whatever the operator has already picked.
+function updateTrackReadiness() {
+  document.querySelectorAll('#trackChoice input[name=track]').forEach(r => {
+    const ready = trackReady(r.value);
+    r.disabled = !ready;
+    const span = r.nextElementSibling;
+    if (span) {
+      const label = r.value === 'claude' ? 'Claude (claude CLI)' : 'ChatGPT (codex CLI)';
+      span.textContent = label + (ready ? '' : ' — not ready');
+    }
+  });
+}
+
+function currentTrack() {
+  const checked = document.querySelector('input[name=track]:checked');
+  return checked ? checked.value : null;
+}
+
+function trackConfigs() {
+  const track = currentTrack();
+  return (STATUS.configs || []).filter(c => !c.error && c.track === track);
+}
+
+// A config's scope is inferred from its file name (pilot vs. the
+// pre-registered config); Scope and Config always agree with each other and
+// with what currentSpec() sends, whichever one the operator changed last.
+function inferScope(cfg) {
+  return /pilot/i.test(cfg.name || '') || /pilot/i.test(cfg.path || '') ? 'pilot' : 'full';
+}
+
+function onTrackChange() {
+  const configs = trackConfigs();
+  const sel = document.getElementById('configSelect');
+  sel.innerHTML = configs.map(c => `<option value="${esc(c.path)}">${esc(c.name)} (${c.n_tasks} tasks, ${c.trials} trials)</option>`).join('')
+    || '<option value="">No config for this track</option>';
+  sel.onchange = onConfigSelectChange;
+  selectedConfig = configs[0] || null;
+  if (selectedConfig) document.getElementById('scopeSelect').value = inferScope(selectedConfig);
+  onConfigChange();
+}
+
+function onConfigSelectChange() {
+  const configs = trackConfigs();
+  const sel = document.getElementById('configSelect');
+  selectedConfig = configs.find(c => c.path === sel.value) || null;
+  if (selectedConfig) document.getElementById('scopeSelect').value = inferScope(selectedConfig);
+  onConfigChange();
+}
+
+function onScopeChange() {
+  const scope = document.getElementById('scopeSelect').value;
+  const configs = trackConfigs();
+  const match = configs.find(c => inferScope(c) === scope);
+  if (match) {
+    document.getElementById('configSelect').value = match.path;
+    selectedConfig = match;
+  }
+  onConfigChange();
+}
+document.getElementById('scopeSelect').addEventListener('change', onScopeChange);
+
+function onConfigChange() {
+  const detail = document.getElementById('configDetail');
+  if (!selectedConfig) { detail.textContent = ''; renderPolicies(); return; }
+  const margin = selectedConfig.margin_pp;
+  const primary = selectedConfig.primary || {};
+  detail.textContent = `Pre-registered primary: ${primary.treatment || '?'} vs ${primary.control || '?'}, non-inferiority margin ${margin} pp.`;
+  applySizePreset();
+  renderPolicies();
+}
+
+function applySizePreset() {
+  if (!selectedConfig) return;
+  const scope = document.getElementById('scopeSelect').value;
+  const sampleEl = document.getElementById('sample');
+  const trialsEl = document.getElementById('trials');
+  if (scope === 'pilot') {
+    sampleEl.value = Math.max(1, Math.min(3, selectedConfig.n_tasks || 3));
+    trialsEl.value = 1;
+  } else {
+    sampleEl.value = selectedConfig.n_tasks || '';
+    trialsEl.value = selectedConfig.trials || 1;
+  }
+}
+
+function renderPolicies() {
+  const el = document.getElementById('policyList');
+  if (!selectedConfig) { el.innerHTML = ''; return; }
+  el.innerHTML = selectedConfig.policies.map(p =>
+    `<label><input type="checkbox" name="policy" value="${esc(p)}" checked> ${esc(policyLabel(p))}</label>`
+  ).join('');
+}
+
+function selectedPolicies() {
+  return [...document.querySelectorAll('input[name=policy]:checked')].map(i => i.value);
+}
+
+function currentSpec(overrides) {
+  // Read straight from the controls so the request always matches what's
+  // on screen, even if a stale JS variable disagrees.
+  return Object.assign({
+    config: document.getElementById('configSelect').value || '',
+    sample: Number(document.getElementById('sample').value) || null,
+    trials: Number(document.getElementById('trials').value) || null,
+    policies: selectedPolicies(),
+    budget: Number(document.getElementById('budget').value) || 0,
+  }, overrides || {});
+}
+
+function setStatus(msg) { document.getElementById('labStatus').textContent = msg; }
+
+document.getElementById('btnEstimate').addEventListener('click', async () => {
+  if (!selectedConfig) { setStatus('Choose a config first.'); return; }
+  setStatus('Estimating…');
+  try {
+    const r = await post('/api/dispatch/estimate', currentSpec());
+    lastEstimate = r;
+    document.getElementById('estimateResult').innerHTML =
+      `<b>Estimate:</b> low ${money(r.usd_low)} &middot; mid ${money(r.usd_mid)} &middot; high ${money(r.usd_high)} ` +
+      `over ${r.cells} cells / ${r.sessions} sessions.` +
+      `<details><summary>Assumptions</summary><ul>${(r.assumptions || []).map(a => `<li>${esc(a)}</li>`).join('')}</ul></details>`;
+    document.getElementById('btnRun').disabled = false;
+    setStatus('Estimate ready. Simulate for free, or run for real once you confirm.');
+  } catch (e) { setStatus(e.message); }
+});
+
+function setRunningUI(running) {
+  document.getElementById('btnEstimate').disabled = running;
+  document.getElementById('btnSimulate').disabled = running;
+  document.getElementById('btnRun').disabled = running || !lastEstimate;
+  document.getElementById('btnCancel').hidden = !running;
+}
+
+document.getElementById('btnSimulate').addEventListener('click', async () => {
+  if (!selectedConfig) { setStatus('Choose a config first.'); return; }
+  setStatus('Starting simulation…');
+  try {
+    await post('/api/dispatch/start', currentSpec({ fake: true, budget: Number(document.getElementById('budget').value) || 1 }));
+    setStatus('Simulation running (no real models were called).');
+    setRunningUI(true);
+    startPolling();
+  } catch (e) { setStatus(e.message); }
+});
+
+document.getElementById('btnRun').addEventListener('click', () => {
+  if (!lastEstimate) { setStatus('Estimate first.'); return; }
+  const budget = Number(document.getElementById('budget').value) || 0;
+  const track = currentTrack();
+  document.getElementById('confirmText').textContent =
+    `This bills your ${track === 'codex' ? 'ChatGPT' : 'Claude'} subscription at API rates. ` +
+    `Estimated cost: ${money(lastEstimate.usd_low)} to ${money(lastEstimate.usd_high)} (mid ${money(lastEstimate.usd_mid)}). ` +
+    `Budget cap: $${budget.toFixed(2)}. The budget is a post-session stop, so the last in-flight session can overshoot it.`;
+  document.getElementById('confirmDialog').showModal();
+});
+document.getElementById('confirmCancel').addEventListener('click', () => document.getElementById('confirmDialog').close());
+document.getElementById('confirmGo').addEventListener('click', async () => {
+  document.getElementById('confirmDialog').close();
+  setStatus('Starting real run…');
+  try {
+    await post('/api/dispatch/start', currentSpec({
+      fake: false,
+      confirm_estimate_usd: lastEstimate.usd_high,
+    }));
+    setStatus('Real run started. This is billed at API rates.');
+    setRunningUI(true);
+    startPolling();
+  } catch (e) { setStatus(e.message); }
+});
+
+document.getElementById('btnCancel').addEventListener('click', async () => {
+  try { await post('/api/dispatch/cancel', {}); setStatus('Cancelling…'); } catch (e) { setStatus(e.message); }
+});
+
+function renderJob(job) {
+  const card = document.getElementById('progressCard');
+  const running = !!job && job.state === 'running';
+  setRunningUI(running);
+  if (!job || !job.progress) {
+    card.hidden = true;
+    return;
+  }
+  const p = job.progress;
+  card.hidden = false;
+  document.getElementById('progressBar').value = p.total ? p.done / p.total : 0;
+  document.getElementById('progDone').textContent = `${p.done} / ${p.total} cells`;
+  document.getElementById('progSpent').textContent = `${money(p.spent_usd)} spent` + (p.budget_usd ? ` of $${Number(p.budget_usd).toFixed(2)} budget` : '');
+  const elapsed = runStartedAt ? Math.round((Date.now() - runStartedAt) / 1000) : 0;
+  document.getElementById('progElapsed').textContent = `${elapsed}s elapsed`;
+  document.getElementById('progCurrent').textContent = `${p.state}${p.current ? ' — ' + p.current : ''}${p.message ? ' — ' + p.message : ''}`;
+  if (job.state !== 'running' && pollTimer) {
+    setStatus(`Run finished: ${job.state}${job.error ? ' — ' + job.error : ''}`);
+    if (job.run_dir) loadRun(job.run_dir);
+    stopPolling();
+  }
+}
+
+function renderHistory() {
+  const rows = (STATUS.history || []).map(h => `<tr><td>${esc(h.experiment || '')}<div class="small muted">${esc(h.run_dir)}</div></td>` +
+    `<td class="small muted">${esc(h.fake ? 'simulated' : 'real')}</td><td class="num">${money(h.spent_usd)}</td><td class="small">${esc(h.headline || '')}</td>` +
+    `<td><button data-run="${esc(h.run_dir)}">View</button></td></tr>`).join('');
+  document.querySelector('#historyTable tbody').innerHTML = rows || '<tr><td colspan="5" class="muted small">No runs yet.</td></tr>';
+  document.querySelectorAll('#historyTable [data-run]').forEach(b => b.onclick = () => loadRun(b.dataset.run));
+}
+
+let uiBuilt = false;
+
+async function refreshStatus() {
+  STATUS = await api('/api/dispatch/status');
+  renderAuthPills();
+  // Only rebuild the track radios / config select once: rebuilding on every
+  // periodic poll would silently discard whatever config/scope the operator
+  // had already chosen. Later polls just refresh readiness in place.
+  if (!uiBuilt) {
+    renderTrackChoice();
+    uiBuilt = true;
+  } else {
+    updateTrackReadiness();
+  }
+  renderHistory();
+  renderJob(STATUS.job);
+  if (STATUS.job && STATUS.job.state === 'running' && !pollTimer) {
+    runStartedAt = STATUS.job.started_at ? Date.parse(STATUS.job.started_at) : Date.now();
+    startPolling();
+  }
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  runStartedAt = runStartedAt || Date.now();
+  pollTimer = setInterval(async () => {
+    try {
+      STATUS = await api('/api/dispatch/status');
+      renderHistory();
+      renderJob(STATUS.job);
+    } catch (e) { setStatus('Connection lost: ' + e.message); }
+  }, 2000);
+}
+function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
+
+function svgChart(policies, oracle) {
+  const pts = policies.filter(p => p.cost_per_pass != null && p.pass_rate != null);
+  if (!pts.length) return '<p class="muted small">No comparable cost/pass data.</p>';
+  const all = oracle ? pts.concat([Object.assign({}, oracle, { name: 'oracle', _oracle: true })]) : pts;
+  const maxCost = Math.max(...all.map(p => p.cost_per_pass), 0.0001);
+  const w = 560, h = 320, pad = 46;
+  const x = c => pad + (c / maxCost) * (w - pad * 2);
+  const y = r => h - pad - r * (h - pad * 2);
+
+  // Simple label-collision avoidance: points that land on (almost) the same
+  // pixel get nudged apart horizontally, then any labels still stacked too
+  // close vertically get pushed down a line, with a thin leader line back
+  // to the true dot position so the reading stays honest.
+  const buckets = new Map();
+  all.forEach(p => {
+    const key = Math.round(x(p.cost_per_pass) / 6) + ':' + Math.round(y(p.pass_rate) / 6);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(p);
+  });
+  let placed = [];
+  buckets.forEach(group => {
+    group.forEach((p, i) => {
+      const jitter = (i - (group.length - 1) / 2) * 9;
+      placed.push({ p, cx: x(p.cost_per_pass) + jitter, cy: y(p.pass_rate) });
+    });
+  });
+  placed = placed.map(d => ({ ...d, ly: d.cy + 4 })).sort((a, b) => a.cx - b.cx);
+  for (let i = 1; i < placed.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(placed[i].cx - placed[j].cx) < 96 && Math.abs(placed[i].ly - placed[j].ly) < 14) {
+        placed[i].ly = placed[j].ly + 14;
+      }
+    }
+  }
+
+  const grid = [0, .25, .5, .75, 1].map(r => `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${y(r)}" y2="${y(r)}"/><text x="4" y="${y(r)+4}">${Math.round(r*100)}%</text>`).join('');
+  const marks = placed.map((d, i) => {
+    const isOracle = !!d.p._oracle;
+    const nudged = Math.abs(d.ly - (d.cy + 4)) > 1;
+    const leader = nudged
+      ? `<line x1="${d.cx}" y1="${d.cy}" x2="${d.cx + 8}" y2="${d.ly - 4}" stroke="var(--text-3)" stroke-width="1"/>`
+      : '';
+    return `${leader}<circle cx="${d.cx}" cy="${d.cy}" r="6" fill="var(--s${(i % 4) + 1})" ${isOracle ? 'class="dot-oracle"' : ''}/>` +
+      `<text x="${d.cx + 9}" y="${d.ly}" class="lbl">${esc(d.p.name)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Cost per completed task vs pass rate">` +
+    `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${h-pad}" y2="${h-pad}"/><line class="axis" x1="${pad}" x2="${pad}" y1="${pad}" y2="${h-pad}"/>` +
+    grid +
+    `<text x="${w/2}" y="${h-8}" text-anchor="middle">cost per completed task ($)</text>` +
+    `<text x="12" y="${pad-10}">pass rate</text>` +
+    marks + `</svg>`;
+}
+
+function verdictClass(v) { return (v || 'inconclusive').replace(/\s+/g, '_'); }
+
+function renderRunView(summary) {
+  const el = document.getElementById('runView');
+  const h_d1 = (summary.comparisons || []).find(c => c.id === 'H-D1');
+  const secondary = (summary.comparisons || []).filter(c => c.id !== 'H-D1');
+  const banner = summary.fake ? '<div class="banner">SIMULATED — no real models were called</div>' : '';
+  const verdict = h_d1 ? `
+    <div class="verdict ${verdictClass(h_d1.verdict)}">
+      <div class="label">H-D1 — dispatch-time routing</div>
+      <div class="headline">${esc(h_d1.verdict || 'inconclusive')}</div>
+      <p>${esc(h_d1.sentence || summary.headline || '')}</p>
+    </div>` : `<p class="muted">${esc(summary.headline || 'No primary comparison in this run.')}</p>`;
+  const policies = summary.policies || [];
+  // Table rows show only the short policy code (with a tooltip for the full
+  // description) so columns fit at 800px; the legend below spells every
+  // code out for touch devices that have no hover.
+  const rows = policies.map(p => `<tr>
+      <td><span class="policy-code" title="${esc(policyDescription(p.name))}">${esc(p.name)}</span></td>
+      <td class="num">${pct(p.pass_rate)} <span class="muted small">(${ci(p.pass_ci)})</span></td>
+      <td class="num">${money(p.cost_per_task)}</td>
+      <td class="num">${money(p.cost_per_pass)} <span class="muted small">(${p.cost_per_pass_ci ? money(p.cost_per_pass_ci[0]) + '–' + money(p.cost_per_pass_ci[1]) : 'n/a'})</span></td>
+      <td class="num">${pct(p.router_share)}</td>
+      <td class="num">${p.escalation_rate != null ? pct(p.escalation_rate) : '–'}</td>
+      <td class="num">${p.mean_turns != null ? p.mean_turns.toFixed(1) : '–'}</td>
+      <td class="small">${esc(Object.entries(p.model_mix || {}).map(([m, s]) => `${m} ${pct(s)}`).join(', '))}</td>
+    </tr>`).join('');
+  const legend = policies.map(p =>
+    `<div><b>${esc(p.name)}</b> — ${esc(policyDescription(p.name))}</div>`
+  ).join('');
+  const hypCards = secondary.map(c => `<div class="hyp-card ${verdictClass(c.verdict)}"><b>${esc(c.id)}</b> — ${esc(c.verdict)}<p class="small">${esc(c.sentence)}</p></div>`).join('');
+  el.innerHTML = `
+    <h2>Results: ${esc(summary.experiment || '')}</h2>
+    ${banner}
+    ${verdict}
+    <h3>Cost per completed task vs pass rate</h3>
+    <div class="card">${svgChart(policies, summary.oracle)}</div>
+    <details open><summary>What do these metrics mean?</summary>
+      <ul class="small">
+        <li><b>pass rate</b>: share of (task, trial) cells that passed the deterministic grader.</li>
+        <li><b>cost per task</b>: list-price spend divided by cells run (setup sessions excluded).</li>
+        <li><b>cost per completed task</b>: spend divided by cells that passed — the headline metric.</li>
+        <li><b>router share</b>: fraction of a policy's cost spent choosing the model, not doing the task.</li>
+        <li><b>escalations</b>: how often a cascade policy needed a stronger model after a failed check.</li>
+      </ul>
+    </details>
+    <h3>Policies</h3>
+    <details class="small"><summary>Policy legend (code &rarr; what it does)</summary><div class="policy-legend">${legend}</div></details>
+    <div class="table-wrap"><table><thead><tr><th>Policy</th><th class="num">Pass rate</th><th class="num">Cost/task</th><th class="num">Cost/completed task</th><th class="num">Router share</th><th class="num">Escalations</th><th class="num">Mean turns</th><th>Model mix</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h3>Secondary hypotheses</h3>
+    <div class="hyp-cards">${hypCards || '<p class="muted small">No secondary comparisons in this run.</p>'}</div>
+    <div class="row" style="margin-top:10px"><button id="copyMd">Copy summary as Markdown</button></div>
+  `;
+  document.getElementById('copyMd').addEventListener('click', () => {
+    const lines = [
+      `# ${summary.experiment || 'Dispatch run'}`,
+      summary.fake ? '_SIMULATED — no real models were called_' : '',
+      '',
+      h_d1 ? `**H-D1 (${h_d1.verdict}):** ${h_d1.sentence}` : (summary.headline || ''),
+      '',
+      '| Policy | Pass rate | Cost/task | Cost/completed task |',
+      '| --- | --- | --- | --- |',
+      ...policies.map(p => `| ${p.name} | ${pct(p.pass_rate)} | ${money(p.cost_per_task)} | ${money(p.cost_per_pass)} |`),
+      '',
+      ...secondary.map(c => `**${c.id} (${c.verdict}):** ${c.sentence}`),
+    ].filter(l => l !== undefined);
+    const text = lines.join('\n');
+    navigator.clipboard && navigator.clipboard.writeText(text).catch(() => {});
+  });
+}
+
+async function loadRun(dir) {
+  try {
+    const summary = await api('/api/dispatch/run?dir=' + encodeURIComponent(dir));
+    renderRunView(summary);
+  } catch (e) { setStatus('Could not load run: ' + e.message); }
+}
+
+refreshStatus().catch(e => setStatus(e.message));
+setInterval(() => { if (!pollTimer) refreshStatus().catch(() => {}); }, 15000);
+})();
+</script>
+</body>
+</html>

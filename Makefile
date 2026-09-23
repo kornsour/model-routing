@@ -2,7 +2,8 @@
 .DEFAULT_GOAL := help
 PY := uv run
 
-.PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab
+.PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab \
+	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips app
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -54,3 +55,25 @@ clean: ## Remove caches
 
 lab: ## Serve the local experiment platform at http://127.0.0.1:8765
 	$(PY) model-routing serve
+
+dispatch-estimate: ## Dry-run list-price estimate for a dispatch experiment (EXP=experiments/agentic/exp05_dispatch.toml)
+	$(PY) model-routing dispatch-estimate $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
+		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES))
+
+dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE=n, TRIALS=n, POLICIES=A,B,C1)
+	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
+		--budget-usd $(or $(BUDGET),1.00) \
+		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES))
+
+dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
+	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
+		--fake --budget-usd 1000 $(if $(SAMPLE),--sample $(SAMPLE))
+
+dispatch-report: ## Rebuild summary.json/md for a dispatch run dir (RUN=results/<exp>/<stamp>)
+	$(PY) model-routing dispatch-report $(RUN)
+
+harvest-chips: ## Scan local Claude Code transcripts for spawned task chips -> tasks/agentic/private/harvested.jsonl
+	$(PY) model-routing harvest-chips
+
+app: ## Launch the dispatch routing lab as a desktop app (opens the browser)
+	$(PY) model-routing serve --open --page dispatch

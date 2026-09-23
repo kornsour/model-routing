@@ -1,0 +1,92 @@
+# Experiment 5 (ChatGPT/Codex track) - dispatch-time routing, same design as
+# exp05_dispatch.toml, run against the Codex CLI / OpenAI candidates instead.
+# See docs/experiments/dispatch-routing.md.
+
+[experiment]
+name = "exp05_dispatch_codex"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+trials = 3                      # pre-registered
+order = "by_policy"             # by_policy | by_task
+hypothesis = "Spawning with the parent-recommended model lowers cost per completed task vs. spawning on the parent model, with pass rate non-inferior within the margin."
+primary = { treatment = "C1", control = "B" }   # pre-registered
+margin_pp = 5                   # pre-registered non-inferiority margin, percentage points
+max_budget_per_session_usd = 2.0
+parent = "sol"                  # the model the user's main session runs on
+# The menu the parent (C1) and classifier (C2) choose from, cheapest first.
+menu = ["luna", "terra", "sol"]
+
+[auth]
+mode = "subscription"
+
+[candidates.luna]
+provider = "codex_cli"
+model = "gpt-5.6-luna"
+
+[candidates.terra]
+provider = "codex_cli"
+model = "gpt-5.6-terra"
+
+[candidates.sol]
+provider = "codex_cli"
+model = "gpt-5.6-sol"
+
+[candidates.sol_low]
+provider = "codex_cli"
+model = "gpt-5.6-sol"
+effort = "low"
+
+[[policies]]
+name = "A"
+kind = "in_session"
+
+[[policies]]
+name = "A_switch"
+kind = "in_session"
+switch_to = "terra"
+
+[[policies]]
+name = "B"
+kind = "spawn_static"
+candidate = "sol"               # = parent
+
+[[policies]]
+name = "C1"
+kind = "spawn_parent_pick"
+
+[[policies]]
+name = "C2"
+kind = "spawn_classifier"
+classifier = "luna"
+
+[[policies]]
+name = "D"
+kind = "spawn_cascade"
+chain = ["luna", "terra", "sol"]
+
+[[policies]]
+name = "D_ideal"                # upper bound: hidden tests as a perfect checker (not deployable)
+kind = "spawn_cascade"
+chain = ["luna", "terra", "sol"]
+escalate_on = "hidden"
+
+[[policies]]
+name = "static_haiku"           # naming kept for report comparability; luna is the cheap tier here
+kind = "spawn_static"
+candidate = "luna"
+
+[[policies]]
+name = "static_haiku_terse"
+kind = "spawn_static"
+candidate = "luna"
+brief = "terse"
+
+[[policies]]
+name = "static_sonnet"
+kind = "spawn_static"
+candidate = "terra"
+
+[[policies]]
+name = "static_opus_low"
+kind = "spawn_static"
+candidate = "sol_low"

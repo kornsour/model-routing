@@ -89,3 +89,17 @@ def test_dashboard_html_is_self_contained(tmp_path: Path):
         == 0
     )
     assert out.exists() and "Model routing runs" in out.read_text()
+
+
+def test_discover_runs_skips_dispatch_runs(tmp_path):
+    from model_routing.store import discover_runs
+
+    single = tmp_path / "exp01" / "s1"
+    single.mkdir(parents=True)
+    (single / "outcomes.jsonl").write_text("")
+    (single / "calls.jsonl").write_text("")
+    dispatch = tmp_path / "exp05_dispatch" / "s2"
+    dispatch.mkdir(parents=True)
+    (dispatch / "outcomes.jsonl").write_text('{"policy": "B"}\n')
+    (dispatch / "sessions.jsonl").write_text("")
+    assert discover_runs(tmp_path) == [single]

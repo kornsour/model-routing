@@ -1,0 +1,92 @@
+# Experiment 5 - dispatch-time routing (agentic, multi-turn, sandboxed).
+# See docs/experiments/dispatch-routing.md. Pre-registered fields are marked;
+# change them only before the confirmatory run, and record why.
+
+[experiment]
+name = "exp05_dispatch"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+trials = 3                      # pre-registered
+order = "by_policy"             # by_policy | by_task
+hypothesis = "Spawning with the parent-recommended model lowers cost per completed task vs. spawning on the parent model, with pass rate non-inferior within the margin."
+primary = { treatment = "C1", control = "B" }   # pre-registered
+margin_pp = 5                   # pre-registered non-inferiority margin, percentage points
+max_budget_per_session_usd = 2.0
+parent = "opus"                 # the model the user's main session runs on
+# The menu the parent (C1) and classifier (C2) choose from, cheapest first.
+menu = ["haiku", "sonnet", "opus_low", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[candidates.opus_low]
+provider = "claude_cli"
+model = "opus"
+effort = "low"
+
+[[policies]]
+name = "A"
+kind = "in_session"
+
+[[policies]]
+name = "A_switch"
+kind = "in_session"
+switch_to = "sonnet"
+
+[[policies]]
+name = "B"
+kind = "spawn_static"
+candidate = "opus"              # = parent
+
+[[policies]]
+name = "C1"
+kind = "spawn_parent_pick"
+
+[[policies]]
+name = "C2"
+kind = "spawn_classifier"
+classifier = "haiku"
+
+[[policies]]
+name = "D"
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+
+[[policies]]
+name = "D_ideal"                # upper bound: hidden tests as a perfect checker (not deployable)
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+escalate_on = "hidden"
+
+[[policies]]
+name = "static_haiku"
+kind = "spawn_static"
+candidate = "haiku"
+
+[[policies]]
+name = "static_haiku_terse"
+kind = "spawn_static"
+candidate = "haiku"
+brief = "terse"
+
+[[policies]]
+name = "static_sonnet"
+kind = "spawn_static"
+candidate = "sonnet"
+
+[[policies]]
+name = "static_opus_low"
+kind = "spawn_static"
+candidate = "opus_low"
