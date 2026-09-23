@@ -162,9 +162,31 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
   <p class="small" id="progCurrent"></p>
 </section>
 
+<section class="card" id="backupCard">
+  <h2 style="margin-top:0">Data &amp; backups</h2>
+  <p class="small muted">Raw run data (JSONL + meta.json) in <code>results/</code> is the source of truth and is
+    git-ignored; if this checkout lives in a worktree, deleting the worktree deletes it. Auto-backup copies each
+    finished real run somewhere durable.</p>
+  <div class="grid">
+    <label>Backup folder
+      <input id="backupDir" type="text" placeholder="/Users/you/Google Drive/model-routing-backups">
+    </label>
+    <label style="flex-direction:row;align-items:center;gap:6px">
+      <input id="autoBackupToggle" type="checkbox"> Auto-backup after every real run
+    </label>
+  </div>
+  <p class="small muted" id="backupDirHint"></p>
+  <div class="row" style="margin-top:8px">
+    <button id="btnSaveBackupDir">Save folder</button>
+    <button id="btnBackupAll">Back up everything now</button>
+    <button id="btnRestore" class="danger">Restore from backup&hellip;</button>
+  </div>
+  <p class="small muted" id="backupStatusLine" style="margin-top:8px"></p>
+</section>
+
 <section class="card">
   <h2 style="margin-top:0">Run history</h2>
-  <div class="table-wrap"><table id="historyTable"><thead><tr><th>Run</th><th>When</th><th class="num">Spent</th><th>Headline</th><th></th></tr></thead><tbody></tbody></table></div>
+  <div class="table-wrap"><table id="historyTable"><thead><tr><th>Run</th><th>When</th><th class="num">Spent</th><th>Headline</th><th>Backup</th><th></th></tr></thead><tbody></tbody></table></div>
 </section>
 
 <section id="runView"></section>
@@ -175,6 +197,20 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
   <div class="row" style="justify-content:flex-end">
     <button id="confirmCancel">Cancel</button>
     <button id="confirmGo" class="primary">Start real run</button>
+  </div>
+</dialog>
+
+<dialog id="restoreDialog">
+  <h3 style="margin-top:0">Restore from backup</h3>
+  <p class="small">Copies runs found in the backup folder that are missing from <code>results/</code> back in,
+    then rebuilds the index. A local file that differs from its backup is never overwritten — it is reported
+    as a conflict instead.</p>
+  <label>Backup folder to restore from
+    <input id="restoreDir" type="text">
+  </label>
+  <div class="row" style="justify-content:flex-end;margin-top:10px">
+    <button id="restoreCancel">Cancel</button>
+    <button id="restoreGo" class="primary">Restore</button>
   </div>
 </dialog>
 
@@ -471,17 +507,118 @@ function renderJob(job) {
   if (job.state !== 'running' && pollTimer) {
     setStatus(`Run finished: ${job.state}${job.error ? ' — ' + job.error : ''}`);
     if (job.run_dir) loadRun(job.run_dir);
+    refreshBackupStatus().catch(() => {});
     stopPolling();
   }
+}
+
+let BACKUP_STATUS = null;
+
+function backupBadge(runDir) {
+  const rows = (BACKUP_STATUS && BACKUP_STATUS.runs) || [];
+  const row = rows.find(r => r.run_dir === runDir);
+  if (!row) return '<span class="muted small">unknown</span>';
+  if (row.up_to_date) {
+    const when = row.backed_up_at ? relTime(row.backed_up_at) : 'recently';
+    return `<span class="small" style="color:var(--good)">Backed up to Drive &#10003; ${esc(when)}</span>`;
+  }
+  if (row.backed_up) {
+    return '<span class="small" style="color:var(--warn)">Backup stale</span> <button data-backup-run="' + esc(runDir) + '" class="small">Back up now</button>';
+  }
+  return '<span class="small muted">Not backed up</span> <button data-backup-run="' + esc(runDir) + '" class="small">Back up now</button>';
+}
+
+function relTime(iso) {
+  const ms = Date.now() - Date.parse(iso);
+  if (!(ms >= 0)) return iso;
+  const mins = Math.round(ms / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
 }
 
 function renderHistory() {
   const rows = (STATUS.history || []).map(h => `<tr><td>${esc(h.experiment || '')}<div class="small muted">${esc(h.run_dir)}</div></td>` +
     `<td class="small muted">${esc(h.fake ? 'simulated' : 'real')}</td><td class="num">${money(h.spent_usd)}</td><td class="small">${esc(h.headline || '')}</td>` +
-    `<td><button data-run="${esc(h.run_dir)}">View</button></td></tr>`).join('');
-  document.querySelector('#historyTable tbody').innerHTML = rows || '<tr><td colspan="5" class="muted small">No runs yet.</td></tr>';
+    `<td>${backupBadge(h.run_dir)}</td>` +
+    `<td><button data-run="${esc(h.run_dir)}">View</button> ` +
+    `<a href="/api/runs/report?dir=${encodeURIComponent(h.run_dir)}" target="_blank" rel="noopener">Open report</a> ` +
+    `<a href="/api/runs/export?dir=${encodeURIComponent(h.run_dir)}">Download .zip</a></td></tr>`).join('');
+  document.querySelector('#historyTable tbody').innerHTML = rows || '<tr><td colspan="6" class="muted small">No runs yet.</td></tr>';
   document.querySelectorAll('#historyTable [data-run]').forEach(b => b.onclick = () => loadRun(b.dataset.run));
+  document.querySelectorAll('#historyTable [data-backup-run]').forEach(b => b.onclick = () => backupOneRun(b.dataset.backupRun));
 }
+
+async function backupOneRun(runDir) {
+  document.getElementById('backupStatusLine').textContent = `Backing up ${runDir}…`;
+  try {
+    await post('/api/backup/run', { dir: runDir });
+    await refreshBackupStatus();
+    document.getElementById('backupStatusLine').textContent = `Backed up ${runDir}.`;
+  } catch (e) {
+    document.getElementById('backupStatusLine').textContent = 'Backup failed: ' + e.message;
+  }
+}
+
+async function refreshBackupStatus() {
+  BACKUP_STATUS = await api('/api/backup/status');
+  const dirInput = document.getElementById('backupDir');
+  if (document.activeElement !== dirInput) dirInput.value = BACKUP_STATUS.backup_dir || '';
+  document.getElementById('autoBackupToggle').checked = !!BACKUP_STATUS.auto_backup;
+  const hint = document.getElementById('backupDirHint');
+  const parts = [];
+  if (BACKUP_STATUS.detected_drive) parts.push(`Detected Google Drive folder: ${esc(BACKUP_STATUS.detected_drive)}`);
+  if (BACKUP_STATUS.index_snapshot) parts.push(`Last index snapshot: ${esc(BACKUP_STATUS.index_snapshot)}`);
+  if (!BACKUP_STATUS.backup_dir) parts.push('No backup folder configured yet — nothing is being backed up.');
+  hint.innerHTML = parts.join('<br>');
+  renderHistory();
+}
+
+document.getElementById('btnSaveBackupDir').addEventListener('click', async () => {
+  const dir = document.getElementById('backupDir').value.trim();
+  document.getElementById('backupStatusLine').textContent = 'Saving…';
+  try {
+    await post('/api/backup/settings', { dir, auto: document.getElementById('autoBackupToggle').checked });
+    await refreshBackupStatus();
+    document.getElementById('backupStatusLine').textContent = 'Saved.';
+  } catch (e) { document.getElementById('backupStatusLine').textContent = e.message; }
+});
+document.getElementById('autoBackupToggle').addEventListener('change', async (e) => {
+  try {
+    await post('/api/backup/settings', { auto: e.target.checked });
+    await refreshBackupStatus();
+  } catch (err) { document.getElementById('backupStatusLine').textContent = err.message; }
+});
+document.getElementById('btnBackupAll').addEventListener('click', async () => {
+  document.getElementById('backupStatusLine').textContent = 'Backing up everything…';
+  try {
+    const r = await post('/api/backup/all', {});
+    const n = (r.runs || []).length;
+    const failed = (r.runs || []).filter(x => x.status === 'failed').length;
+    await refreshBackupStatus();
+    document.getElementById('backupStatusLine').textContent = `Backed up ${n} run(s)${failed ? `, ${failed} failed` : ''}.`;
+  } catch (e) { document.getElementById('backupStatusLine').textContent = e.message; }
+});
+document.getElementById('btnRestore').addEventListener('click', () => {
+  document.getElementById('restoreDir').value = (BACKUP_STATUS && BACKUP_STATUS.backup_dir) || '';
+  document.getElementById('restoreDialog').showModal();
+});
+document.getElementById('restoreCancel').addEventListener('click', () => document.getElementById('restoreDialog').close());
+document.getElementById('restoreGo').addEventListener('click', async () => {
+  const dir = document.getElementById('restoreDir').value.trim();
+  document.getElementById('restoreDialog').close();
+  document.getElementById('backupStatusLine').textContent = 'Restoring…';
+  try {
+    const r = await post('/api/backup/restore', { dir });
+    await refreshStatus();
+    await refreshBackupStatus();
+    document.getElementById('backupStatusLine').textContent =
+      `Restored ${r.restored.length} run(s), reindexed ${r.indexed.length}` +
+      (r.conflicts.length ? `, ${r.conflicts.length} conflict(s) left untouched` : '') + '.';
+  } catch (e) { document.getElementById('backupStatusLine').textContent = e.message; }
+});
 
 let uiBuilt = false;
 
@@ -650,7 +787,9 @@ async function loadRun(dir) {
 }
 
 refreshStatus().catch(e => setStatus(e.message));
+refreshBackupStatus().catch(() => {});
 setInterval(() => { if (!pollTimer) refreshStatus().catch(() => {}); }, 15000);
+setInterval(() => { refreshBackupStatus().catch(() => {}); }, 15000);
 })();
 </script>
 </body>

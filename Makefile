@@ -3,7 +3,8 @@
 PY := uv run
 
 .PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab \
-	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips app
+	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips app \
+	export backup restore backup-status backup-config
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -77,3 +78,18 @@ harvest-chips: ## Scan local Claude Code transcripts for spawned task chips -> t
 
 app: ## Launch the dispatch routing lab as a desktop app (opens the browser)
 	$(PY) model-routing serve --open --page dispatch
+
+export: ## Zip a run into <experiment>__<stamp>.zip (RUN=results/<exp>/<stamp>, OUT=dir)
+	$(PY) model-routing export $(RUN) $(if $(OUT),--out $(OUT))
+
+backup: ## Back up run(s) to the configured backup dir (RUN=results/<exp>/<stamp> optional, TO=dir)
+	$(PY) model-routing backup $(if $(RUN),--run $(RUN)) $(if $(TO),--to $(TO))
+
+backup-status: ## Show per-run backup freshness
+	$(PY) model-routing backup-status
+
+backup-config: ## Show or change the backup directory / auto-backup (DIR=path, AUTO=on|off)
+	$(PY) model-routing backup-config $(if $(DIR),--dir $(DIR)) $(if $(AUTO),--auto $(AUTO))
+
+restore: ## Copy runs missing from results/ back in from a backup dir and reindex (DIR=backup dir)
+	$(PY) model-routing restore $(DIR)
