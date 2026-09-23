@@ -1,0 +1,32 @@
+# Calibration: can the cheapest model already pass the "hard" tasks?
+#
+# The 2026-09-22 pilot (6 tasks) saw Haiku pass everything, including both
+# hard tasks. If Haiku passes most hard tasks, the task set has no headroom
+# for routing to exploit and needs harder tasks before exp05_dispatch means
+# anything. Not a hypothesis test; sizes task difficulty only.
+
+[experiment]
+name = "exp05_calibrate_haiku"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+difficulties = ["hard"]
+trials = 1
+order = "by_policy"
+hypothesis = "Calibration only: share of hard tasks the cheapest model passes."
+primary = { treatment = "static_haiku", control = "static_haiku" }
+margin_pp = 10
+max_budget_per_session_usd = 1.0
+parent = "haiku"
+menu = ["haiku"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[[policies]]
+name = "static_haiku"
+kind = "spawn_static"
+candidate = "haiku"

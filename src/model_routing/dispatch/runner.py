@@ -68,6 +68,10 @@ class DispatchConfig:
     primary: dict[str, str] = field(default_factory=lambda: {"treatment": "C1", "control": "B"})
     margin_pp: float = 5.0
     max_budget_per_session_usd: float = 2.0
+    difficulties: tuple[str, ...] = ()
+    """Restrict the task set to these human difficulty labels (calibration runs,
+    e.g. "can the cheapest model already pass the hard tasks?").  Policies still
+    never see the label; this only chooses which tasks run."""
     auth: dict[str, AuthConfig] = field(default_factory=lambda: {"*": AuthConfig()})
     source: Path | None = None
 
@@ -150,6 +154,7 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         primary=dict(exp.get("primary", {"treatment": "C1", "control": "B"})),
         margin_pp=float(exp.get("margin_pp", 5.0)),
         max_budget_per_session_usd=float(exp.get("max_budget_per_session_usd", 2.0)),
+        difficulties=tuple(str(d) for d in exp.get("difficulties", [])),
         auth=parse_auth(data.get("auth", {})),
         source=path,
     )
@@ -190,10 +195,19 @@ def _select_policies(cfg: DispatchConfig, policies: list[str] | None) -> list[di
     return [by_name[n] for n in policies]
 
 
+def _select_tasks(
+    cfg: DispatchConfig, loader: Callable[..., list[Any]], sample: int | None
+) -> list[Any]:
+    if not cfg.difficulties:
+        return loader(cfg.tasks, sample=sample, seed=0)
+    tasks = [t for t in loader(cfg.tasks, sample=None, seed=0) if t.difficulty in cfg.difficulties]
+    return tasks[:sample] if sample else tasks
+
+
 def _estimate_task_count(
     cfg: DispatchConfig, sample: int | None, task_loader: Callable[..., list[Any]] | None
 ) -> int:
-    if sample:
+    if sample and not cfg.difficulties:
         return sample
     loader = task_loader
     if loader is None:
@@ -203,7 +217,8 @@ def _estimate_task_count(
             loader = None
     if loader is not None:
         try:
-            return len(loader(cfg.tasks))
+            tasks = _select_tasks(cfg, loader, sample)
+            return len(tasks)
         except Exception:
             pass
     if cfg.tasks.exists():
@@ -542,7 +557,7 @@ def run_dispatch(
         task_loader_fn = task_loader
     else:
         from model_routing.dispatch.tasks import load_agent_tasks as task_loader_fn
-    loaded_tasks: list[AgentTask] = task_loader_fn(cfg.tasks, sample=sample, seed=0)
+    loaded_tasks: list[AgentTask] = _select_tasks(cfg, task_loader_fn, sample)
     if not loaded_tasks:
         raise ValueError("no tasks loaded")
 

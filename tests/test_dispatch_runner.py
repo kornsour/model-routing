@@ -728,3 +728,21 @@ def test_resumed_session_reported_cost_is_per_session(tmp_path: Path):
     assert reported["setup"] == pytest.approx(0.086)
     assert reported["router"] == pytest.approx(0.083)  # not 0.169 (cumulative)
     assert reported["worker"] == pytest.approx(0.03)
+
+
+def test_difficulties_filter_selects_only_labelled_tasks(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="B",
+    )
+    text = cfg_path.read_text().replace("[experiment]\n", '[experiment]\ndifficulties = ["hard"]\n')
+    cfg_path.write_text(text)
+    tasks = [
+        make_task("e1", difficulty="easy"),
+        make_task("h1", difficulty="hard"),
+        make_task("h2", difficulty="hard"),
+    ]
+    out = _run(tmp_path, cfg_path, RecordingProvider(), tasks)
+    assert sorted(o["task_id"] for o in _outcomes(out)) == ["h1", "h2"]
