@@ -19,9 +19,11 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import os
 import platform
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -367,6 +369,20 @@ class _FakeAgentProvider:
         )
 
 
+def _with_harness_python(env: dict[str, str] | None) -> dict[str, str]:
+    """Put this interpreter's bin dir first on the agents' PATH.
+
+    Fixture repos are tested with pytest, which lives in the harness venv; the
+    system ``python3`` usually lacks it and ``python`` is often only a shell
+    alias.  Without this, every agent burns turns discovering how to run the
+    tests - a cost unrelated to the model choice being measured.
+    """
+    env = dict(os.environ if env is None else env)
+    bin_dir = str(Path(sys.executable).parent)
+    env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+    return env
+
+
 def _fake_provider_factory(name: str, env: dict[str, str] | None = None) -> Any:
     """Prefer the tiered fake in ``agents`` (applies ``.fake_solution`` overlays so
     simulated pass rates vary by model); fall back to the minimal in-module fake."""
@@ -559,7 +575,7 @@ def run_dispatch(
     def provider_for(candidate_name: str) -> Any:
         cand = cfg.candidates[candidate_name]
         if cand.provider not in provider_cache:
-            env = cfg.auth_for(cand.provider).child_env(cand.provider)
+            env = _with_harness_python(cfg.auth_for(cand.provider).child_env(cand.provider))
             provider_cache[cand.provider] = provider_factory_fn(cand.provider, env)
         return provider_cache[cand.provider]
 

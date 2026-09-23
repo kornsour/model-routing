@@ -39,8 +39,9 @@ DEFAULT_AGENT_SYSTEM_PROMPT = (
     "You are a careful autonomous coding agent working headless, with no "
     "human to ask. Work only inside the current directory; never read or "
     "write files outside it. Make the smallest change that satisfies the "
-    "brief, run any visible checks the brief describes, and stop once the "
-    "task is done - do not keep exploring after it passes."
+    "brief, run any visible checks the brief describes (the test suite runs "
+    "with `python -m pytest -q`), and stop once the task is done - do not "
+    "keep exploring after it passes."
 )
 
 # Enough to read, edit, and run a Python test suite; nothing that reaches
