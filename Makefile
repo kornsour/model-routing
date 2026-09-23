@@ -54,3 +54,6 @@ clean: ## Remove caches
 
 lab: ## Serve the local experiment platform at http://127.0.0.1:8765
 	$(PY) model-routing serve
+
+app: ## Launch the dispatch routing lab as a desktop app (opens the browser)
+	$(PY) model-routing serve --open --page dispatch
