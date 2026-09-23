@@ -169,6 +169,49 @@ def run_identity(run_dir: Path) -> tuple[str, str]:
     return str(experiment), run_dir.name
 
 
+REPORTS_DIRNAME = "Reports"
+
+
+def run_started_at(run_dir: Path) -> datetime:
+    """When the run started, in local time: ``meta.started_at``, else the stamp
+    (``20260922-233941`` local or ``20260923T025818Z`` UTC, optionally after a
+    ``fake-``/``estimate-`` prefix), else the run directory's mtime."""
+    meta = _load_json(run_dir / "meta.json")
+    raw = meta.get("started_at")
+    if isinstance(raw, str):
+        try:
+            parsed = datetime.fromisoformat(raw)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            return parsed.astimezone()
+        except ValueError:
+            pass
+    name = run_dir.name
+    for prefix in ("fake-", "estimate-"):
+        name = name.removeprefix(prefix)
+    for fmt, utc in (("%Y%m%dT%H%M%SZ", True), ("%Y%m%d-%H%M%S", False)):
+        width = len(datetime(2000, 1, 1).strftime(fmt))
+        try:
+            parsed = datetime.strptime(name[:width], fmt)
+        except ValueError:
+            continue
+        return parsed.replace(tzinfo=UTC).astimezone() if utc else parsed.astimezone()
+    return datetime.fromtimestamp(run_dir.stat().st_mtime).astimezone()
+
+
+def export_basename(run_dir: Path) -> str:
+    """``2026-09-22_23-39-41_exp05_pilot`` - sorts chronologically in a folder
+    listing and says when the run happened; simulated runs are labelled."""
+    experiment, _ = run_identity(run_dir)
+    when = run_started_at(run_dir).strftime("%Y-%m-%d_%H-%M-%S")
+    label = ""
+    if run_dir.name.startswith("estimate-"):
+        label = "_estimate"
+    elif is_fake_run(run_dir):
+        label = "_simulated"
+    return f"{when}_{experiment}{label}"
+
+
 def discover_all_runs(results_dir: Path) -> list[Path]:
     """Every run directory under ``results_dir``: single-shot or dispatch."""
     if not results_dir.is_dir():
@@ -443,7 +486,7 @@ def export_run(run_dir: str | Path, out_dir: str | Path | None = None) -> Path:
     experiment, stamp = run_identity(run_dir)
     out_dir = Path(out_dir) if out_dir else run_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    zip_name = f"{experiment}__{stamp}.zip"
+    zip_name = f"{export_basename(run_dir)}.zip"
     zip_path = out_dir / zip_name
 
     report_html = render_report_html(run_dir)
@@ -527,7 +570,13 @@ def backup_run(run_dir: str | Path, settings: Settings | None = None) -> dict[st
 
     (dest / "report.html").write_text(report_html)
 
-    zip_path = export_run(run_dir, out_dir=dest)
+    # A flat, chronologically sorted folder of human-facing exports, so the
+    # backup can be browsed in Drive without opening per-run folders.
+    reports_dir = Path(settings.backup_dir) / REPORTS_DIRNAME
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    zip_path = export_run(run_dir, out_dir=reports_dir)
+    report_path = reports_dir / f"{export_basename(run_dir)}_report.html"
+    report_path.write_text(report_html)
 
     manifest = {
         "experiment": experiment,
@@ -548,6 +597,7 @@ def backup_run(run_dir: str | Path, settings: Settings | None = None) -> dict[st
         "copied": copied,
         "skipped": skipped,
         "zip": str(zip_path),
+        "report": str(report_path),
         "status": "up-to-date" if not copied else "backed-up",
     }
 

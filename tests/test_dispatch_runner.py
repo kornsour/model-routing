@@ -691,3 +691,58 @@ def test_summary_json_shape(tmp_path: Path):
             assert key in c
     assert (out / "summary.json").exists()
     assert (out / "summary.md").exists()
+
+
+class CumulativeCostProvider(RecordingProvider):
+    """Mimics the Claude CLI: ``total_cost_usd`` of a resumed session includes
+    the cost of the session it resumed (observed in the 2026-09-22 pilot)."""
+
+    def __init__(self) -> None:
+        super().__init__(router_pick="haiku")
+        self.totals: dict[str, float] = {}
+        self.own = {"setup": 0.086, "router": 0.083, "worker": 0.03}
+
+    def run(self, model: str, prompt: str, **kw: Any) -> AgentResult:
+        r = super().run(model, prompt, **kw)
+        role = (
+            "router"
+            if not kw.get("tools", True)
+            else ("setup" if len(self.calls) == 1 else "worker")
+        )
+        prior = self.totals.get(kw.get("resume_session") or "", 0.0)
+        total = prior + self.own[role]
+        assert r.session_id is not None
+        self.totals[r.session_id] = total
+        r.cost_usd_reported = total
+        return r
+
+
+def test_resumed_session_reported_cost_is_per_session(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "C1"\nkind = "spawn_parent_pick"\n'
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+    )
+    out = _run(tmp_path, cfg_path, CumulativeCostProvider(), [make_task()], policies=["C1"])
+    reported = {s["role"]: s["cost_usd_reported"] for s in _sessions(out)}
+    assert reported["setup"] == pytest.approx(0.086)
+    assert reported["router"] == pytest.approx(0.083)  # not 0.169 (cumulative)
+    assert reported["worker"] == pytest.approx(0.03)
+
+
+def test_difficulties_filter_selects_only_labelled_tasks(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="B",
+    )
+    text = cfg_path.read_text().replace("[experiment]\n", '[experiment]\ndifficulties = ["hard"]\n')
+    cfg_path.write_text(text)
+    tasks = [
+        make_task("e1", difficulty="easy"),
+        make_task("h1", difficulty="hard"),
+        make_task("h2", difficulty="hard"),
+    ]
+    out = _run(tmp_path, cfg_path, RecordingProvider(), tasks)
+    assert sorted(o["task_id"] for o in _outcomes(out)) == ["h1", "h2"]

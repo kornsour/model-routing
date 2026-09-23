@@ -71,6 +71,14 @@ scope check compares every changed file against. Keep it tight - only the
 files the brief actually calls out, plus `tests/*.py` for tasks that require
 adding a test.
 
+Every full `brief` ends with a scope line naming exactly those globs
+(`Scope: change only ...; leave every other file untouched ...`). The scope
+check is only fair if the agent was told the scope: in the 2026-09-22 pilot,
+Opus and Sonnet both fixed a bug correctly and then updated a docstring the
+fix had made stale in a file outside `allowed_paths`, which failed them on
+scope and biased the comparison toward cheaper, less thorough models.
+`brief_terse` deliberately omits it (it is the low-quality brief).
+
 ## Overlay conventions
 
 `src/model_routing/dispatch/tasks.py` (`load_agent_tasks`) resolves these by
