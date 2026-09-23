@@ -193,8 +193,12 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
         f"(mid ${est['usd_mid']:.2f}) over {est['sessions']} sessions. "
         f"Budget: ${args.budget_usd:.2f}."
     )
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = Path(args.out) / cfg.name / (("fake-" if args.fake else "") + stamp)
+    if args.resume:
+        out = Path(args.resume)
+        print(f"Resuming {out}: cells already in outcomes.jsonl are skipped.")
+    else:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out = Path(args.out) / cfg.name / (("fake-" if args.fake else "") + stamp)
     run_dispatch(
         cfg,
         out_dir=out,
@@ -204,6 +208,7 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
         policies=policies,
         fake=args.fake,
         keep_sandboxes=args.keep_sandboxes,
+        resume=bool(args.resume),
     )
     from model_routing.dispatch.report import summarize
 
@@ -455,6 +460,12 @@ def main(argv: list[str] | None = None) -> int:
         "--keep-sandboxes", action="store_true", help="do not delete sandbox copies after grading"
     )
     dr.add_argument("--out", default="results")
+    dr.add_argument(
+        "--resume",
+        metavar="RUN_DIR",
+        help="continue an existing run directory (same config, sample, trials, policies); "
+        "completed cells are skipped",
+    )
     dr.set_defaults(fn=cmd_dispatch_run)
 
     drp = sub.add_parser(

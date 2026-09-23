@@ -56,6 +56,79 @@ class BudgetExceeded(RuntimeError):
     pass
 
 
+class UsageLimitHit(RuntimeError):
+    """A provider reported the account's usage/rate limit.  Raised out of the
+    policy so the cell is abandoned (its sandboxes cleaned up, no outcome
+    written) and retried after the limit resets; never graded as a fail."""
+
+    def __init__(self, reset_at: float | None, detail: str = ""):
+        super().__init__(f"usage limit hit (reset_at={reset_at}) {detail}".strip())
+        self.reset_at = reset_at
+
+
+PAUSE_POLL_S = 300
+"""Between checks while waiting for a usage limit to reset (unknown reset time)."""
+PAUSE_MAX_S = 8 * 3600
+"""Give up waiting (state ``paused``) after this long; ``--resume`` continues later."""
+
+
+def completed_cells(run_dir: Path) -> set[tuple[str, str, int]]:
+    """``(policy, task_id, trial)`` keys already in ``outcomes.jsonl``.  A trailing
+    partial line (the run was killed mid-write) is skipped, not an error."""
+    path = Path(run_dir) / "outcomes.jsonl"
+    done: set[tuple[str, str, int]] = set()
+    if not path.exists():
+        return done
+    with path.open() as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                o = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            done.add((str(o["policy"]), str(o["task_id"]), int(o["trial"])))
+    return done
+
+
+def _repair_jsonl(path: Path) -> int:
+    """Drop unparseable lines (a kill mid-write leaves a partial last line) so a
+    resumed run appends clean records.  Returns the number of lines dropped."""
+    if not path.exists():
+        return 0
+    kept: list[str] = []
+    dropped = 0
+    with path.open() as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                json.loads(line)
+            except json.JSONDecodeError:
+                dropped += 1
+                continue
+            kept.append(line.rstrip("\n"))
+    if dropped:
+        path.write_text("\n".join(kept) + ("\n" if kept else ""))
+    return dropped
+
+
+def _spent_so_far(run_dir: Path) -> float:
+    path = Path(run_dir) / "sessions.jsonl"
+    total = 0.0
+    if not path.exists():
+        return total
+    with path.open() as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                total += float(json.loads(line).get("cost_usd_list", 0.0))
+            except (json.JSONDecodeError, ValueError):
+                continue
+    return total
+
+
 @dataclass
 class DispatchConfig:
     name: str
@@ -767,13 +840,43 @@ def run_dispatch(
     agent_provider_factory: Callable[[str, dict[str, str] | None], Any] | None = None,
     keep_sandboxes: bool = False,
     verbose: bool = True,
+    resume: bool = False,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Path:
+    """Run every (policy, task, trial) cell sequentially.  ``resume=True``
+    continues an existing ``out_dir``: cells already in its ``outcomes.jsonl``
+    are skipped, spend so far still counts against the budget, and ``meta.json``
+    gains a ``resumes`` entry (the config hash must match the original).  A
+    provider usage-limit error pauses the run (state ``paused``) and retries
+    the same cell once the limit resets - up to ``PAUSE_MAX_S``, after which the
+    run stops cleanly in state ``paused`` for a later ``--resume``."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "sandboxes").mkdir(parents=True, exist_ok=True)
     prices = PriceTable.load()
     selected_policies = _select_policies(cfg, policies)
     run_trials = trials or cfg.trials
+    skip: set[tuple[str, str, int]] = set()
+    if resume:
+        meta_path = out_dir / "meta.json"
+        if not meta_path.exists():
+            raise ValueError(f"cannot resume {out_dir}: no meta.json")
+        prior = json.loads(meta_path.read_text())
+        cfg_sha = (
+            hashlib.sha256(cfg.source.read_bytes()).hexdigest()
+            if cfg.source and cfg.source.exists()
+            else None
+        )
+        if prior.get("config_sha256") and cfg_sha and prior["config_sha256"] != cfg_sha:
+            raise ValueError(
+                f"cannot resume {out_dir}: config changed since the run started "
+                f"({prior['config_sha256'][:12]} != {cfg_sha[:12]})"
+            )
+        if prior.get("fake", False) != fake:
+            raise ValueError(f"cannot resume {out_dir}: fake={prior.get('fake')} in the original")
+        for name in ("outcomes.jsonl", "sessions.jsonl"):
+            _repair_jsonl(out_dir / name)
+        skip = completed_cells(out_dir)
 
     task_loader_fn: Callable[..., list[AgentTask]]
     if task_loader is not None:
@@ -818,12 +921,27 @@ def run_dispatch(
         return provider_cache[cand.provider]
 
     menu_text = _menu_text(cfg, prices)
-    _write_meta(cfg, out_dir, loaded_tasks, selected_policies, run_trials, budget_usd, fake, sample)
+    if resume:
+        meta_path = out_dir / "meta.json"
+        prior = json.loads(meta_path.read_text())
+        prior.setdefault("resumes", []).append(
+            {
+                "at": datetime.now(UTC).isoformat(),
+                "completed_cells": len(skip),
+                "git_sha": _git_sha(),
+                "harness_version": __version__,
+            }
+        )
+        meta_path.write_text(json.dumps(prior, indent=2, default=str))
+    else:
+        _write_meta(
+            cfg, out_dir, loaded_tasks, selected_policies, run_trials, budget_usd, fake, sample
+        )
 
     sessions_fh = (out_dir / "sessions.jsonl").open("a")
     outcomes_fh = (out_dir / "outcomes.jsonl").open("a")
 
-    state = {"spent_usd": 0.0, "seq": 0}
+    state = {"spent_usd": _spent_so_far(out_dir) if resume else 0.0, "seq": 0}
     # The Claude CLI's ``total_cost_usd`` is cumulative across a resumed (even
     # forked) session: a router call resumed from a $0.086 setup reports
     # $0.169 for its own $0.083.  Track each session id's cumulative figure so
@@ -892,6 +1010,14 @@ def run_dispatch(
                 max_budget_usd=cfg.max_budget_per_session_usd,
                 timeout_s=1200,
             )
+            if (
+                result.error == "usage_limit"
+                or (result.raw or {}).get("usage_limit_reset_at") is not None
+            ):
+                reset_at = (result.raw or {}).get("usage_limit_reset_at")
+                if verbose:
+                    print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} USAGE LIMIT HIT")
+                raise UsageLimitHit(reset_at, f"{policy_name}/{task_id}/{role}")
             price_model = (
                 result.resolved_model
                 if result.resolved_model and prices.get(result.resolved_model)
@@ -988,9 +1114,12 @@ def run_dispatch(
         return grading.run_cmd(list(cmd), Path(sandbox.path), 300)
 
     outcomes: list[DispatchOutcome] = []
+    done_cells = len(skip)
     try:
         plan = _build_plan(cfg.order, selected_policies, loaded_tasks, run_trials, cfg.seed)
         for policy_spec, task, trial in plan:
+            if (policy_spec["name"], task.id, trial) in skip:
+                continue
             if cancel is not None and cancel.is_set():
                 run_state = "cancelled"
                 stop_message = "cancelled"
@@ -1007,7 +1136,34 @@ def run_dispatch(
                 menu_text=menu_text,
                 cleanup=_noop_cleanup if keep_sandboxes else _cleanup_all,
             )
-            outcome = policies_mod.run_policy(policy_spec, task, trial, cell_ctx)
+            paused_for = 0.0
+            while True:
+                try:
+                    outcome = policies_mod.run_policy(policy_spec, task, trial, cell_ctx)
+                    break
+                except UsageLimitHit as hit:
+                    wait = PAUSE_POLL_S
+                    if hit.reset_at:
+                        wait = max(60.0, min(hit.reset_at - time.time() + 30, PAUSE_MAX_S))
+                    if paused_for + wait > PAUSE_MAX_S or (cancel is not None and cancel.is_set()):
+                        run_state = "paused"
+                        stop_message = (
+                            f"usage limit still in force after {paused_for / 60:.0f} min; "
+                            f"resume with --resume {out_dir}"
+                        )
+                        break
+                    run_state = "paused"
+                    emit_progress(
+                        f"{task.id} · {policy_spec['name']} · trial {trial}",
+                        f"usage limit hit; waiting {wait / 60:.0f} min before retrying this cell",
+                    )
+                    if verbose:
+                        print(f"PAUSED: {hit}; retrying in {wait / 60:.0f} min")
+                    sleep(wait)
+                    paused_for += wait
+                    run_state = "running"
+            if run_state == "paused":
+                break
             done_cells += 1
             outcomes.append(outcome)
             outcomes_fh.write(json.dumps(outcome.to_dict(), default=str) + "\n")
@@ -1037,6 +1193,8 @@ def run_dispatch(
 
     if run_state == "running":
         run_state = "done"
+    if verbose and run_state == "paused":
+        print(f"PAUSED: {stop_message}")
     emit_progress("", stop_message)
 
     summarize(out_dir)

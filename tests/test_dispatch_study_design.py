@@ -24,6 +24,8 @@ from test_dispatch_runner import (
     _sessions,
     _write_cfg,
     _write_run,
+    always_pass_grader,
+    fake_sandbox_factory,
     make_task,
 )
 
@@ -403,3 +405,154 @@ def test_preregistration_block_round_trips_through_toml(tmp_path: Path):
     assert data["order"] == "randomized"
     assert data["primary"] == {"treatment": "C1", "control": "B"}
     assert data["taskset_sha256"] == taskset_sha256(cfg.tasks)
+
+
+# -- usage-limit pause and --resume ------------------------------------------------
+
+
+def test_usage_limit_message_classification():
+    from model_routing.dispatch.agents import parse_claude_stream, usage_limit_reset_at
+
+    assert usage_limit_reset_at("Claude AI usage limit reached|1790200000") == 1790200000.0
+    assert usage_limit_reset_at("You have hit your usage limit reached") == 0.0
+    assert usage_limit_reset_at("API Error: 429 rate_limit_error") == 0.0
+    assert usage_limit_reset_at("plain failure") is None
+    assert usage_limit_reset_at("") is None
+    stream = (
+        '{"type":"result","subtype":"error","is_error":true,'
+        '"result":"Claude AI usage limit reached|1790200000","session_id":"s1"}\n'
+    )
+    r = parse_claude_stream(stream, 10)
+    assert r.error == "usage_limit"
+    assert r.raw is not None and r.raw["usage_limit_reset_at"] == 1790200000.0
+    r2 = parse_claude_stream("", 10, stderr="Claude AI usage limit reached|1790200000")
+    assert r2.error == "usage_limit"
+
+
+class LimitOnceProvider(RecordingProvider):
+    """First worker call reports a usage limit; later calls succeed."""
+
+    def __init__(self):
+        super().__init__()
+        self.limited = False
+
+    def run(self, model: str, prompt: str, *, workdir: Path, tools: bool = True, **kw: Any):
+        if not self.limited:
+            self.limited = True
+            self.calls.append({"model": model, "tools": tools, "limited": True})
+            return AgentResult(
+                output="",
+                usage=Usage(),
+                duration_ms=1,
+                error="usage_limit",
+                raw={"usage_limit_reset_at": 1.0},
+            )
+        return super().run(model, prompt, workdir=workdir, tools=tools, **kw)
+
+
+def test_usage_limit_pauses_and_retries_the_cell(tmp_path: Path):
+    from model_routing.dispatch.runner import run_dispatch
+
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+        treatment="B",
+        control="B",
+    )
+    cfg = load_dispatch_config(cfg_path)
+    provider = LimitOnceProvider()
+    slept: list[float] = []
+    states: list[str] = []
+    out = tmp_path / "run"
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=100.0,
+        task_loader=lambda path, sample=None, seed=0: [make_task("t1"), make_task("t2")],
+        sandbox_factory=fake_sandbox_factory,
+        grader=always_pass_grader,
+        agent_provider_factory=lambda name, env=None: provider,
+        progress=lambda p: states.append(p.state),
+        sleep=slept.append,
+        verbose=False,
+    )
+    assert slept and slept[0] >= 60.0
+    assert "paused" in states and states[-1] == "done"
+    outcomes = _outcomes(out)
+    assert [o["task_id"] for o in outcomes] == ["t1", "t2"]
+    assert all(o["passed"] for o in outcomes)
+    # the limited attempt was never recorded as a session or graded
+    assert all(s["error"] is None for s in _sessions(out))
+    assert len(_sessions(out)) == 2
+
+
+def test_resume_skips_completed_cells_and_keeps_spend(tmp_path: Path):
+    from model_routing.dispatch.runner import completed_cells, run_dispatch
+
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n'
+        '[[policies]]\nname = "H"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="H",
+        trials=2,
+    )
+    cfg = load_dispatch_config(cfg_path)
+    tasks = [make_task("t1"), make_task("t2")]
+    out = tmp_path / "run"
+    cancel = __import__("threading").Event()
+    seen = 0
+
+    class StopAfterThree(RecordingProvider):
+        def run(self, model, prompt, *, workdir, **kw):
+            nonlocal seen
+            seen += 1
+            if seen == 3:
+                cancel.set()  # stop after this session's cell
+            return super().run(model, prompt, workdir=workdir, **kw)
+
+    common: dict[str, Any] = dict(
+        task_loader=lambda path, sample=None, seed=0: tasks,
+        sandbox_factory=fake_sandbox_factory,
+        grader=always_pass_grader,
+        verbose=False,
+    )
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=100.0,
+        agent_provider_factory=lambda name, env=None: StopAfterThree(),
+        cancel=cancel,
+        **common,
+    )
+    done = completed_cells(out)
+    assert len(done) == 3
+    # simulate a kill mid-write: a partial trailing line must be tolerated
+    with (out / "outcomes.jsonl").open("a") as f:
+        f.write('{"task_id": "t2", "policy": "H"')
+    assert len(completed_cells(out)) == 3
+    second = RecordingProvider()
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=100.0,
+        agent_provider_factory=lambda name, env=None: second,
+        resume=True,
+        **common,
+    )
+    assert len(second.calls) == 8 - 3
+    finished = {(o["policy"], o["task_id"], o["trial"]) for o in _outcomes(out)}
+    assert len(finished) == 8
+    meta = json.loads((out / "meta.json").read_text())
+    assert meta["resumes"][0]["completed_cells"] == 3
+    # a changed config is refused
+    cfg_path.write_text(cfg_path.read_text().replace("margin_pp = 5", "margin_pp = 6"))
+    with pytest.raises(ValueError, match="config changed"):
+        run_dispatch(
+            load_dispatch_config(cfg_path),
+            out_dir=out,
+            budget_usd=100.0,
+            agent_provider_factory=lambda name, env=None: RecordingProvider(),
+            resume=True,
+            **common,
+        )

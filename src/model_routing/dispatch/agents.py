@@ -184,6 +184,30 @@ class ClaudeAgentProvider:
         return result
 
 
+_USAGE_LIMIT_RE = re.compile(
+    r"usage limit reached(?:\|(?P<epoch>\d{9,11}))?"
+    r"|rate.?limit"
+    r"|\b429\b"
+    r"|out of extra usage",
+    re.IGNORECASE,
+)
+
+
+def usage_limit_reset_at(text: str) -> float | None:
+    """If ``text`` (a result/error message or stderr) says the subscription or
+    API usage limit was hit, return the reset time as a unix timestamp when the
+    message carries one (``Claude AI usage limit reached|<epoch>``), else 0.0
+    (limit hit, reset time unknown).  ``None`` means it is not a limit error.
+    A limit hit is a *pause* condition for the runner, never a graded fail."""
+    if not text:
+        return None
+    m = _USAGE_LIMIT_RE.search(text)
+    if not m:
+        return None
+    epoch = m.groupdict().get("epoch")
+    return float(epoch) if epoch else 0.0
+
+
 def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentResult:
     """Fold ``--output-format stream-json`` events into one :class:`AgentResult`.
 
@@ -216,8 +240,14 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
     if result_event is None:
         err_tail = (stderr or "").strip()[-300:]
         detail = f"missing result event: {err_tail}" if err_tail else "missing result event"
+        reset = usage_limit_reset_at((stderr or "") + "\n" + stdout[-2000:])
         return AgentResult(
-            output="", usage=Usage(), duration_ms=wall_ms, tool_calls=tool_calls, error=detail
+            output="",
+            usage=Usage(),
+            duration_ms=wall_ms,
+            tool_calls=tool_calls,
+            error="usage_limit" if reset is not None else detail,
+            raw={"usage_limit_reset_at": reset} if reset is not None else None,
         )
     data = result_event
     u = data.get("usage") or {}
@@ -235,12 +265,16 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
         key = list(model_usage)[-1]
         resolved = model_usage[key].get("canonicalModel") or key
     error = None
+    reset: float | None = None
     if data.get("is_error"):
         text = data.get("result")
         if not text:
             errors = data.get("errors")
             text = "; ".join(errors) if errors else "error"
         error = str(text)[:500]
+        reset = usage_limit_reset_at(str(text) + "\n" + (stderr or ""))
+        if reset is not None:
+            error = "usage_limit"
     return AgentResult(
         output=str(data.get("result", "")),
         usage=usage,
@@ -258,6 +292,7 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             "terminal_reason": data.get("terminal_reason"),
             "modelUsage": model_usage or None,
             "permission_denials": len(data.get("permission_denials") or []),
+            "usage_limit_reset_at": reset,
         },
     )
 

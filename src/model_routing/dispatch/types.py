@@ -247,7 +247,7 @@ class Progress:
     """Emitted by the runner after every session; the web app polls it."""
 
     run_dir: str
-    state: Literal["running", "done", "failed", "over_budget", "cancelled"]
+    state: Literal["running", "paused", "done", "failed", "over_budget", "cancelled"]
     total: int  # planned (task, policy, trial) cells
     done: int
     spent_usd: float
