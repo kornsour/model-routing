@@ -148,7 +148,13 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_serve(args: argparse.Namespace) -> int:
     from model_routing.server import serve
 
-    serve(Path.cwd(), Path(args.results).resolve(), args.port)
+    serve(
+        Path.cwd(),
+        Path(args.results).resolve(),
+        args.port,
+        open_browser=args.open,
+        page=args.page,
+    )
     return 0
 
 
@@ -278,6 +284,15 @@ def main(argv: list[str] | None = None) -> int:
     lab = sub.add_parser("serve", help="launch the local experiment lab")
     lab.add_argument("--port", type=int, default=8765)
     lab.add_argument("--results", default="results")
+    lab.add_argument(
+        "--open", action="store_true", help="open the browser once the server is ready"
+    )
+    lab.add_argument(
+        "--page",
+        default="",
+        choices=["", "dispatch"],
+        help="page to open with --open (default: the lab overview)",
+    )
     lab.set_defaults(fn=cmd_serve)
 
     de = sub.add_parser("dispatch-estimate", help="dry-run cost estimate for a dispatch experiment")

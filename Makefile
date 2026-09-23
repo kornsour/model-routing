@@ -3,7 +3,7 @@
 PY := uv run
 
 .PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab \
-	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips
+	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips app
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -74,3 +74,6 @@ dispatch-report: ## Rebuild summary.json/md for a dispatch run dir (RUN=results/
 
 harvest-chips: ## Scan local Claude Code transcripts for spawned task chips -> tasks/agentic/private/harvested.jsonl
 	$(PY) model-routing harvest-chips
+
+app: ## Launch the dispatch routing lab as a desktop app (opens the browser)
+	$(PY) model-routing serve --open --page dispatch
