@@ -607,7 +607,8 @@ def run_dispatch(
             resumed_from: str | None = None,
             max_turns: int | None = None,
         ) -> SessionRecord:
-            if state["spent_usd"] >= budget_usd:
+            # Simulated spend is list price of made-up tokens; a budget cannot bind it.
+            if not fake and state["spent_usd"] >= budget_usd:
                 raise BudgetExceeded(
                     f"budget exhausted (${state['spent_usd']:.4f} >= ${budget_usd:.2f})"
                 )
@@ -672,7 +673,7 @@ def run_dispatch(
                     + (f" ERROR: {rec.error[:60]}" if rec.error else "")
                 )
             emit_progress(f"{task_id} · {policy_name} · trial {trial} · {role}({candidate})")
-            if state["spent_usd"] > budget_usd:
+            if not fake and state["spent_usd"] > budget_usd:
                 raise BudgetExceeded(f"spent ${state['spent_usd']:.4f} > budget ${budget_usd:.2f}")
             return rec
 
