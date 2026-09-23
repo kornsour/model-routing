@@ -75,3 +75,48 @@ verdict is one of `supported`, `not supported`, `inconclusive`.
 Agents run with tools inside a throwaway sandbox copy of the fixture repo,
 on the operator's own `claude` / `codex` login. Nothing runs without an
 estimate and a budget; the budget is checked after every session.
+
+## Running
+
+```bash
+# No-spend cost estimate (states its token-profile assumptions explicitly).
+make dispatch-estimate EXP=experiments/agentic/exp05_dispatch.toml
+
+# Full run end to end with the fake agent provider - exercises every policy,
+# the sandbox/grading/report plumbing, and produces a real summary.json/md,
+# but spends nothing.
+make dispatch-sim EXP=experiments/agentic/exp05_pilot.toml
+
+# A small, cheap pilot to size variance and cost before the confirmatory run.
+# Pilots do not test H-D1; run more trials/tasks for that.
+make dispatch-run EXP=experiments/agentic/exp05_pilot.toml BUDGET=2.00
+
+# The pre-registered confirmatory run.
+make dispatch-run EXP=experiments/agentic/exp05_dispatch.toml BUDGET=25.00 \
+  SAMPLE=8 TRIALS=3
+
+# (re)build summary.json/summary.md for an existing run directory.
+make dispatch-report RUN=results/exp05_dispatch/20260922-120000
+
+# Scan local Claude Code transcripts for spawned task chips to grow the task set.
+make harvest-chips
+```
+
+Equivalently, via the CLI directly:
+
+```bash
+model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
+model-routing dispatch-run experiments/agentic/exp05_dispatch.toml \
+  --budget-usd 25.00 --sample 8 --trials 3 [--policies A,B,C1,D] [--fake] [--keep-sandboxes]
+model-routing dispatch-report results/exp05_dispatch/<stamp>
+model-routing harvest-chips [--projects-dir ~/.claude/projects] [--out tasks/agentic/private/harvested.jsonl]
+```
+
+`dispatch-run` always prints the no-spend estimate first, runs sequentially
+(never in parallel - ordering is an experimental variable), stops cleanly and
+marks the run `over_budget` if the budget is exceeded, and prints the H-D1
+headline sentence at the end. `--fake` uses a deterministic no-spend agent
+provider so the whole pipeline (sandboxing, grading, pricing, budget, report)
+can be exercised without spending; `--keep-sandboxes` leaves the sandbox
+copies on disk under `<run_dir>/sandboxes/` for inspection instead of deleting
+them after grading.

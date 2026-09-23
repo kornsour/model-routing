@@ -1,0 +1,61 @@
+# Pilot for exp05_dispatch: small, cheap, trials=1, a subset of policies.  Sizes
+# variance and cost before the confirmatory run; does NOT test H-D1 (see
+# docs/experiments/dispatch-routing.md - "Pilot runs size variance and cost;
+# they do not test H-D1.").
+
+[experiment]
+name = "exp05_pilot"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+trials = 1
+order = "by_policy"
+hypothesis = "Pilot only: sizes cost and variance for exp05_dispatch before the confirmatory run."
+primary = { treatment = "C1", control = "B" }
+margin_pp = 5
+max_budget_per_session_usd = 2.0
+parent = "opus"
+menu = ["haiku", "sonnet", "opus_low", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[candidates.opus_low]
+provider = "claude_cli"
+model = "opus"
+effort = "low"
+
+[[policies]]
+name = "B"
+kind = "spawn_static"
+candidate = "opus"
+
+[[policies]]
+name = "C1"
+kind = "spawn_parent_pick"
+
+[[policies]]
+name = "D"
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+
+[[policies]]
+name = "static_haiku"
+kind = "spawn_static"
+candidate = "haiku"
+
+[[policies]]
+name = "static_sonnet"
+kind = "spawn_static"
+candidate = "sonnet"
