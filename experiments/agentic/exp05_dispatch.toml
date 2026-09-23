@@ -65,6 +65,12 @@ kind = "spawn_cascade"
 chain = ["haiku", "sonnet", "opus"]
 
 [[policies]]
+name = "D_ideal"                # upper bound: hidden tests as a perfect checker (not deployable)
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+escalate_on = "hidden"
+
+[[policies]]
 name = "static_haiku"
 kind = "spawn_static"
 candidate = "haiku"

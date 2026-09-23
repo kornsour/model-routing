@@ -20,10 +20,10 @@ confirmatory run. Pilot runs size variance and cost; they do not test H-D1.
 
 ## Secondary hypotheses
 
-| # | Hypothesis | Comparison |
+| # | Hypothesis | Comparison (expected winner first) |
 |---|---|---|
-| H-D2 | Doing the task inside the parent session costs more per completed task than spawning with a brief, because every turn re-reads the parent's context. | `A` vs `B` |
-| H-D3 | Switching model mid-session costs more than staying (cache rewrite) and passes less often. | `A_switch` vs `A` |
+| H-D2 | Doing the task inside the parent session costs more per completed task than spawning with a brief, because every turn re-reads the parent's context. | `B` vs `A` |
+| H-D3 | Switching model mid-session costs more than staying (cache rewrite) and passes less often. | `A` vs `A_switch` |
 | H-D4 | A cheap-first cascade that escalates only when the checker fails beats a single routed pick when a real checker (tests) exists. | `D` vs `C1` |
 | H-D5 | Parent-recommended routing beats a context-free router (classifier/heuristic on the brief alone) at lower router overhead. | `C1` vs `C2` |
 | H-D6 | Brief quality matters as much as model choice: the cheap model with the full brief beats it with a terse brief by more than the cheap-vs-parent model gap. | `static_cheap` vs `static_cheap_terse` |
@@ -38,7 +38,8 @@ confirmatory run. Pilot runs size variance and cost; they do not test H-D1.
 | `B` | Fresh session, parent model, full brief | no |
 | `C1` | Resume parent (forked) and ask it for `{model, effort, reason}` from the menu (router call), then fresh session on that pick | yes |
 | `C2` | Classifier/heuristic on the brief alone picks the model, then fresh session | no |
-| `D` | Fresh session on the cheapest model; run the visible checker; on failure, escalate to the next model in `chain` with the failure log | no |
+| `D` | Fresh session on the cheapest model; check it (something in scope changed, nothing out of scope changed, visible tests pass); on failure, escalate to the next model in `chain` with the failure log | no |
+| `D_ideal` | Same cascade, but the hidden tests are the checker: an upper bound for any cascade, not deployable | no |
 | `static:<cand>` | Fresh session on a fixed candidate (also feeds the oracle) | no |
 | `oracle` | Computed in the report from `static:*` outcomes | — |
 

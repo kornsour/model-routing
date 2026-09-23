@@ -22,6 +22,7 @@ import json
 import platform
 import shutil
 import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -677,18 +678,38 @@ def run_dispatch(
 
         return run_session
 
-    def run_visible_checker(task: AgentTask, sandbox: Any) -> tuple[bool, str]:
-        cmd = task.grader.get("visible_cmd")
-        if not cmd:
-            return True, ""
+    def run_visible_checker(
+        task: AgentTask, sandbox: Any, mode: str = "visible"
+    ) -> tuple[bool, str]:
+        """Checker policy D escalates on.  Never shows hidden tests to the agent.
+
+        ``visible`` (deployable): something in scope changed, nothing out of
+        scope changed, and the visible suite passes.  The visible suite passes
+        on the untouched repo by design, so the diff checks are what catch an
+        agent that gave up.  ``hidden`` (upper bound, not deployable): grade a
+        throwaway copy of the sandbox with the hidden tests - a perfect checker.
+        """
+        from model_routing.dispatch import grading
+        from model_routing.dispatch.sandbox import Sandbox
+
+        if mode == "hidden":
+            with tempfile.TemporaryDirectory() as tmp:
+                copy = Path(tmp) / "sandbox"
+                shutil.copytree(sandbox.path, copy, symlinks=True)
+                g = grading.grade_sandbox(task, Sandbox(task=task, path=copy))
+            return g.passed, "The previous attempt did not pass the checks."
         try:
-            proc = subprocess.run(
-                cmd, cwd=sandbox.path, capture_output=True, text=True, timeout=300
-            )
-        except (subprocess.SubprocessError, OSError) as e:
-            return False, str(e)
-        tail = ((proc.stdout or "") + "\n" + (proc.stderr or ""))[-2000:]
-        return proc.returncode == 0, tail
+            changed: list[str] | None = grading.changed_files(sandbox.path)
+        except (subprocess.CalledProcessError, OSError):
+            changed = None  # not a git sandbox (injected test fixtures): skip diff checks
+        if changed is not None:
+            if not changed:
+                return False, "No files were changed; the task is not done."
+            allowed = task.grader.get("allowed_paths") or ["*"]
+            if not grading.check_scope(changed, allowed):
+                return False, f"Files changed outside the allowed scope: {', '.join(changed)}"
+        cmd = task.grader.get("visible_cmd") or grading.default_visible_cmd()
+        return grading.run_cmd(list(cmd), Path(sandbox.path), 300)
 
     outcomes: list[DispatchOutcome] = []
     try:

@@ -39,7 +39,7 @@ class PolicyRunContext:
     run_session: RunSession
     new_sandbox: Callable[[AgentTask], Any]
     grade: Callable[[AgentTask, Any], GradeResult]
-    run_visible_checker: Callable[[AgentTask, Any], tuple[bool, str]]
+    run_visible_checker: Callable[..., tuple[bool, str]]
     menu_text: str
     cleanup: Callable[[list[Any]], None]
 
@@ -278,7 +278,10 @@ def _policy_c2(
 def _policy_d(
     name: str, spec: dict[str, Any], task: AgentTask, trial: int, ctx: PolicyRunContext
 ) -> DispatchOutcome:
-    """D: cheapest-first cascade; escalate on the visible checker only, never hidden tests."""
+    """D: cheapest-first cascade.  ``escalate_on = "visible"`` (default, deployable) checks
+    diff + scope + visible tests; ``"hidden"`` uses the hidden tests as a perfect checker
+    (an upper bound for any cascade, not a deployable policy).  The agent never sees
+    hidden test output either way."""
     chain: list[str] = spec["chain"]
     sandbox = ctx.new_sandbox(task)
     try:
@@ -294,13 +297,13 @@ def _policy_d(
             chosen = cand
             if i == len(chain) - 1:
                 break
-            ok, tail = ctx.run_visible_checker(task, sandbox)
+            ok, tail = ctx.run_visible_checker(task, sandbox, spec.get("escalate_on", "visible"))
             if ok:
                 break
             escalations += 1
             prompt = (
                 f"{brief}\n\nThe previous attempt failed the visible checks:\n{tail}\n"
-                "Fix the issues; the hidden tests are stricter than these."
+                "Finish the task; the acceptance checks are stricter than the visible tests."
             )
         grade = ctx.grade(task, sandbox)
         return _outcome(task, name, trial, sessions, grade, chosen=chosen, escalations=escalations)

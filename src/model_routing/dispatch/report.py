@@ -9,8 +9,10 @@ Paired, task-clustered bootstrap comparisons for the pre-registered hypotheses
 * a real saving  <=>  the 95% CI on the cost-saving fraction lies entirely
   above zero.
 * ``supported``     = non-inferior AND a real saving.
-* ``not supported`` = not non-inferior, OR the CI shows a real *cost increase*
-  (upper bound of the saving CI below zero).
+* ``not supported`` = the CI shows the treatment is *clearly* worse: the upper
+  bound of the pass-rate delta is below ``-margin_pp``, or the upper bound of
+  the saving CI is below zero (a real cost increase).  A lower bound below the
+  margin alone is not evidence of harm - it is too little data.
 * ``inconclusive``  = everything else (too little data, or the CIs straddle
   the thresholds).
 """
@@ -97,11 +99,12 @@ def _bootstrap(
 
 def _verdict(delta_pass_ci: list[float], saving_ci: list[float], margin_pp: float) -> str:
     non_inferior = delta_pass_ci[0] > -margin_pp
+    clearly_inferior = delta_pass_ci[1] < -margin_pp
     real_saving = saving_ci[0] > 0
-    real_loss = saving_ci[1] < 0
+    real_cost_increase = saving_ci[1] < 0
     if non_inferior and real_saving:
         return "supported"
-    if not non_inferior or real_loss:
+    if clearly_inferior or real_cost_increase:
         return "not supported"
     return "inconclusive"
 
@@ -109,32 +112,36 @@ def _verdict(delta_pass_ci: list[float], saving_ci: list[float], margin_pp: floa
 def _sentence(
     treatment: str,
     control: str,
+    delta_pass_pp: float,
     delta_pass_ci: list[float],
+    saving: float,
     saving_ci: list[float],
     margin_pp: float,
     verdict: str,
 ) -> str:
-    saving_mid = (saving_ci[0] + saving_ci[1]) / 2 * 100
-    pass_mid = (delta_pass_ci[0] + delta_pass_ci[1]) / 2
-    cost_clause = (
-        f"cut cost per completed task by {saving_mid:.0f}% "
-        f"(95% CI {saving_ci[0] * 100:.0f}–{saving_ci[1] * 100:.0f}%)"
-        if saving_mid >= 0
-        else f"raised cost per completed task by {abs(saving_mid):.0f}% "
-        f"(95% CI {saving_ci[0] * 100:.0f}–{saving_ci[1] * 100:.0f}%)"
-    )
+    """One plain-English line.  ``saving`` and ``saving_ci`` are fractions (0.3 = 30%
+    cheaper per completed task); the CI is re-oriented to match the wording."""
+    lo, hi = saving_ci[0] * 100, saving_ci[1] * 100
+    if saving >= 0:
+        cost_clause = (
+            f"cut cost per completed task by {saving * 100:.0f}% (95% CI {lo:.0f}% to {hi:.0f}%)"
+        )
+    else:
+        cost_clause = (
+            f"raised cost per completed task by {-saving * 100:.0f}% "
+            f"(95% CI {-hi:.0f}% to {-lo:.0f}%)"
+        )
     pass_clause = (
-        f"changed pass rate by {pass_mid:+.0f} pts "
-        f"({delta_pass_ci[0]:+.0f} to {delta_pass_ci[1]:+.0f})"
+        f"changed pass rate by {delta_pass_pp:+.0f} pts "
+        f"(95% CI {delta_pass_ci[0]:+.0f} to {delta_pass_ci[1]:+.0f})"
     )
     margin_clause = {
-        "supported": f"within the {margin_pp:.0f}-pt margin → supported.",
+        "supported": f"non-inferior within {margin_pp:.0f} pts and a real saving → supported.",
         "not supported": (
-            f"outside the {margin_pp:.0f}-pt margin, or no real saving → not supported."
+            f"clearly worse by more than {margin_pp:.0f} pts or clearly more expensive"
+            " → not supported."
         ),
-        "inconclusive": (
-            f"not enough data to call vs. the {margin_pp:.0f}-pt margin → inconclusive."
-        ),
+        "inconclusive": "the intervals are too wide to call → inconclusive.",
     }[verdict]
     return f"{treatment} vs {control}: {cost_clause} and {pass_clause}; {margin_clause}"
 
@@ -247,22 +254,27 @@ def _oracle_rows(outcomes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
-def _rough_power_note(n_tasks: int, margin_pp: float) -> str:
+def _rough_power_note(
+    n_tasks: int, n_paired: int, margin_pp: float, discordant_rate: float | None
+) -> str:
+    """Paired non-inferiority sizing (McNemar approximation, true difference 0):
+    n ≈ (z_α + z_β)² · p_disc / δ², where p_disc is the share of task-trials on
+    which the two policies disagree.  Uses the observed rate when there is one."""
     delta = margin_pp / 100
     if delta <= 0:
         return "margin_pp must be positive to size a run."
-    z_alpha, z_beta = 1.96, 0.84  # 95% CI, 80% power
-    n_needed = math.ceil(2 * (z_alpha + z_beta) ** 2 * 0.25 / delta**2)
-    if n_tasks >= n_needed:
-        return (
-            f"{n_tasks} sampled tasks is at or above the rough {n_needed}-task guideline for "
-            f"detecting a {margin_pp:.0f}-pt margin at 95%/80% power (p=0.5, worst case)."
-        )
+    z_alpha, z_beta = 1.96, 0.84  # one-sided 2.5% (matches the 95% CI), 80% power
+    observed = discordant_rate is not None and discordant_rate > 0
+    p_disc = discordant_rate if observed and discordant_rate is not None else 0.2
+    n_needed = math.ceil((z_alpha + z_beta) ** 2 * p_disc / delta**2)
+    source = f"observed discordance {p_disc:.0%}" if observed else "assumed discordance 20%"
+    verdict = "enough" if n_paired >= n_needed else "too few"
     return (
-        f"Only {n_tasks} sampled tasks; a rough guideline for reliably resolving a "
-        f"{margin_pp:.0f}-pt margin at 95%/80% power is about {n_needed} tasks (p=0.5, worst "
-        "case). Treat 'inconclusive' verdicts as expected at this sample size, not as a null "
-        "result."
+        f"Primary comparison needs about {n_needed} paired task-trials to resolve a "
+        f"{margin_pp:.0f}-pt margin at 95%/80% power ({source}); this run has {n_paired} "
+        f"across {n_tasks} distinct tasks - {verdict}. Repeated trials of one task help less "
+        "than new tasks because they are clustered. Treat 'inconclusive' at small n as "
+        "expected, not as a null result."
     )
 
 
@@ -286,6 +298,18 @@ def _comparison(
     keys = sorted(t_rows.keys() & c_rows.keys())
     t_pass = sum(bool(t_rows[k]["passed"]) for k in keys) / len(keys) if keys else 0.0
     c_pass = sum(bool(c_rows[k]["passed"]) for k in keys) / len(keys) if keys else 0.0
+    t_passes = sum(bool(t_rows[k]["passed"]) for k in keys)
+    c_passes = sum(bool(c_rows[k]["passed"]) for k in keys)
+    t_cost = sum(_outcome_cost(t_rows[k]) for k in keys)
+    c_cost = sum(_outcome_cost(c_rows[k]) for k in keys)
+    saving = (
+        1 - (t_cost / t_passes) / (c_cost / c_passes) if t_passes and c_passes and c_cost else 0.0
+    )
+    discordant = (
+        sum(bool(t_rows[k]["passed"]) != bool(c_rows[k]["passed"]) for k in keys) / len(keys)
+        if keys
+        else 0.0
+    )
     return {
         "id": comp_id,
         "treatment": treatment_name,
@@ -294,10 +318,20 @@ def _comparison(
         "task_clusters": clusters,
         "delta_pass_pp": (t_pass - c_pass) * 100,
         "delta_pass_ci": pass_ci,
-        "saving_pct": (saving_ci[0] + saving_ci[1]) / 2 * 100,
+        "saving_pct": saving * 100,
         "saving_ci": [saving_ci[0] * 100, saving_ci[1] * 100],
+        "discordant_rate": discordant,
         "verdict": verdict,
-        "sentence": _sentence(treatment_name, control_name, pass_ci, saving_ci, margin_pp, verdict),
+        "sentence": _sentence(
+            treatment_name,
+            control_name,
+            (t_pass - c_pass) * 100,
+            pass_ci,
+            saving,
+            saving_ci,
+            margin_pp,
+            verdict,
+        ),
     }
 
 
@@ -329,8 +363,10 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
     comparisons: list[dict[str, Any]] = []
     specs = [
         ("H-D1", primary.get("treatment", "C1"), primary.get("control", "B")),
-        ("H-D2", "A", "B"),
-        ("H-D3", "A_switch", "A"),
+        # Each pair is (expected winner, other), so "supported" always means the
+        # hypothesis in docs/experiments/dispatch-routing.md held.
+        ("H-D2", "B", "A"),
+        ("H-D3", "A", "A_switch"),
         ("H-D4", "D", "C1"),
         ("H-D5", "C1", "C2"),
         ("H-D6", "static_haiku", "static_haiku_terse"),
@@ -364,7 +400,12 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
         "oracle": oracle_stats,
         "comparisons": comparisons,
         "headline": headline,
-        "power_note": _rough_power_note(n_tasks, margin_pp)
+        "power_note": _rough_power_note(
+            n_tasks,
+            int(h_d1["n_paired"]) if h_d1 else 0,
+            margin_pp,
+            h_d1.get("discordant_rate") if h_d1 else None,
+        )
         if n_tasks
         else "No task count in meta.json.",
     }

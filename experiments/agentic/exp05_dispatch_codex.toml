@@ -65,6 +65,12 @@ kind = "spawn_cascade"
 chain = ["luna", "terra", "sol"]
 
 [[policies]]
+name = "D_ideal"                # upper bound: hidden tests as a perfect checker (not deployable)
+kind = "spawn_cascade"
+chain = ["luna", "terra", "sol"]
+escalate_on = "hidden"
+
+[[policies]]
 name = "static_haiku"           # naming kept for report comparability; luna is the cheap tier here
 kind = "spawn_static"
 candidate = "luna"

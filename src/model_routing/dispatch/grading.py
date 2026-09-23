@@ -167,3 +167,10 @@ def grade_sandbox(task: AgentTask, sandbox: Sandbox) -> GradeResult:
         detail="; ".join(details) if details else "all checks passed",
         files_changed=changed,
     )
+
+
+# Public aliases for the cascade checker in ``runner`` (policy D).
+changed_files = _changed_files
+check_scope = _check_scope
+default_visible_cmd = _default_visible_cmd
+run_cmd = _run

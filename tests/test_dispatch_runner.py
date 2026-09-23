@@ -603,10 +603,11 @@ def test_verdict_supported(tmp_path: Path):
 
 def test_verdict_not_supported_on_pass_rate_drop(tmp_path: Path):
     outcomes = []
-    for i in range(4):
+    for i in range(20):
         t = f"t{i}"
         outcomes.append(_outcome_row(t, "B", passed=True, cost=1.0))
-        # C1 passes half the time: a large, robust pass-rate regression.
+        # C1 passes half the time over 20 tasks: a regression whose whole CI
+        # sits below the margin (4 tasks would only be inconclusive).
         outcomes.append(_outcome_row(t, "C1", passed=(i % 2 == 0), cost=0.5))
     out = _write_run(tmp_path, "not_supported_run", outcomes)
     summary = summarize(out)

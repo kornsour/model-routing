@@ -92,6 +92,14 @@ def serve(
 
         def do_POST(self) -> None:
             if not self.allowed(True):
+                # Drain a small body first so the client sees the 403 rather than a reset.
+                try:
+                    pending = int(self.headers.get("Content-Length", "0"))
+                except ValueError:
+                    pending = 0
+                if 0 < pending <= 16000:
+                    self.rfile.read(pending)
+                self.close_connection = True
                 self.reply(403, json.dumps({"error": "Local session required"}))
                 return
             try:

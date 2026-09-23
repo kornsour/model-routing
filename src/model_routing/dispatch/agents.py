@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -497,10 +498,16 @@ class FakeAgentProvider:
 
     Contract for ``.fake_solution/``: a directory tree mirroring repo-relative
     paths, whose files should be copied over the sandbox repo on a simulated
-    "pass". It is provided by the task-set workstream per task, consumed on
-    the first ``tools=True`` call that sees it, and always removed afterward
-    (success or not) so a later resume in the same sandbox does not re-apply
-    it.
+    "pass". It is removed once applied; after a failed attempt it stays, so a
+    cascade escalation in the same sandbox can still succeed.  Parent-seeding
+    calls ("do not make any changes yet") never apply it.
+
+    Simulated difficulty: each task gets a stable hardness in [0, 1) from the
+    hash of its solution overlay; success probability falls with hardness and
+    rises with model tier.  Router calls (``tools=False`` asking for a JSON
+    ``candidate``) pick from the menu by estimated hardness - a resumed parent
+    estimates it with little noise, a fresh classifier with a lot.  All of this
+    exists only to exercise every code path; simulated numbers are not evidence.
     """
 
     name = "fake"
@@ -537,7 +544,8 @@ class FakeAgentProvider:
         num_turns = 1 + int(turns_roll * max(0, min(max_turns - 1, 4)))
 
         applied = False
-        if tools:
+        seeding = "do not make any changes yet" in prompt
+        if tools and not seeding:
             applied = self._apply_fake_solution(workdir, model, prompt, resume_session)
         tool_calls = num_turns if tools else 0
 
@@ -551,6 +559,8 @@ class FakeAgentProvider:
             output = f"[fake:{model}] applied simulated solution"
         elif tools:
             output = f"[fake:{model}] no .fake_solution available; task left unsolved"
+        elif '"candidate"' in prompt:
+            output = self._fake_router_choice(workdir, prompt, model, resume_session)
         else:
             output = f"[fake:{model}] router/no-tools call"
 
@@ -568,27 +578,50 @@ class FakeAgentProvider:
         )
 
     @staticmethod
+    def _hardness(workdir: Path) -> float:
+        sol_dir = workdir / ".fake_solution"
+        if not sol_dir.is_dir():
+            return 0.5
+        h = hashlib.sha256()
+        for src in sorted(sol_dir.rglob("*")):
+            if src.is_file():
+                h.update(str(src.relative_to(sol_dir)).encode())
+                h.update(src.read_bytes())
+        return int(h.hexdigest()[:8], 16) / 0xFFFFFFFF
+
+    @classmethod
+    def _fake_router_choice(
+        cls, workdir: Path, prompt: str, model: str, resume_session: str | None
+    ) -> str:
+        menu = re.findall(r"^- (\S+) \(", prompt, flags=re.MULTILINE)
+        if not menu:
+            return f"[fake:{model}] router call without a menu"
+        spread = 0.1 if resume_session else 0.35
+        noise = (_stable_unit_interval(prompt, model, "route") - 0.5) * 2 * spread
+        est = min(0.999, max(0.0, cls._hardness(workdir) + noise))
+        pick = menu[min(len(menu) - 1, int(est * len(menu)))]
+        return json.dumps({"candidate": pick, "effort": None, "reason": "simulated"})
+
+    @classmethod
     def _apply_fake_solution(
-        workdir: Path, model: str, prompt: str, resume_session: str | None
+        cls, workdir: Path, model: str, prompt: str, resume_session: str | None
     ) -> bool:
         sol_dir = workdir / ".fake_solution"
         if not sol_dir.is_dir():
             return False
-        try:
-            tier = _tier_rank(model)
-            prob = _TIER_QUALITY[tier]
-            roll = _stable_unit_interval(prompt, model, resume_session or "")
-            success = roll < prob
-            if success:
-                for src in sol_dir.rglob("*"):
-                    if src.is_file():
-                        rel = src.relative_to(sol_dir)
-                        dest = workdir / rel
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(src, dest)
-            return success
-        finally:
-            shutil.rmtree(sol_dir, ignore_errors=True)
+        hardness = cls._hardness(workdir)
+        prob = _TIER_QUALITY[_tier_rank(model)] - (hardness - 0.5) * 0.9
+        prob = min(0.99, max(0.02, prob))
+        roll = _stable_unit_interval(prompt, model, resume_session or "")
+        if roll >= prob:
+            return False
+        for src in sol_dir.rglob("*"):
+            if src.is_file():
+                dest = workdir / src.relative_to(sol_dir)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
+        shutil.rmtree(sol_dir, ignore_errors=True)
+        return True
 
 
 # --------------------------------------------------------------------------- #
