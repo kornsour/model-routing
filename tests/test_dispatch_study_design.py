@@ -416,7 +416,15 @@ def test_usage_limit_message_classification():
     assert usage_limit_reset_at("Claude AI usage limit reached|1790200000") == 1790200000.0
     assert usage_limit_reset_at("You have hit your usage limit reached") == 0.0
     assert usage_limit_reset_at("API Error: 429 rate_limit_error") == 0.0
+    assert (
+        usage_limit_reset_at(
+            "You've hit your monthly spend limit · raise it at claude.ai/settings/usage"
+            " · your session limit resets 5:40pm (America/Detroit)"
+        )
+        == 0.0
+    )
     assert usage_limit_reset_at("plain failure") is None
+    assert usage_limit_reset_at("Reached maximum number of turns (40)") is None
     assert usage_limit_reset_at("") is None
     stream = (
         '{"type":"result","subtype":"error","is_error":true,'
@@ -570,3 +578,30 @@ def test_resume_skips_completed_cells_and_keeps_spend(tmp_path: Path):
             resume=True,
             **common,
         )
+
+
+def test_resume_purges_cells_poisoned_by_an_unrecognised_limit(tmp_path: Path):
+    from model_routing.dispatch.runner import completed_cells, purge_limited_cells
+
+    out = tmp_path / "run"
+    out.mkdir()
+    limit_msg = "You've hit your monthly spend limit · your session limit resets 5:40pm"
+    good = _outcome_row("t1", "B", passed=True, cost=0.5)
+    good["sessions"] = [{"policy": "B", "task_id": "t1", "trial": 0, "error": None}]
+    bad = _outcome_row("t2", "B", passed=False, cost=0.0)
+    bad["sessions"] = [{"policy": "B", "task_id": "t2", "trial": 0, "error": limit_msg}]
+    (out / "outcomes.jsonl").write_text(json.dumps(good) + "\n" + json.dumps(bad) + "\n")
+    sessions = [
+        {"policy": "B", "task_id": "t1", "trial": 0, "error": None, "cost_usd_list": 0.5},
+        {"policy": "B", "task_id": "t2", "trial": 0, "error": limit_msg, "cost_usd_list": 0.38},
+    ]
+    (out / "sessions.jsonl").write_text("\n".join(json.dumps(s) for s in sessions) + "\n")
+    assert purge_limited_cells(out) == 1
+    assert completed_cells(out) == {("B", "t1", 0)}
+    assert json.loads((out / "outcomes.poisoned.jsonl").read_text())["task_id"] == "t2"
+    assert "t2" in (out / "sessions.poisoned.jsonl").read_text()
+    assert "t2" not in (out / "sessions.jsonl").read_text()
+    from model_routing.dispatch.runner import _spent_so_far
+
+    assert _spent_so_far(out) == pytest.approx(0.88)  # the poisoned session still cost money
+    assert purge_limited_cells(out) == 0  # idempotent

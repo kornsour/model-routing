@@ -114,19 +114,73 @@ def _repair_jsonl(path: Path) -> int:
 
 
 def _spent_so_far(run_dir: Path) -> float:
-    path = Path(run_dir) / "sessions.jsonl"
+    """List-price spend recorded so far, including sessions later set aside as
+    poisoned (they still cost money)."""
     total = 0.0
-    if not path.exists():
-        return total
-    with path.open() as f:
+    for name in ("sessions.jsonl", "sessions.poisoned.jsonl"):
+        path = Path(run_dir) / name
+        if not path.exists():
+            continue
+        with path.open() as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    total += float(json.loads(line).get("cost_usd_list", 0.0))
+                except (json.JSONDecodeError, ValueError):
+                    continue
+    return total
+
+
+def _is_limit_error(error: str | None) -> bool:
+    from model_routing.dispatch.agents import usage_limit_reset_at
+
+    return error == "usage_limit" or usage_limit_reset_at(error or "") is not None
+
+
+def purge_limited_cells(run_dir: Path) -> int:
+    """Set aside every outcome whose sessions include an account-limit error
+    (graded as a fail by a harness that did not recognise the wording), plus
+    those sessions, into ``outcomes.poisoned.jsonl`` / ``sessions.poisoned.jsonl``
+    so ``--resume`` redoes the cells.  Returns the number of cells moved."""
+    run_dir = Path(run_dir)
+    out_path = run_dir / "outcomes.jsonl"
+    if not out_path.exists():
+        return 0
+    keep: list[str] = []
+    poisoned: list[str] = []
+    bad: set[tuple[str, str, int]] = set()
+    with out_path.open() as f:
         for line in f:
             if not line.strip():
                 continue
-            try:
-                total += float(json.loads(line).get("cost_usd_list", 0.0))
-            except (json.JSONDecodeError, ValueError):
-                continue
-    return total
+            o = json.loads(line)
+            if any(_is_limit_error(s.get("error")) for s in o.get("sessions", [])):
+                poisoned.append(line.rstrip("\n"))
+                bad.add((str(o["policy"]), str(o["task_id"]), int(o["trial"])))
+            else:
+                keep.append(line.rstrip("\n"))
+    if not poisoned:
+        return 0
+    out_path.write_text("\n".join(keep) + ("\n" if keep else ""))
+    with (run_dir / "outcomes.poisoned.jsonl").open("a") as f:
+        f.write("\n".join(poisoned) + "\n")
+    sess_path = run_dir / "sessions.jsonl"
+    if sess_path.exists():
+        keep_s: list[str] = []
+        moved_s: list[str] = []
+        with sess_path.open() as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                s = json.loads(line)
+                key = (str(s["policy"]), str(s["task_id"]), int(s["trial"]))
+                (moved_s if key in bad else keep_s).append(line.rstrip("\n"))
+        sess_path.write_text("\n".join(keep_s) + ("\n" if keep_s else ""))
+        if moved_s:
+            with (run_dir / "sessions.poisoned.jsonl").open("a") as f:
+                f.write("\n".join(moved_s) + "\n")
+    return len(poisoned)
 
 
 @dataclass
@@ -876,6 +930,9 @@ def run_dispatch(
             raise ValueError(f"cannot resume {out_dir}: fake={prior.get('fake')} in the original")
         for name in ("outcomes.jsonl", "sessions.jsonl"):
             _repair_jsonl(out_dir / name)
+        purged = purge_limited_cells(out_dir)
+        if purged and verbose:
+            print(f"  set aside {purged} cell(s) poisoned by an account-limit error; redoing them")
         skip = completed_cells(out_dir)
 
     task_loader_fn: Callable[..., list[AgentTask]]

@@ -186,11 +186,17 @@ class ClaudeAgentProvider:
 
 _USAGE_LIMIT_RE = re.compile(
     r"usage limit reached(?:\|(?P<epoch>\d{9,11}))?"
+    r"|(?:usage|spend|spending|monthly|weekly|session) limit"
+    r"|limit resets"
     r"|rate.?limit"
     r"|\b429\b"
     r"|out of extra usage",
     re.IGNORECASE,
 )
+"""Every wording the Claude CLI has used for an account limit.  Seen on
+2026-09-23: "You've hit your monthly spend limit · raise it at ... · your
+session limit resets 5:40pm (America/Detroit)" (no epoch, so the runner
+polls).  Keep this broad: a limit graded as a fail poisons a whole run."""
 
 
 def usage_limit_reset_at(text: str) -> float | None:
