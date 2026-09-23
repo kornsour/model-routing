@@ -20,6 +20,23 @@ make dashboard                               # index results/ -> SQLite, open th
 Requires the `claude` CLI logged in (Pro/Max) and, for cross-vendor
 experiments, the `codex` CLI logged in (ChatGPT).
 
+## Dispatch routing
+
+`docs/experiments/dispatch-routing.md` covers a second, agentic question: does
+it pay to choose the model *when work is handed off* (a spawned task chip, a
+subagent), rather than always spawning on the parent's own model? Sessions run
+with tools inside a throwaway sandbox copy of a fixture repo and are graded
+deterministically (visible + hidden tests). Nothing spends without an estimate
+and `--budget-usd`:
+
+```bash
+make dispatch-estimate EXP=experiments/agentic/exp05_dispatch.toml   # no spend
+make dispatch-sim EXP=experiments/agentic/exp05_pilot.toml           # full run, fake provider, no spend
+make dispatch-run EXP=experiments/agentic/exp05_dispatch.toml BUDGET=5.00
+make dispatch-report RUN=results/exp05_dispatch/<stamp>
+make harvest-chips                                                   # scan local transcripts for task chips
+```
+
 ## Layout
 
 ```
@@ -35,8 +52,13 @@ src/model_routing/
   findings.py     per-run verdicts on the hypotheses, with the numbers behind them
   dashboard.py    single-file HTML dashboard (run history, evidence, charts, drill-down)
   cli.py          model-routing smoke | estimate | run | report | dashboard
+  dispatch/       agentic, dispatch-time routing (see docs/experiments/dispatch-routing.md):
+                    types.py runner.py policies.py report.py agents.py tasks.py
+                    sandbox.py grading.py harvest.py api.py
 tasks/llm/        task sets (JSONL) + shared context documents
-experiments/llm/  one TOML per experiment
+tasks/agentic/    fixture repos + briefs for dispatch experiments
+experiments/llm/  one TOML per single-shot experiment
+experiments/agentic/  one TOML per dispatch experiment
 results/          run output (git-ignored); promote findings to docs/experiments/findings/
 ```
 
@@ -48,6 +70,9 @@ results/          run output (git-ignored); promote findings to docs/experiments
 | `exp02_routing`      | Oracle, heuristic, classifier, and cascade routers vs. those baselines, with cache fragmentation visible |
 | `exp03_cache_order`  | Does interleaving requests across models change the cache picture?                                       |
 | `exp04_cross_vendor` | The Codex harness floor and a cross-vendor cascade                                                       |
+| `exp05_dispatch` (agentic) | Does dispatch-time routing (letting the parent pick the model when it spawns a task) lower cost per completed task? See `docs/experiments/dispatch-routing.md`. |
+| `exp05_dispatch_codex` (agentic) | Same design, ChatGPT/Codex candidates |
+| `exp05_pilot` (agentic) | Small, cheap pilot to size variance/cost before the confirmatory run |
 
 ## Conventions
 
