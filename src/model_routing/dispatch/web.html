@@ -69,13 +69,13 @@ progress { width: 100%; height: 14px; accent-color: var(--s1); }
 .verdict.inconclusive { border-color: var(--warn); }
 .verdict .label { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
 .verdict .headline { font-size: 20px; font-weight: 700; margin: 4px 0 8px; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; table-layout: auto; }
 th, td { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 th { color: var(--text-2); font-weight: 600; white-space: nowrap; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.table-wrap { overflow: auto; }
-.table-wrap table { min-width: 720px; }
-.table-wrap td:first-child { white-space: nowrap; }
+.table-wrap { overflow-x: auto; }
+.policy-code { border-bottom: 1px dotted var(--text-3); cursor: help; white-space: nowrap; font-weight: 600; }
+.policy-legend { display: grid; gap: 2px 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin: 4px 0 0; }
 .hyp-cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .hyp-card { border-left: 4px solid var(--text-3); padding: 8px 10px; background: var(--surface); border-radius: 6px; }
 .hyp-card.supported { border-left-color: var(--good); }
@@ -210,20 +210,27 @@ async function post(path, data) {
   });
 }
 
-const POLICY_LABELS = {
-  A: 'A — Keep going in the same session',
-  A_switch: 'A_switch — Same session, switch model mid-way',
-  B: 'B — Hand off on the same big model (today’s default)',
-  C1: 'C1 — Parent picks the model (the idea being tested)',
-  C2: 'C2 — A cheap classifier picks the model, no parent context',
-  D: 'D — Start cheap, escalate only if checks fail',
-  static_haiku: 'static — always the small model',
-  static_haiku_terse: 'static — small model, terse brief',
-  static_sonnet: 'static — always the mid model',
-  static_opus_low: 'static — always the big model, low effort',
-  oracle: 'oracle — cheapest model that passed, in hindsight (computed, not run)',
+const POLICY_DESCRIPTIONS = {
+  A: 'Keep going in the same session',
+  A_switch: 'Same session, switch model mid-way',
+  B: 'Hand off on the same big model (today’s default)',
+  C1: 'Parent picks the model (the idea being tested)',
+  C2: 'A cheap classifier picks the model, no parent context',
+  D: 'Start cheap, escalate only if checks fail',
+  D_ideal: 'Start cheap, escalate using the hidden tests as a perfect checker (upper bound, not deployable)',
+  static_haiku: 'Always the small model',
+  static_haiku_terse: 'Small model, terse brief',
+  static_sonnet: 'Always the mid model',
+  static_opus_low: 'Always the big model, low effort',
+  oracle: 'Cheapest model that passed, in hindsight (computed, not run)',
 };
-function policyLabel(name) { return POLICY_LABELS[name] || name; }
+// Graceful fallback for policy names the page doesn't know about yet.
+function policyDescription(name) {
+  if (POLICY_DESCRIPTIONS[name]) return POLICY_DESCRIPTIONS[name];
+  if (name.startsWith('static_')) return 'Fixed model: ' + name.slice(7).replace(/_/g, ' ');
+  return name.replace(/_/g, ' ');
+}
+function policyLabel(name) { return `${name} — ${policyDescription(name)}`; }
 
 let STATUS = null;
 let selectedConfig = null;
@@ -270,34 +277,80 @@ function renderTrackChoice() {
   onTrackChange();
 }
 
+// Called on every status poll (not just the first load): update readiness
+// without rebuilding the track radios / config select, which would discard
+// whatever the operator has already picked.
+function updateTrackReadiness() {
+  document.querySelectorAll('#trackChoice input[name=track]').forEach(r => {
+    const ready = trackReady(r.value);
+    r.disabled = !ready;
+    const span = r.nextElementSibling;
+    if (span) {
+      const label = r.value === 'claude' ? 'Claude (claude CLI)' : 'ChatGPT (codex CLI)';
+      span.textContent = label + (ready ? '' : ' — not ready');
+    }
+  });
+}
+
 function currentTrack() {
   const checked = document.querySelector('input[name=track]:checked');
   return checked ? checked.value : null;
 }
 
-function onTrackChange() {
+function trackConfigs() {
   const track = currentTrack();
-  const configs = (STATUS.configs || []).filter(c => !c.error && c.track === track);
+  return (STATUS.configs || []).filter(c => !c.error && c.track === track);
+}
+
+// A config's scope is inferred from its file name (pilot vs. the
+// pre-registered config); Scope and Config always agree with each other and
+// with what currentSpec() sends, whichever one the operator changed last.
+function inferScope(cfg) {
+  return /pilot/i.test(cfg.name || '') || /pilot/i.test(cfg.path || '') ? 'pilot' : 'full';
+}
+
+function onTrackChange() {
+  const configs = trackConfigs();
   const sel = document.getElementById('configSelect');
   sel.innerHTML = configs.map(c => `<option value="${esc(c.path)}">${esc(c.name)} (${c.n_tasks} tasks, ${c.trials} trials)</option>`).join('')
     || '<option value="">No config for this track</option>';
-  sel.onchange = () => { selectedConfig = configs.find(c => c.path === sel.value) || null; onConfigChange(); };
+  sel.onchange = onConfigSelectChange;
   selectedConfig = configs[0] || null;
+  if (selectedConfig) document.getElementById('scopeSelect').value = inferScope(selectedConfig);
   onConfigChange();
 }
 
+function onConfigSelectChange() {
+  const configs = trackConfigs();
+  const sel = document.getElementById('configSelect');
+  selectedConfig = configs.find(c => c.path === sel.value) || null;
+  if (selectedConfig) document.getElementById('scopeSelect').value = inferScope(selectedConfig);
+  onConfigChange();
+}
+
+function onScopeChange() {
+  const scope = document.getElementById('scopeSelect').value;
+  const configs = trackConfigs();
+  const match = configs.find(c => inferScope(c) === scope);
+  if (match) {
+    document.getElementById('configSelect').value = match.path;
+    selectedConfig = match;
+  }
+  onConfigChange();
+}
+document.getElementById('scopeSelect').addEventListener('change', onScopeChange);
+
 function onConfigChange() {
   const detail = document.getElementById('configDetail');
-  const scope = document.getElementById('scopeSelect').value;
   if (!selectedConfig) { detail.textContent = ''; renderPolicies(); return; }
   const margin = selectedConfig.margin_pp;
   const primary = selectedConfig.primary || {};
   detail.textContent = `Pre-registered primary: ${primary.treatment || '?'} vs ${primary.control || '?'}, non-inferiority margin ${margin} pp.`;
-  applyScope();
+  applySizePreset();
   renderPolicies();
 }
 
-function applyScope() {
+function applySizePreset() {
   if (!selectedConfig) return;
   const scope = document.getElementById('scopeSelect').value;
   const sampleEl = document.getElementById('sample');
@@ -310,7 +363,6 @@ function applyScope() {
     trialsEl.value = selectedConfig.trials || 1;
   }
 }
-document.getElementById('scopeSelect').addEventListener('change', applyScope);
 
 function renderPolicies() {
   const el = document.getElementById('policyList');
@@ -325,8 +377,10 @@ function selectedPolicies() {
 }
 
 function currentSpec(overrides) {
+  // Read straight from the controls so the request always matches what's
+  // on screen, even if a stale JS variable disagrees.
   return Object.assign({
-    config: selectedConfig ? selectedConfig.path : '',
+    config: document.getElementById('configSelect').value || '',
     sample: Number(document.getElementById('sample').value) || null,
     trials: Number(document.getElementById('trials').value) || null,
     policies: selectedPolicies(),
@@ -351,12 +405,20 @@ document.getElementById('btnEstimate').addEventListener('click', async () => {
   } catch (e) { setStatus(e.message); }
 });
 
+function setRunningUI(running) {
+  document.getElementById('btnEstimate').disabled = running;
+  document.getElementById('btnSimulate').disabled = running;
+  document.getElementById('btnRun').disabled = running || !lastEstimate;
+  document.getElementById('btnCancel').hidden = !running;
+}
+
 document.getElementById('btnSimulate').addEventListener('click', async () => {
   if (!selectedConfig) { setStatus('Choose a config first.'); return; }
   setStatus('Starting simulation…');
   try {
     await post('/api/dispatch/start', currentSpec({ fake: true, budget: Number(document.getElementById('budget').value) || 1 }));
     setStatus('Simulation running (no real models were called).');
+    setRunningUI(true);
     startPolling();
   } catch (e) { setStatus(e.message); }
 });
@@ -381,6 +443,7 @@ document.getElementById('confirmGo').addEventListener('click', async () => {
       confirm_estimate_usd: lastEstimate.usd_high,
     }));
     setStatus('Real run started. This is billed at API rates.');
+    setRunningUI(true);
     startPolling();
   } catch (e) { setStatus(e.message); }
 });
@@ -391,15 +454,14 @@ document.getElementById('btnCancel').addEventListener('click', async () => {
 
 function renderJob(job) {
   const card = document.getElementById('progressCard');
-  const cancelBtn = document.getElementById('btnCancel');
+  const running = !!job && job.state === 'running';
+  setRunningUI(running);
   if (!job || !job.progress) {
     card.hidden = true;
-    cancelBtn.hidden = true;
     return;
   }
   const p = job.progress;
   card.hidden = false;
-  cancelBtn.hidden = job.state !== 'running';
   document.getElementById('progressBar').value = p.total ? p.done / p.total : 0;
   document.getElementById('progDone').textContent = `${p.done} / ${p.total} cells`;
   document.getElementById('progSpent').textContent = `${money(p.spent_usd)} spent` + (p.budget_usd ? ` of $${Number(p.budget_usd).toFixed(2)} budget` : '');
@@ -421,10 +483,20 @@ function renderHistory() {
   document.querySelectorAll('#historyTable [data-run]').forEach(b => b.onclick = () => loadRun(b.dataset.run));
 }
 
+let uiBuilt = false;
+
 async function refreshStatus() {
   STATUS = await api('/api/dispatch/status');
   renderAuthPills();
-  renderTrackChoice();
+  // Only rebuild the track radios / config select once: rebuilding on every
+  // periodic poll would silently discard whatever config/scope the operator
+  // had already chosen. Later polls just refresh readiness in place.
+  if (!uiBuilt) {
+    renderTrackChoice();
+    uiBuilt = true;
+  } else {
+    updateTrackReadiness();
+  }
   renderHistory();
   renderJob(STATUS.job);
   if (STATUS.job && STATUS.job.state === 'running' && !pollTimer) {
@@ -449,24 +521,54 @@ function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = 
 function svgChart(policies, oracle) {
   const pts = policies.filter(p => p.cost_per_pass != null && p.pass_rate != null);
   if (!pts.length) return '<p class="muted small">No comparable cost/pass data.</p>';
-  const all = oracle ? pts.concat([Object.assign({}, oracle, { name: 'oracle' })]) : pts;
+  const all = oracle ? pts.concat([Object.assign({}, oracle, { name: 'oracle', _oracle: true })]) : pts;
   const maxCost = Math.max(...all.map(p => p.cost_per_pass), 0.0001);
-  const w = 560, h = 300, pad = 46;
+  const w = 560, h = 320, pad = 46;
   const x = c => pad + (c / maxCost) * (w - pad * 2);
   const y = r => h - pad - r * (h - pad * 2);
+
+  // Simple label-collision avoidance: points that land on (almost) the same
+  // pixel get nudged apart horizontally, then any labels still stacked too
+  // close vertically get pushed down a line, with a thin leader line back
+  // to the true dot position so the reading stays honest.
+  const buckets = new Map();
+  all.forEach(p => {
+    const key = Math.round(x(p.cost_per_pass) / 6) + ':' + Math.round(y(p.pass_rate) / 6);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(p);
+  });
+  let placed = [];
+  buckets.forEach(group => {
+    group.forEach((p, i) => {
+      const jitter = (i - (group.length - 1) / 2) * 9;
+      placed.push({ p, cx: x(p.cost_per_pass) + jitter, cy: y(p.pass_rate) });
+    });
+  });
+  placed = placed.map(d => ({ ...d, ly: d.cy + 4 })).sort((a, b) => a.cx - b.cx);
+  for (let i = 1; i < placed.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(placed[i].cx - placed[j].cx) < 96 && Math.abs(placed[i].ly - placed[j].ly) < 14) {
+        placed[i].ly = placed[j].ly + 14;
+      }
+    }
+  }
+
   const grid = [0, .25, .5, .75, 1].map(r => `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${y(r)}" y2="${y(r)}"/><text x="4" y="${y(r)+4}">${Math.round(r*100)}%</text>`).join('');
-  const dots = all.map((p, i) => {
-    const cx = x(p.cost_per_pass), cy = y(p.pass_rate);
-    const isOracle = p.name === 'oracle';
-    return `<circle cx="${cx}" cy="${cy}" r="6" fill="var(--s${(i % 4) + 1})" ${isOracle ? 'class="dot-oracle"' : ''}/>` +
-      `<text x="${cx + 9}" y="${cy + 4}" class="lbl">${esc(p.name)}</text>`;
+  const marks = placed.map((d, i) => {
+    const isOracle = !!d.p._oracle;
+    const nudged = Math.abs(d.ly - (d.cy + 4)) > 1;
+    const leader = nudged
+      ? `<line x1="${d.cx}" y1="${d.cy}" x2="${d.cx + 8}" y2="${d.ly - 4}" stroke="var(--text-3)" stroke-width="1"/>`
+      : '';
+    return `${leader}<circle cx="${d.cx}" cy="${d.cy}" r="6" fill="var(--s${(i % 4) + 1})" ${isOracle ? 'class="dot-oracle"' : ''}/>` +
+      `<text x="${d.cx + 9}" y="${d.ly}" class="lbl">${esc(d.p.name)}</text>`;
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Cost per completed task vs pass rate">` +
     `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${h-pad}" y2="${h-pad}"/><line class="axis" x1="${pad}" x2="${pad}" y1="${pad}" y2="${h-pad}"/>` +
     grid +
     `<text x="${w/2}" y="${h-8}" text-anchor="middle">cost per completed task ($)</text>` +
     `<text x="12" y="${pad-10}">pass rate</text>` +
-    dots + `</svg>`;
+    marks + `</svg>`;
 }
 
 function verdictClass(v) { return (v || 'inconclusive').replace(/\s+/g, '_'); }
@@ -483,8 +585,11 @@ function renderRunView(summary) {
       <p>${esc(h_d1.sentence || summary.headline || '')}</p>
     </div>` : `<p class="muted">${esc(summary.headline || 'No primary comparison in this run.')}</p>`;
   const policies = summary.policies || [];
+  // Table rows show only the short policy code (with a tooltip for the full
+  // description) so columns fit at 800px; the legend below spells every
+  // code out for touch devices that have no hover.
   const rows = policies.map(p => `<tr>
-      <td>${esc(policyLabel(p.name))}</td>
+      <td><span class="policy-code" title="${esc(policyDescription(p.name))}">${esc(p.name)}</span></td>
       <td class="num">${pct(p.pass_rate)} <span class="muted small">(${ci(p.pass_ci)})</span></td>
       <td class="num">${money(p.cost_per_task)}</td>
       <td class="num">${money(p.cost_per_pass)} <span class="muted small">(${p.cost_per_pass_ci ? money(p.cost_per_pass_ci[0]) + '–' + money(p.cost_per_pass_ci[1]) : 'n/a'})</span></td>
@@ -493,6 +598,9 @@ function renderRunView(summary) {
       <td class="num">${p.mean_turns != null ? p.mean_turns.toFixed(1) : '–'}</td>
       <td class="small">${esc(Object.entries(p.model_mix || {}).map(([m, s]) => `${m} ${pct(s)}`).join(', '))}</td>
     </tr>`).join('');
+  const legend = policies.map(p =>
+    `<div><b>${esc(p.name)}</b> — ${esc(policyDescription(p.name))}</div>`
+  ).join('');
   const hypCards = secondary.map(c => `<div class="hyp-card ${verdictClass(c.verdict)}"><b>${esc(c.id)}</b> — ${esc(c.verdict)}<p class="small">${esc(c.sentence)}</p></div>`).join('');
   el.innerHTML = `
     <h2>Results: ${esc(summary.experiment || '')}</h2>
@@ -510,6 +618,7 @@ function renderRunView(summary) {
       </ul>
     </details>
     <h3>Policies</h3>
+    <details class="small"><summary>Policy legend (code &rarr; what it does)</summary><div class="policy-legend">${legend}</div></details>
     <div class="table-wrap"><table><thead><tr><th>Policy</th><th class="num">Pass rate</th><th class="num">Cost/task</th><th class="num">Cost/completed task</th><th class="num">Router share</th><th class="num">Escalations</th><th class="num">Mean turns</th><th>Model mix</th></tr></thead><tbody>${rows}</tbody></table></div>
     <h3>Secondary hypotheses</h3>
     <div class="hyp-cards">${hypCards || '<p class="muted small">No secondary comparisons in this run.</p>'}</div>
