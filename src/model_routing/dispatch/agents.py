@@ -692,13 +692,11 @@ def auth_check(name: str) -> dict[str, Any]:
                 check=False,
                 stdin=subprocess.DEVNULL,
             )
-            text = (proc.stdout or "").strip()
-            logged_in = proc.returncode == 0 and "logged in" in text.lower()
-            return {
-                "installed": True,
-                "logged_in": logged_in,
-                "detail": text[:200] or (proc.stderr or "").strip()[:200],
-            }
+            # codex prints its status line on stderr (0.154.0), so read both streams.
+            text = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+            low = text.lower()
+            logged_in = proc.returncode == 0 and "logged in" in low and "not logged in" not in low
+            return {"installed": True, "logged_in": logged_in, "detail": text[:200]}
     except subprocess.TimeoutExpired:
         return {"installed": True, "logged_in": None, "detail": "status check timed out"}
     except (json.JSONDecodeError, OSError) as exc:

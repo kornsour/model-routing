@@ -95,11 +95,19 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
 
 
 def discover_runs(results_dir: str | Path) -> list[Path]:
-    """Run directories: ``results/<experiment>/<stamp>/`` containing outcomes.jsonl."""
+    """Single-shot run directories: ``results/<experiment>/<stamp>/`` with outcomes.jsonl.
+
+    Dispatch (agentic) runs write ``sessions.jsonl`` instead of ``calls.jsonl``
+    and have their own report (``model_routing.dispatch.report``); skip them.
+    """
     root = Path(results_dir)
     if not root.exists():
         return []
-    return sorted(p.parent for p in root.glob("*/*/outcomes.jsonl"))
+    return sorted(
+        p.parent
+        for p in root.glob("*/*/outcomes.jsonl")
+        if not (p.parent / "sessions.jsonl").exists()
+    )
 
 
 def _read_jsonl(path: Path) -> list[dict[str, Any]]:

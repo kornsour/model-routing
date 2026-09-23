@@ -510,7 +510,7 @@ def test_estimate_no_spend(tmp_path: Path):
 
 def test_auth_status_is_graceful_without_agents_module():
     status = auth_status()
-    assert set(status) == {"claude_cli", "codex_cli"}
+    assert set(status) == {"claude", "codex"}  # keyed by track, per dispatch.api
     for row in status.values():
         assert "installed" in row and "logged_in" in row
 

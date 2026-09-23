@@ -768,14 +768,15 @@ def run_dispatch(
 
 
 def auth_status() -> dict[str, dict[str, Any]]:
+    """Keyed by track (``claude`` / ``codex``) as documented in ``dispatch.api``."""
     result: dict[str, dict[str, Any]] = {}
-    for name in ("claude_cli", "codex_cli"):
+    for track, name in (("claude", "claude_cli"), ("codex", "codex_cli")):
         try:
             from model_routing.dispatch.agents import auth_check
 
-            result[name] = auth_check(name)
+            result[track] = auth_check(name)
         except Exception as e:
-            result[name] = {
+            result[track] = {
                 "installed": False,
                 "logged_in": None,
                 "detail": f"dispatch.agents not available yet: {e}",
