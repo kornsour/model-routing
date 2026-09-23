@@ -122,6 +122,9 @@ def cmd_run(args: argparse.Namespace) -> int:
         index_results(results_root, results_root / "index.sqlite")
         page = write_dashboard(results_root / "index.sqlite", results_root / "dashboard.html")
         print(f"dashboard: {page.resolve()}")
+    from model_routing.backup import auto_backup
+
+    auto_backup(out)
     return 0
 
 
@@ -206,6 +209,9 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
     summary = summarize(out)
     print(f"\n{summary['headline']}")
     print(f"summary: {out / 'summary.md'}")
+    from model_routing.backup import auto_backup
+
+    auto_backup(out)
     return 0
 
 
@@ -223,6 +229,84 @@ def cmd_harvest_chips(args: argparse.Namespace) -> int:
 
     n = harvest_chips(Path(args.projects_dir).expanduser(), Path(args.out))
     print(f"harvested {n} task chip(s) -> {args.out}")
+    return 0
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    from model_routing.backup import export_run
+
+    zip_path = export_run(args.run_dir, args.out)
+    print(f"exported: {zip_path.resolve()}")
+    return 0
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    from model_routing.backup import Settings, backup_all, backup_run
+
+    settings = Settings.load()
+    if args.to:
+        settings = Settings(backup_dir=Path(args.to), auto_backup=settings.auto_backup)
+    if settings.backup_dir is None:
+        print("No backup directory configured. Run: model-routing backup-config --dir DIR")
+        return 1
+    if args.run:
+        result = backup_run(args.run, settings)
+        print(json.dumps(result, indent=2))
+    else:
+        result = backup_all(args.results, settings)
+        n_ok = sum(1 for r in result["runs"] if r.get("status") != "failed")
+        n_failed = len(result["runs"]) - n_ok
+        print(f"backed up {n_ok} run(s), {n_failed} failed, to {settings.backup_dir}")
+        if result["index_snapshot"]:
+            print(f"index snapshot: {result['index_snapshot']}")
+        for r in result["runs"]:
+            if r.get("status") == "failed":
+                print(f"  FAILED {r['run_id']}: {r.get('error')}")
+    return 0
+
+
+def cmd_backup_status(args: argparse.Namespace) -> int:
+    from model_routing.backup import backup_status
+
+    rows = backup_status(args.results)
+    if not rows:
+        print("No runs found.")
+        return 0
+    for r in rows:
+        state = (
+            "up to date" if r["up_to_date"] else ("stale" if r["backed_up"] else "NOT backed up")
+        )
+        fake = " (simulated)" if r["fake"] else ""
+        print(f"  {r['run_id']:<40} {state}{fake}")
+    return 0
+
+
+def cmd_restore(args: argparse.Namespace) -> int:
+    from model_routing.backup import restore
+
+    result = restore(args.backup_dir, args.results)
+    print(f"restored {len(result['restored'])} run(s), reindexed {len(result['indexed'])}")
+    if result["conflicts"]:
+        print(f"conflicts ({len(result['conflicts'])}): local file differs from backup, kept local")
+        for c in result["conflicts"]:
+            print(f"  {c['run_id']}: {', '.join(c['files'])}")
+    if result["corrupt_backups"]:
+        print(f"corrupt backup manifests skipped: {', '.join(result['corrupt_backups'])}")
+    return 0
+
+
+def cmd_backup_config(args: argparse.Namespace) -> int:
+    from model_routing.backup import Settings, set_auto_backup, set_backup_dir
+
+    if args.dir is not None:
+        set_backup_dir(Path(args.dir).expanduser())
+    if args.auto is not None:
+        set_auto_backup(args.auto == "on")
+    settings = Settings.load()
+    print(f"backup_dir:  {settings.backup_dir or '(none configured)'}")
+    print(f"auto_backup: {settings.auto_backup}")
+    if settings.detected_drive:
+        print(f"detected Google Drive folder: {settings.detected_drive}")
     return 0
 
 
@@ -329,6 +413,31 @@ def main(argv: list[str] | None = None) -> int:
     hc.add_argument("--projects-dir", default="~/.claude/projects")
     hc.add_argument("--out", default="tasks/agentic/private/harvested.jsonl")
     hc.set_defaults(fn=cmd_harvest_chips)
+
+    ex = sub.add_parser("export", help="zip a run directory (raw files + report.html + README)")
+    ex.add_argument("run_dir")
+    ex.add_argument("--out", help="directory to write the zip into (default: the run dir)")
+    ex.set_defaults(fn=cmd_export)
+
+    bk = sub.add_parser("backup", help="copy run(s) into the configured backup directory")
+    bk.add_argument("--run", help="a single run dir; default backs up every run under --results")
+    bk.add_argument("--to", help="override the configured backup directory for this call")
+    bk.add_argument("--results", default="results")
+    bk.set_defaults(fn=cmd_backup)
+
+    bs = sub.add_parser("backup-status", help="per-run backup freshness")
+    bs.add_argument("--results", default="results")
+    bs.set_defaults(fn=cmd_backup_status)
+
+    rs = sub.add_parser("restore", help="copy runs missing from results/ back in and reindex")
+    rs.add_argument("backup_dir")
+    rs.add_argument("--results", default="results")
+    rs.set_defaults(fn=cmd_restore)
+
+    bc = sub.add_parser("backup-config", help="show or change the backup directory / auto-backup")
+    bc.add_argument("--dir", help="set the backup directory (absolute path)")
+    bc.add_argument("--auto", choices=["on", "off"], help="enable/disable automatic backup")
+    bc.set_defaults(fn=cmd_backup_config)
 
     args = p.parse_args(argv)
     return int(args.fn(args))

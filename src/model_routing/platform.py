@@ -215,5 +215,9 @@ class Lab:
                     conn.execute(
                         "UPDATE jobs SET state=?, error=? WHERE id=?", (state, error, ident)
                     )
+                if (out / "outcomes.jsonl").exists():
+                    from model_routing.backup import auto_backup
+
+                    auto_backup(out)
             finally:
                 self.lock.release()

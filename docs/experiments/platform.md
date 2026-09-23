@@ -160,6 +160,53 @@ Only one dispatch run executes at a time; job state is written to
 survives a server restart. A job still `running` when the server starts is
 marked `interrupted`; it is never silently resumed.
 
+## Data safety
+
+`results/` is git-ignored and is the only place the JSONL call/outcome logs,
+`meta.json`, and `summary.md/json` for a run live. `results/index.sqlite`
+(run/outcome/call index, plus saved single-shot plans and dispatch job
+history) and `results/dispatch_jobs/*.json` sit alongside it. **If this
+checkout is a git worktree, deleting the worktree deletes `results/` with
+it** — nothing under it is tracked by git, so there is no other copy.
+
+`src/model_routing/backup.py` copies finished real runs somewhere durable:
+
+- **Auto-backup.** After a non-simulated run finishes (dispatch or
+  single-shot; any end state — done, over-budget, cancelled, or failed), the
+  CLI (`model-routing run` / `dispatch-run`) and the web job managers
+  (`platform.Lab`, `dispatch.web.DispatchLab`) call `backup.auto_backup`.
+  Simulated (`--fake`) runs are never backed up — there is nothing to lose.
+  A backup failure is logged loudly but never crashes the run or discards
+  the local data; the run's own files in `results/` are always the fallback.
+- **Where backups land.** By default, a detected Google Drive for desktop
+  folder: `~/Library/CloudStorage/GoogleDrive-<account>/My Drive/
+  model-routing-backups/<experiment>/<stamp>/`, auto-detected only when
+  exactly one `GoogleDrive-*` folder exists under `~/Library/CloudStorage`
+  (otherwise configure one explicitly). Each run's backup includes its raw
+  files (JSONL, `meta.json`, `config.toml`, `summary.*`; sandbox working
+  copies are skipped), a standalone `report.html`, the exported `.zip`, and a
+  `manifest.json` of sha256 hashes used to verify the copy and detect drift.
+  `results/index.sqlite` is snapshotted via SQLite's own backup API into
+  `<backup_dir>/_index/` (last 10 kept), and `results/dispatch_jobs/` is
+  mirrored into `<backup_dir>/_dispatch_jobs/`.
+- **Settings** persist outside the repo at
+  `~/.config/model-routing/settings.json` (`backup_dir`, `auto_backup`), so
+  they too survive a deleted worktree. `MODEL_ROUTING_BACKUP_DIR` overrides
+  the configured directory (used by tests).
+- **Export.** `model-routing export RUN [--out DIR]`, the dispatch page's
+  per-run "Download .zip", and the lab overview's run history both produce
+  the same deterministic `<experiment>__<stamp>.zip`: every run file plus
+  `report.html` and a `README.txt` explaining how to restore it. Use this to
+  keep a report in Google Drive by hand, or to hand a run to someone else.
+- **Restore.** `model-routing restore BACKUP_DIR` (or the dispatch page's
+  "Restore from backup") copies runs present in the backup but missing from
+  `results/` back in, verifies each manifest, and rebuilds the SQLite index.
+  It never overwrites a local file that differs from its backup — those are
+  reported as conflicts instead, left for a human to reconcile.
+- **Status.** `model-routing backup-status`, `GET /api/backup/status`, and
+  the per-run badge in the dispatch page's run history ("Backed up to Drive
+  ✓ 2 min ago" / "Not backed up") show whether each run's backup is current.
+
 ## Limits and operation
 
 Only one server process should use a results database. Calls within a live

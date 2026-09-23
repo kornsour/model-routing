@@ -74,6 +74,25 @@ results/          run output (git-ignored); promote findings to docs/experiments
 | `exp05_dispatch_codex` (agentic) | Same design, ChatGPT/Codex candidates |
 | `exp05_pilot` (agentic) | Small, cheap pilot to size variance/cost before the confirmatory run |
 
+## Data safety
+
+`results/` (JSONL logs, `meta.json`, `summary.*`, `index.sqlite`) is
+git-ignored and is the source of truth for every run; if this checkout lives
+in a git worktree, deleting the worktree deletes it with nothing left behind.
+Real (non-`--fake`) runs are auto-backed-up on finish — by default to a
+detected Google Drive for desktop folder — with per-run manifests, a
+standalone `report.html`, and a `.zip` export; see "Data safety" in
+[`docs/experiments/platform.md`](docs/experiments/platform.md) for where
+backups land and how to restore them:
+
+```bash
+make backup-config DIR="$HOME/Google Drive/model-routing-backups"  # or auto-detected
+make backup                                  # back up every run now
+make backup-status                           # per-run freshness
+make export RUN=results/<experiment>/<stamp> # zip one run + report + README
+make restore DIR=<backup dir>                # copy missing runs back in, reindex
+```
+
 ## Conventions
 
 `make check` is the CI gate. Dependencies are stdlib-only at runtime; dev

@@ -347,3 +347,7 @@ class DispatchLab:
             self._current_id = None
             self._cancel = None
             self.lock.release()
+            if out.exists() and state in ("done", "over_budget", "cancelled", "failed"):
+                from model_routing.backup import auto_backup
+
+                auto_backup(out)
