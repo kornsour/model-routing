@@ -13,7 +13,7 @@ the confirmatory run.
 | `C1_inline` (brief + pick in one forked turn) | router got a new session id (fork), `cost_usd_billed` is the marginal pick ($0.0006-$0.002) while the full turn cost $0.09-$0.13; worker ran on the canned brief | as designed, 2/2 passed |
 | `D` escalation | cascade escalates when the cheapest model fails the visible checks | **not exercised**: Haiku passed both `-01` hard tasks on the first attempt. Re-smoke on a task the calibration run shows Haiku failing |
 
-One defect found and fixed (`7c9f…`, this branch): on `inv-retry-01` the
+One defect found and fixed (this branch): on `inv-retry-01` the
 parent answered the tools-off inline turn with "I'll take a quick look at
 `sync.py`", tried to read a file, and the turn ended without a pick. The
 policy fell back to the parent model silently. The prompt now says tools are
