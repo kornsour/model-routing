@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import http.client
 import json
+import re
 import socket
 import sqlite3
 import threading
 import time
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -174,7 +176,9 @@ def test_export_zip_contents_skip_sandboxes(tmp_path):
     run_dir = _real_looking_run(tmp_path)
     out_dir = tmp_path / "exported"
     zip_path = export_run(run_dir, out_dir)
-    assert zip_path == out_dir / "exp_x__20260101-000000-widget.zip"
+    # Named by when the run started, in local time, so exports sort and are unique.
+    when = datetime(2026, 1, 1, tzinfo=UTC).astimezone().strftime("%Y-%m-%d_%H-%M-%S")
+    assert zip_path == out_dir / f"{when}_exp_x.zip"
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
     prefix = "exp_x/20260101-000000-widget/"
@@ -188,7 +192,9 @@ def test_export_zip_contents_skip_sandboxes(tmp_path):
 def test_export_deterministic_name_for_dispatch_run(tmp_path):
     run_dir = _dispatch_fake_run(tmp_path)
     zip_path = export_run(run_dir)
-    assert zip_path.name == f"exp05_pilot__{run_dir.name}.zip"
+    assert re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}_exp05_pilot_simulated\.zip", zip_path.name
+    )
     with zipfile.ZipFile(zip_path) as zf:
         names = zf.namelist()
     assert any(n.endswith("sessions.jsonl") for n in names)
@@ -652,3 +658,20 @@ def test_post_backup_endpoints_require_token(running_server):
         body={},
     )
     assert status == 403
+
+
+def test_backup_writes_timestamped_exports_to_reports_folder(tmp_path):
+    from model_routing.backup import REPORTS_DIRNAME, Settings, backup_run
+
+    run_dir = _real_looking_run(tmp_path)
+    backup_dir = tmp_path / "drive"
+    result = backup_run(run_dir, Settings(backup_dir=backup_dir, auto_backup=True))
+    when = datetime(2026, 1, 1, tzinfo=UTC).astimezone().strftime("%Y-%m-%d_%H-%M-%S")
+    reports = backup_dir / REPORTS_DIRNAME
+    assert (reports / f"{when}_exp_x.zip").is_file()
+    assert (reports / f"{when}_exp_x_report.html").is_file()
+    assert result["report"].endswith(f"{when}_exp_x_report.html")
+    # The restorable per-run mirror is unchanged: raw files + report + manifest.
+    run_backup = backup_dir / "exp_x" / run_dir.name
+    assert (run_backup / "manifest.json").is_file()
+    assert (run_backup / "report.html").is_file()

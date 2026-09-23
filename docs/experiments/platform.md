@@ -184,8 +184,12 @@ it** — nothing under it is tracked by git, so there is no other copy.
   exactly one `GoogleDrive-*` folder exists under `~/Library/CloudStorage`
   (otherwise configure one explicitly). Each run's backup includes its raw
   files (JSONL, `meta.json`, `config.toml`, `summary.*`; sandbox working
-  copies are skipped), a standalone `report.html`, the exported `.zip`, and a
-  `manifest.json` of sha256 hashes used to verify the copy and detect drift.
+  copies are skipped), a standalone `report.html`, and a `manifest.json` of
+  sha256 hashes used to verify the copy and detect drift. The human-facing
+  exports go to a flat, chronologically sorted `<backup_dir>/Reports/`
+  folder: `2026-09-22_23-39-41_exp05_pilot_report.html` and
+  `2026-09-22_23-39-41_exp05_pilot.zip` (run start time, local; simulated
+  runs end in `_simulated`, estimates in `_estimate`).
   `results/index.sqlite` is snapshotted via SQLite's own backup API into
   `<backup_dir>/_index/` (last 10 kept), and `results/dispatch_jobs/` is
   mirrored into `<backup_dir>/_dispatch_jobs/`.
@@ -195,7 +199,8 @@ it** — nothing under it is tracked by git, so there is no other copy.
   the configured directory (used by tests).
 - **Export.** `model-routing export RUN [--out DIR]`, the dispatch page's
   per-run "Download .zip", and the lab overview's run history both produce
-  the same deterministic `<experiment>__<stamp>.zip`: every run file plus
+  the same timestamped `<YYYY-MM-DD_HH-MM-SS>_<experiment>.zip` (when the run
+  started, local time; unique per run and sorts by date): every run file plus
   `report.html` and a `README.txt` explaining how to restore it. Use this to
   keep a report in Google Drive by hand, or to hand a run to someone else.
 - **Restore.** `model-routing restore BACKUP_DIR` (or the dispatch page's

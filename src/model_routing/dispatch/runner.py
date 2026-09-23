@@ -586,6 +586,11 @@ def run_dispatch(
     outcomes_fh = (out_dir / "outcomes.jsonl").open("a")
 
     state = {"spent_usd": 0.0, "seq": 0}
+    # The Claude CLI's ``total_cost_usd`` is cumulative across a resumed (even
+    # forked) session: a router call resumed from a $0.086 setup reports
+    # $0.169 for its own $0.083.  Track each session id's cumulative figure so
+    # every SessionRecord carries only its own reported cost.
+    reported_cumulative: dict[str, float] = {}
     total_cells = len(selected_policies) * run_trials * len(loaded_tasks)
     done_cells = 0
     run_state = "running"
@@ -650,11 +655,17 @@ def run_dispatch(
                 if result.resolved_model and prices.get(result.resolved_model)
                 else cand.model
             )
+            reported = result.cost_usd_reported
+            if reported is not None:
+                prior = reported_cumulative.get(resume_session or "", 0.0)
+                if result.session_id:
+                    reported_cumulative[result.session_id] = reported
+                reported = max(0.0, reported - prior)
             cost = prices.cost(price_model, result.usage) if prices.get(price_model) else 0.0
-            if cost == 0.0 and result.cost_usd_reported:
+            if cost == 0.0 and reported:
                 # The Claude CLI zeroes ``usage`` on a budget-capped result while
                 # still reporting dollars; never price a paid session at $0.
-                cost = result.cost_usd_reported
+                cost = reported
             rec = SessionRecord(
                 task_id=task_id,
                 policy=policy_name,
@@ -671,7 +682,7 @@ def run_dispatch(
                 tool_calls=result.tool_calls,
                 session_id=result.session_id,
                 resumed_from=resumed_from,
-                cost_usd_reported=result.cost_usd_reported,
+                cost_usd_reported=reported,
                 resolved_model=result.resolved_model,
                 error=result.error,
                 output=result.output,
