@@ -188,12 +188,12 @@ const money = x => x == null ? '–' : '$' + Number(x).toFixed(4);
 const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
 const ci = x => x ? `${(x[0]*100).toFixed(1)}–${(x[1]*100).toFixed(1)}%` : 'n/a';
 
-try { document.getElementById('theme').value = localStorage.getItem('dispatch-theme') || 'auto'; } catch {}
+try { document.getElementById('theme').value = localStorage.getItem('theme') || 'auto'; } catch {}
 function applyTheme() { document.documentElement.dataset.theme = document.getElementById('theme').value; }
 applyTheme();
 document.getElementById('theme').addEventListener('change', () => {
   applyTheme();
-  try { localStorage.setItem('dispatch-theme', document.getElementById('theme').value); } catch {}
+  try { localStorage.setItem('theme', document.getElementById('theme').value); } catch {}
 });
 
 async function api(path, opts) {
