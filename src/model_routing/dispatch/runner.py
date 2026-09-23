@@ -924,14 +924,20 @@ def run_dispatch(
     if resume:
         meta_path = out_dir / "meta.json"
         prior = json.loads(meta_path.read_text())
-        prior.setdefault("resumes", []).append(
-            {
-                "at": datetime.now(UTC).isoformat(),
-                "completed_cells": len(skip),
-                "git_sha": _git_sha(),
-                "harness_version": __version__,
-            }
-        )
+        entry: dict[str, Any] = {
+            "at": datetime.now(UTC).isoformat(),
+            "completed_cells": len(skip),
+            "git_sha": _git_sha(),
+            "harness_version": __version__,
+            "budget_usd": budget_usd,
+        }
+        if int(prior.get("trials", run_trials)) != run_trials:
+            # Recorded, never silent: the report's pre-registration check reads
+            # ``trials`` and will flag the change if it matters.
+            entry["trials_changed"] = {"from": prior.get("trials"), "to": run_trials}
+            prior["trials"] = run_trials
+        prior["budget_usd"] = budget_usd
+        prior.setdefault("resumes", []).append(entry)
         meta_path.write_text(json.dumps(prior, indent=2, default=str))
     else:
         _write_meta(

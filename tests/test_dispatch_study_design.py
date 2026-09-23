@@ -545,6 +545,20 @@ def test_resume_skips_completed_cells_and_keeps_spend(tmp_path: Path):
     assert len(finished) == 8
     meta = json.loads((out / "meta.json").read_text())
     assert meta["resumes"][0]["completed_cells"] == 3
+    # resuming with fewer trials is recorded and runs only the remaining cells
+    third = RecordingProvider()
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=100.0,
+        trials=1,
+        agent_provider_factory=lambda name, env=None: third,
+        resume=True,
+        **common,
+    )
+    assert third.calls == []  # every trial-0 cell was already done
+    meta = json.loads((out / "meta.json").read_text())
+    assert meta["trials"] == 1 and meta["resumes"][1]["trials_changed"] == {"from": 2, "to": 1}
     # a changed config is refused
     cfg_path.write_text(cfg_path.read_text().replace("margin_pp = 5", "margin_pp = 6"))
     with pytest.raises(ValueError, match="config changed"):
