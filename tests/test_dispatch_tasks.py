@@ -1,4 +1,4 @@
-"""CI enforcement of the agentic task set (see ``scripts/validate_agentic_tasks.py``).
+"""CI enforcement of the agentic task set (see ``model_routing.dispatch.validate``).
 
 For every task in ``tasks/agentic/tasks.jsonl``: the untouched fixture repo
 must fail grading (with its own visible suite already green), and the repo
@@ -15,7 +15,7 @@ import pytest
 
 from model_routing.dispatch.tasks import load_agent_tasks
 from model_routing.dispatch.types import AgentTask
-from scripts.validate_agentic_tasks import check_solution_passes, check_untouched
+from model_routing.dispatch.validate import check_solution_passes, check_untouched
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TASKS_JSONL = REPO_ROOT / "tasks" / "agentic" / "tasks.jsonl"
