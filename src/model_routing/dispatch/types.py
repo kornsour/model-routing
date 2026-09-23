@@ -138,10 +138,20 @@ class SessionRecord:
     seq: int = 0
     started_at: float = field(default_factory=time.time)
     raw: dict[str, Any] | None = None
+    cost_usd_billed: float | None = None
+    """Headline cost when it differs from ``cost_usd_list``.  Only the inline
+    router (``C1_inline``) sets it: the whole turn is recorded in ``usage`` /
+    ``cost_usd_list``, but only the *marginal* tokens the model choice added
+    are billed to the task (see ``policies._policy_c1_inline``)."""
+
+    @property
+    def headline_cost_usd(self) -> float:
+        return self.cost_usd_list if self.cost_usd_billed is None else self.cost_usd_billed
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["usage"] = asdict(self.usage)
+        d["headline_cost_usd"] = self.headline_cost_usd
         return d
 
 
@@ -171,8 +181,21 @@ class DispatchOutcome:
 
     @property
     def cost_usd(self) -> float:
-        """Headline cost: everything except parent-session setup."""
+        """Headline cost: everything except parent-session setup.  A session
+        with ``cost_usd_billed`` set contributes that instead of its full list
+        cost (inline router turns)."""
+        return sum(s.headline_cost_usd for s in self.sessions if s.role in HEADLINE_ROLES)
+
+    @property
+    def cost_usd_full(self) -> float:
+        """Every headline-role session at its full list cost (no marginal billing)."""
         return sum(s.cost_usd_list for s in self.sessions if s.role in HEADLINE_ROLES)
+
+    @property
+    def errors(self) -> int:
+        """Sessions that ended with a provider error (timeout, budget cap, exit code).
+        They are still graded and counted - intention to treat - but reported."""
+        return sum(1 for s in self.sessions if s.role in HEADLINE_ROLES and s.error)
 
     @property
     def setup_cost_usd(self) -> float:
@@ -180,7 +203,7 @@ class DispatchOutcome:
 
     @property
     def router_cost_usd(self) -> float:
-        return sum(s.cost_usd_list for s in self.sessions if s.role == "router")
+        return sum(s.headline_cost_usd for s in self.sessions if s.role == "router")
 
     @property
     def turns(self) -> int:
@@ -204,6 +227,8 @@ class DispatchOutcome:
             "chosen_candidate": self.chosen_candidate,
             "escalations": self.escalations,
             "cost_usd": self.cost_usd,
+            "cost_usd_full": self.cost_usd_full,
+            "errors": self.errors,
             "setup_cost_usd": self.setup_cost_usd,
             "router_cost_usd": self.router_cost_usd,
             "turns": self.turns,

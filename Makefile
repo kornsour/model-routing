@@ -3,7 +3,7 @@
 PY := uv run
 
 .PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab \
-	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips app \
+	dispatch-estimate dispatch-run dispatch-sim dispatch-report dispatch-calibration dispatch-preregister harvest-chips app \
 	export backup restore backup-status backup-config
 
 help: ## Show this help
@@ -72,6 +72,12 @@ dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
 
 dispatch-report: ## Rebuild summary.json/md for a dispatch run dir (RUN=results/<exp>/<stamp>)
 	$(PY) model-routing dispatch-report $(RUN)
+
+dispatch-calibration: ## Measured per-task pass rates by model from calibration run(s) (RUNS="results/a results/b", WRITE=1 relabels tasks.jsonl)
+	$(PY) model-routing dispatch-calibration $(RUNS) $(if $(WRITE),--write)
+
+dispatch-preregister: ## Print (WRITE=1: append) the [preregistration] table for a config (EXP=...)
+	$(PY) model-routing dispatch-preregister $(or $(EXP),experiments/agentic/exp05_dispatch.toml) $(if $(WRITE),--write)
 
 harvest-chips: ## Scan local Claude Code transcripts for spawned task chips -> tasks/agentic/private/harvested.jsonl
 	$(PY) model-routing harvest-chips

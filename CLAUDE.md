@@ -20,6 +20,13 @@ report.
 - **Ordering is an experimental variable** (prompt caches are model-scoped
   and expire). Keep `order` explicit in configs; do not parallelize calls.
 - **Graders are deterministic.** No LLM-as-judge unless a task set says so.
+- **The confirmatory run is pre-registered.** `docs/experiments/preregistration-exp05.md`
+  is the analysis plan; `make dispatch-preregister ... WRITE=1` freezes the
+  design and task-set hash into the config. Do not edit a registered field or
+  the task set afterwards without recording a deviation there; the report
+  downgrades any mismatching run to exploratory.
+- **Difficulty labels are measured**, not guessed: relabel with
+  `make dispatch-calibration RUNS=... WRITE=1` after a calibration run.
 - `results/` is git-ignored. Promote findings to `docs/experiments/findings/`.
 
 - **Env & deps:** `uv`. `make setup` runs `uv sync --extra dev`, installing

@@ -7,10 +7,12 @@ name = "exp05_dispatch_codex"
 kind = "dispatch"
 tasks = "tasks/agentic/tasks.jsonl"
 trials = 3                      # pre-registered
-order = "by_policy"             # by_policy | by_task
+order = "randomized"            # by_policy | by_task | randomized
+seed = 20260923
+max_turns = 40
 hypothesis = "Spawning with the parent-recommended model lowers cost per completed task vs. spawning on the parent model, with pass rate non-inferior within the margin."
-primary = { treatment = "C1", control = "B" }   # pre-registered
-margin_pp = 5                   # pre-registered non-inferiority margin, percentage points
+primary = { treatment = "C1_inline", control = "B" }   # pre-registered (see exp05_dispatch.toml)
+margin_pp = 10                  # pre-registered non-inferiority margin, percentage points (see exp05_dispatch.toml)
 max_budget_per_session_usd = 2.0
 parent = "sol"                  # the model the user's main session runs on
 # The menu the parent (C1) and classifier (C2) choose from, cheapest first.
@@ -53,6 +55,10 @@ candidate = "sol"               # = parent
 [[policies]]
 name = "C1"
 kind = "spawn_parent_pick"
+
+[[policies]]
+name = "C1_inline"
+kind = "spawn_parent_pick_inline"
 
 [[policies]]
 name = "C2"

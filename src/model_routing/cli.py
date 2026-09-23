@@ -224,6 +224,49 @@ def cmd_dispatch_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_dispatch_calibration(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.calibration import (
+        calibration_table,
+        relabel_tasks,
+        render_calibration,
+    )
+
+    table = calibration_table(list(args.run_dirs))
+    if not table:
+        print("no static/cascade outcomes found in those run directories")
+        return 1
+    print(render_calibration(table))
+    if args.write:
+        counts = relabel_tasks(args.tasks, table)
+        print(
+            f"relabelled {counts['relabelled']} task(s) in {args.tasks}; "
+            f"{counts['unchanged']} unchanged, {counts['uncalibrated']} without data"
+        )
+        print("Re-run `make check`, then `dispatch-preregister` before the confirmatory run.")
+    return 0
+
+
+def cmd_dispatch_preregister(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.calibration import preregistration_block
+    from model_routing.dispatch.runner import load_dispatch_config
+
+    cfg = load_dispatch_config(args.config)
+    block = preregistration_block(cfg, n_tasks=args.n_tasks)
+    if args.write:
+        import tomllib
+
+        text = Path(args.config).read_text()
+        if "[preregistration]" in text:
+            print(f"{args.config} already has a [preregistration] table; refusing to overwrite.")
+            print("Remove it by hand if you really intend to re-register (and say why in the doc).")
+            return 1
+        Path(args.config).write_text(text.rstrip("\n") + "\n\n" + block)
+        tomllib.loads(Path(args.config).read_text())  # must still parse
+        print(f"appended to {args.config}:\n")
+    print(block)
+    return 0
+
+
 def cmd_harvest_chips(args: argparse.Namespace) -> int:
     from model_routing.dispatch.harvest import harvest_chips
 
@@ -406,6 +449,26 @@ def main(argv: list[str] | None = None) -> int:
     )
     drp.add_argument("run_dir")
     drp.set_defaults(fn=cmd_dispatch_report)
+
+    dc = sub.add_parser(
+        "dispatch-calibration",
+        help="measured per-task pass rates by model from calibration run(s); --write relabels",
+    )
+    dc.add_argument("run_dirs", nargs="+", help="one or more results/<exp>/<stamp> directories")
+    dc.add_argument("--tasks", default="tasks/agentic/tasks.jsonl")
+    dc.add_argument(
+        "--write", action="store_true", help="rewrite difficulty labels in --tasks from the data"
+    )
+    dc.set_defaults(fn=cmd_dispatch_calibration)
+
+    dp = sub.add_parser(
+        "dispatch-preregister",
+        help="print (or --write) the [preregistration] table freezing a config + task set",
+    )
+    dp.add_argument("config")
+    dp.add_argument("--n-tasks", type=int, help="registered task count (default: all tasks)")
+    dp.add_argument("--write", action="store_true", help="append the table to the config file")
+    dp.set_defaults(fn=cmd_dispatch_preregister)
 
     hc = sub.add_parser(
         "harvest-chips", help="scan local Claude Code transcripts for spawned task chips"

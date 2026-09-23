@@ -1,24 +1,43 @@
 # Experiment 5 - dispatch-time routing (agentic, multi-turn, sandboxed).
-# See docs/experiments/dispatch-routing.md. Pre-registered fields are marked;
-# change them only before the confirmatory run, and record why.
+# See docs/experiments/dispatch-routing.md and the analysis plan in
+# docs/experiments/preregistration-exp05.md.  Pre-registered fields are
+# marked; change them only before the confirmatory run, and record why in the
+# preregistration doc.  `make dispatch-preregister EXP=... WRITE=1` appends the
+# [preregistration] table that freezes this design against the task set; the
+# report calls a run "confirmatory" only when it matches that table.
 
 [experiment]
 name = "exp05_dispatch"
 kind = "dispatch"
 tasks = "tasks/agentic/tasks.jsonl"
-trials = 3                      # pre-registered
-order = "by_policy"             # by_policy | by_task
+trials = 3                      # pre-registered: 3 trials per (task, policy); reports variance
+order = "randomized"            # pre-registered: randomized block design per (task, trial)
+seed = 20260923                 # seeds the block order and any task sampling
+max_turns = 40                  # per-session turn cap for every policy (pilot: up to 23 used)
 hypothesis = "Spawning with the parent-recommended model lowers cost per completed task vs. spawning on the parent model, with pass rate non-inferior within the margin."
-primary = { treatment = "C1", control = "B" }   # pre-registered
-margin_pp = 5                   # pre-registered non-inferiority margin, percentage points
+# pre-registered primary comparison: the *inline* pick (the parent writes the
+# brief and the model choice in one turn; only the pick's marginal tokens are
+# billed) against spawning on the parent's own model.  The forked C1 stays in
+# the run as the pessimistic variant (secondary).
+primary = { treatment = "C1_inline", control = "B" }
+# pre-registered non-inferiority margin, percentage points.  10, not 5: the
+# pilot's C1/B outcomes disagreed on 33% of tasks; at that discordance a 5-pt
+# margin needs ~1,000 paired task-trials (~330 tasks x 3), a 10-pt margin ~260
+# (~90 tasks x 3).  10 pts still answers "does it save real money without a
+# noticeable quality drop?" at a cost worth paying.  Decided 2026-09-23, before
+# any confirmatory data (see docs/experiments/preregistration-exp05.md).
+margin_pp = 10
 max_budget_per_session_usd = 2.0
 parent = "opus"                 # the model the user's main session runs on
-# The menu the parent (C1) and classifier (C2) choose from, cheapest first.
+# The menu the parent (C1 / C1_inline) and classifier (C2) choose from, cheapest first.
 menu = ["haiku", "sonnet", "opus_low", "opus"]
 
 [auth]
 mode = "subscription"
 
+# Candidates use the CLI aliases; every session records the resolved model id
+# (pilot: claude-haiku-4-5, claude-sonnet-5, claude-opus-5) and the report
+# should be read against those ids, since aliases can move between runs.
 [candidates.haiku]
 provider = "claude_cli"
 model = "haiku"
@@ -51,8 +70,12 @@ kind = "spawn_static"
 candidate = "opus"              # = parent
 
 [[policies]]
-name = "C1"
+name = "C1"                     # pessimistic: forked router call re-reads the parent context
 kind = "spawn_parent_pick"
+
+[[policies]]
+name = "C1_inline"              # realistic: brief + pick in one parent turn, marginal tokens billed
+kind = "spawn_parent_pick_inline"
 
 [[policies]]
 name = "C2"

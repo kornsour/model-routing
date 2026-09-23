@@ -21,7 +21,9 @@ import hashlib
 import json
 import os
 import platform
+import random
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -72,6 +74,20 @@ class DispatchConfig:
     """Restrict the task set to these human difficulty labels (calibration runs,
     e.g. "can the cheapest model already pass the hard tasks?").  Policies still
     never see the label; this only chooses which tasks run."""
+    seed: int = 0
+    """Seeds task sampling and, for ``order = "randomized"``, the per-block policy
+    order.  Recorded in ``meta.json`` so a run can be reproduced exactly."""
+    max_turns: int = 30
+    """Turn cap passed to every agent session.  ``AgentTask.max_turns`` is a
+    human guess and is *not* used: the 2026-09-22 pilot saw the cheapest model
+    need 12-23 turns on tasks labelled 8-12, so a per-task cap would create
+    failures unrelated to the model choice being measured."""
+    preregistration: dict[str, Any] | None = None
+    """The ``[preregistration]`` table, if any: what was frozen before the
+    confirmatory run (``taskset_sha256``, ``n_tasks``, ``trials``, ``margin_pp``,
+    ``primary``, ``registered_at``, ``doc``).  The report compares the run
+    against it and only calls a run *confirmatory* when everything matches;
+    see ``dispatch-preregister`` to produce the table."""
     auth: dict[str, AuthConfig] = field(default_factory=lambda: {"*": AuthConfig()})
     source: Path | None = None
 
@@ -91,9 +107,14 @@ class DispatchConfig:
             "in_session",
             "spawn_static",
             "spawn_parent_pick",
+            "spawn_parent_pick_inline",
             "spawn_classifier",
             "spawn_cascade",
         }
+        if self.order not in ("by_policy", "by_task", "randomized"):
+            raise ValueError(f"order must be by_policy | by_task | randomized, got {self.order!r}")
+        if self.max_turns < 1:
+            raise ValueError("max_turns must be >= 1")
         for p in self.policies:
             kind = p.get("kind")
             if kind not in valid_kinds:
@@ -155,11 +176,44 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         margin_pp=float(exp.get("margin_pp", 5.0)),
         max_budget_per_session_usd=float(exp.get("max_budget_per_session_usd", 2.0)),
         difficulties=tuple(str(d) for d in exp.get("difficulties", [])),
+        seed=int(exp.get("seed", 0)),
+        max_turns=int(exp.get("max_turns", 30)),
+        preregistration=(
+            dict(data["preregistration"]) if isinstance(data.get("preregistration"), dict) else None
+        ),
         auth=parse_auth(data.get("auth", {})),
         source=path,
     )
     cfg.validate()
     return cfg
+
+
+_TASKSET_IGNORED_DIRS = {"private", "__pycache__", ".pytest_cache", ".ruff_cache", ".git"}
+
+
+def taskset_sha256(tasks_path: str | Path) -> str:
+    """One hash over the whole task set: the JSONL plus every fixture, hidden test,
+    setup/mutant/solution overlay under its directory (``private/`` and caches
+    excluded).  Pre-registration freezes this value; the report refuses to call a
+    run confirmatory if the task set changed after registration."""
+    tasks_path = Path(tasks_path)
+    root = tasks_path.parent
+    h = hashlib.sha256()
+    if not root.is_dir():
+        if tasks_path.exists():
+            h.update(tasks_path.read_bytes())
+        return h.hexdigest()
+    for f in sorted(root.rglob("*")):
+        if not f.is_file():
+            continue
+        rel = f.relative_to(root)
+        if any(part in _TASKSET_IGNORED_DIRS for part in rel.parts):
+            continue
+        h.update(str(rel).encode())
+        h.update(b"\0")
+        h.update(f.read_bytes())
+        h.update(b"\0")
+    return h.hexdigest()
 
 
 # -- estimate (no spend) ----------------------------------------------------
@@ -172,6 +226,102 @@ WORKER_USAGE = Usage(
 )
 SETUP_USAGE = Usage(input_tokens=1500, cache_write=1500, output_tokens=100, cache_write_1h=1500)
 ROUTER_USAGE = Usage(input_tokens=900, cache_read=20000, output_tokens=150)
+INLINE_ROUTER_USAGE = Usage(input_tokens=120, output_tokens=40)
+"""Marginal tokens of an inline pick (menu + instruction in, one JSON line out)."""
+
+MIN_OBSERVED_SESSIONS = 5
+"""Below this many real sessions for a (model, role), the estimator keeps the
+assumed profile rather than trusting a couple of outliers."""
+
+
+@dataclass
+class ObservedProfile:
+    """Median / p90 token usage of real (non-fake) sessions for one (model, role)."""
+
+    model: str
+    role: str
+    n: int
+    median: Usage
+    p90: Usage
+    median_cost_usd: float
+
+
+def _usage_quantile(usages: list[Usage], q: float) -> Usage:
+    def quant(values: list[int]) -> int:
+        values = sorted(values)
+        if not values:
+            return 0
+        pos = (len(values) - 1) * q
+        lo = int(pos)
+        hi = min(lo + 1, len(values) - 1)
+        return int(values[lo] + (values[hi] - values[lo]) * (pos - lo))
+
+    return Usage(
+        input_tokens=quant([u.input_tokens for u in usages]),
+        cache_read=quant([u.cache_read for u in usages]),
+        cache_write=quant([u.cache_write for u in usages]),
+        output_tokens=quant([u.output_tokens for u in usages]),
+        reasoning=quant([u.reasoning for u in usages]),
+        cache_write_1h=quant([u.cache_write_1h for u in usages]),
+    )
+
+
+def observed_profiles(
+    results_dir: str | Path | None = "results",
+) -> dict[tuple[str, str], ObservedProfile]:
+    """Scan every real dispatch run's ``sessions.jsonl`` under ``results_dir`` and
+    return per-(model, role) token profiles.  Fake runs (``meta.fake``) and sessions
+    that errored are skipped.  Returns ``{}`` when there is no history."""
+    if results_dir is None:
+        return {}
+    root = Path(results_dir)
+    if not root.is_dir():
+        return {}
+    by_key: dict[tuple[str, str], list[tuple[Usage, float]]] = {}
+    for sessions in sorted(root.glob("*/*/sessions.jsonl")):
+        run_dir = sessions.parent
+        meta_path = run_dir / "meta.json"
+        try:
+            meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+        except json.JSONDecodeError:
+            continue
+        if meta.get("fake") or run_dir.name.startswith("fake-"):
+            continue
+        with sessions.open() as fh:
+            for line in fh:
+                if not line.strip():
+                    continue
+                try:
+                    rec = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if rec.get("error"):
+                    continue
+                u = rec.get("usage") or {}
+                usage = Usage(
+                    input_tokens=int(u.get("input_tokens", 0)),
+                    cache_read=int(u.get("cache_read", 0)),
+                    cache_write=int(u.get("cache_write", 0)),
+                    output_tokens=int(u.get("output_tokens", 0)),
+                    reasoning=int(u.get("reasoning", 0)),
+                    cache_write_1h=int(u.get("cache_write_1h", 0)),
+                )
+                if usage.prompt_tokens == 0 and usage.output_tokens == 0:
+                    continue
+                key = (str(rec.get("model", "")), str(rec.get("role", "")))
+                by_key.setdefault(key, []).append((usage, float(rec.get("cost_usd_list", 0.0))))
+    out: dict[tuple[str, str], ObservedProfile] = {}
+    for (model, role), rows in by_key.items():
+        usages = [u for u, _ in rows]
+        out[(model, role)] = ObservedProfile(
+            model=model,
+            role=role,
+            n=len(rows),
+            median=_usage_quantile(usages, 0.5),
+            p90=_usage_quantile(usages, 0.9),
+            median_cost_usd=statistics.median(c for _, c in rows),
+        )
+    return out
 
 
 def _scale_usage(u: Usage, scale: float) -> Usage:
@@ -199,8 +349,10 @@ def _select_tasks(
     cfg: DispatchConfig, loader: Callable[..., list[Any]], sample: int | None
 ) -> list[Any]:
     if not cfg.difficulties:
-        return loader(cfg.tasks, sample=sample, seed=0)
-    tasks = [t for t in loader(cfg.tasks, sample=None, seed=0) if t.difficulty in cfg.difficulties]
+        return loader(cfg.tasks, sample=sample, seed=cfg.seed)
+    tasks = [
+        t for t in loader(cfg.tasks, sample=None, seed=cfg.seed) if t.difficulty in cfg.difficulties
+    ]
     return tasks[:sample] if sample else tasks
 
 
@@ -228,13 +380,35 @@ def _estimate_task_count(
     return 1
 
 
+_ASSUMED_ROLE_PROFILE = {"worker": WORKER_USAGE, "setup": SETUP_USAGE, "router": ROUTER_USAGE}
+
+
 def _policy_estimate(
-    cfg: DispatchConfig, spec: dict[str, Any], prices: PriceTable
+    cfg: DispatchConfig,
+    spec: dict[str, Any],
+    prices: PriceTable,
+    observed: dict[tuple[str, str], ObservedProfile] | None = None,
 ) -> tuple[float, float, float, int]:
+    """(low, mid, high, sessions) for one policy.  When ``observed`` has at least
+    ``MIN_OBSERVED_SESSIONS`` real sessions for a (model, role), mid uses the
+    observed median and high the observed p90; otherwise the assumed profile is
+    scaled by 1.0x / 1.8x.  Low is always 0.6x of mid."""
+    observed = observed or {}
+
     def cost(cand_name: str, scale: float, profile: Usage) -> float:
         cand = cfg.candidates[cand_name]
         price = prices.get(cand.model)
-        return price.cost(_scale_usage(profile, scale)) if price else 0.0
+        if price is None:
+            return 0.0
+        role = next((r for r, p in _ASSUMED_ROLE_PROFILE.items() if p is profile), None)
+        obs = observed.get((cand.model, role)) if role else None
+        if obs is not None and obs.n >= MIN_OBSERVED_SESSIONS:
+            if scale <= 0.6:
+                return price.cost(obs.median) * 0.6
+            if scale >= 1.8:
+                return price.cost(obs.p90)
+            return price.cost(obs.median)
+        return price.cost(_scale_usage(profile, scale))
 
     kind = spec["kind"]
     if kind == "in_session":
@@ -258,6 +432,17 @@ def _policy_estimate(
             return (
                 cost(cfg.parent, scale, SETUP_USAGE)
                 + cost(cfg.parent, scale, ROUTER_USAGE)
+                + cost(picked_guess, scale, WORKER_USAGE)
+            )
+
+        return total(0.6), total(1.0), total(1.8), 3
+    if kind == "spawn_parent_pick_inline":
+        picked_guess = cfg.menu[0] if cfg.menu else cfg.parent
+
+        def total(scale: float) -> float:
+            return (
+                cost(cfg.parent, scale, SETUP_USAGE)
+                + cost(cfg.parent, scale, INLINE_ROUTER_USAGE)
                 + cost(picked_guess, scale, WORKER_USAGE)
             )
 
@@ -291,17 +476,22 @@ def estimate_dispatch(
     trials: int | None = None,
     policies: list[str] | None = None,
     task_loader: Callable[..., list[Any]] | None = None,
+    history_dir: str | Path | None = "results",
 ) -> dict[str, Any]:
+    """No-spend estimate.  ``history_dir`` (default ``results/``) supplies observed
+    per-(model, role) token profiles from earlier real runs; pass ``None`` to use
+    the assumed profiles only.  The ``assumptions`` list says which was used."""
     prices = PriceTable.load()
     run_trials = trials or cfg.trials
     selected = _select_policies(cfg, policies)
     n_tasks = _estimate_task_count(cfg, sample, task_loader)
     cells = n_tasks * run_trials * len(selected)
+    observed = observed_profiles(history_dir)
     usd_low = usd_mid = usd_high = 0.0
     sessions = 0
     by_policy: dict[str, float] = {}
     for spec in selected:
-        low, mid, high, sess = _policy_estimate(cfg, spec, prices)
+        low, mid, high, sess = _policy_estimate(cfg, spec, prices, observed)
         n = n_tasks * run_trials
         usd_low += low * n
         usd_mid += mid * n
@@ -309,13 +499,29 @@ def estimate_dispatch(
         sessions += sess * n
         by_policy[spec["name"]] = mid * n
     polic_word = "y" if len(selected) == 1 else "ies"
+    used_models = {c.model for name, c in cfg.candidates.items()}
+    calibrated = sorted(
+        f"{m}/{r} (n={p.n}, median ${p.median_cost_usd:.3f})"
+        for (m, r), p in observed.items()
+        if m in used_models and p.n >= MIN_OBSERVED_SESSIONS
+    )
     assumptions = [
         f"{n_tasks} task(s) x {run_trials} trial(s) x {len(selected)} selected polic{polic_word}.",
-        "Typical agentic worker-session token profile (assumption, not measured): "
+        (
+            "Observed token profiles from earlier real runs used for: "
+            + "; ".join(calibrated)
+            + ". mid = observed median session, high = observed p90, low = 0.6x median."
+            if calibrated
+            else "No observed history for these models (or fewer than "
+            f"{MIN_OBSERVED_SESSIONS} sessions): using the assumed profiles below."
+        ),
+        "Assumed agentic worker-session token profile where no history exists: "
         f"input={WORKER_USAGE.input_tokens}, cache_read={WORKER_USAGE.cache_read}, "
         f"cache_write={WORKER_USAGE.cache_write}, output={WORKER_USAGE.output_tokens} tokens; "
         "router/setup sessions use a much smaller, mostly-cached profile.",
-        "low/mid/high = 0.6x / 1.0x / 1.8x of the mid profile, reflecting task-size uncertainty.",
+        "Without history, low/mid/high = 0.6x / 1.0x / 1.8x of the mid profile.",
+        "C1_inline bills only the marginal tokens of the pick (menu + one JSON line); "
+        "the brief-writing turn it rides on is recorded but not billed.",
         "Policy D (cascade): low assumes the cheapest model always passes, mid assumes about half "
         "the chain escalates, high assumes every task escalates through the whole chain.",
         "Router/classifier calls are billed as role=router; a 'heuristic' classifier is free "
@@ -450,13 +656,26 @@ def _menu_text(cfg: DispatchConfig, prices: PriceTable) -> str:
 
 
 def _build_plan(
-    order: str, selected: list[dict[str, Any]], tasks: list[AgentTask], trials: int
+    order: str,
+    selected: list[dict[str, Any]],
+    tasks: list[AgentTask],
+    trials: int,
+    seed: int = 0,
 ) -> list[tuple[dict[str, Any], AgentTask, int]]:
+    """``by_policy``: every cell of policy 1, then policy 2, ... (cheap to reason
+    about, but confounds policy with clock time and provider drift).  ``by_task``:
+    every policy for task 1, then task 2, ... in config order.  ``randomized``:
+    like ``by_task`` but each (task, trial) block runs its policies in a
+    seeded random order - a randomized block design, so no policy is
+    systematically first or last.  Sessions are still strictly sequential."""
     plan: list[tuple[dict[str, Any], AgentTask, int]] = []
-    if order == "by_task":
+    if order in ("by_task", "randomized"):
         for trial in range(trials):
             for task in tasks:
-                for spec in selected:
+                block = list(selected)
+                if order == "randomized":
+                    random.Random(f"{seed}:{task.id}:{trial}").shuffle(block)
+                for spec in block:
                     plan.append((spec, task, trial))
     else:
         for spec in selected:
@@ -508,9 +727,13 @@ def _write_meta(
             else None
         ),
         "tasks": str(cfg.tasks),
+        "taskset_sha256": taskset_sha256(cfg.tasks),
         "n_tasks": len(tasks),
         "trials": trials,
         "order": cfg.order,
+        "seed": cfg.seed,
+        "max_turns": cfg.max_turns,
+        "preregistration": cfg.preregistration,
         "sample": sample,
         "budget_usd": budget_usd,
         "fake": fake,
@@ -642,7 +865,11 @@ def run_dispatch(
             tools: bool = True,
             resumed_from: str | None = None,
             max_turns: int | None = None,
+            bill: Callable[[AgentResult], Usage] | None = None,
         ) -> SessionRecord:
+            """``bill`` maps the finished call to the usage actually charged to the
+            task (inline router: only the marginal pick tokens); the full usage and
+            list cost are always recorded alongside it."""
             # Simulated spend is list price of made-up tokens; a budget cannot bind it.
             if not fake and state["spent_usd"] >= budget_usd:
                 raise BudgetExceeded(
@@ -658,7 +885,7 @@ def run_dispatch(
                 workdir=workdir,
                 system=system,
                 effort=cand.effort,
-                max_turns=max_turns or 30,
+                max_turns=max_turns or cfg.max_turns,
                 resume_session=resume_session,
                 fork=fork,
                 tools=tools,
@@ -681,6 +908,11 @@ def run_dispatch(
                 # The Claude CLI zeroes ``usage`` on a budget-capped result while
                 # still reporting dollars; never price a paid session at $0.
                 cost = reported
+            billed: float | None = None
+            if bill is not None:
+                billed_usage = bill(result)
+                billed = prices.cost(price_model, billed_usage) if prices.get(price_model) else 0.0
+                billed = min(billed, cost) if cost else billed
             rec = SessionRecord(
                 task_id=task_id,
                 policy=policy_name,
@@ -704,6 +936,7 @@ def run_dispatch(
                 seq=state["seq"],
                 started_at=started,
                 raw=result.raw,
+                cost_usd_billed=billed,
             )
             sessions_fh.write(json.dumps(rec.to_dict(), default=str) + "\n")
             sessions_fh.flush()
@@ -756,7 +989,7 @@ def run_dispatch(
 
     outcomes: list[DispatchOutcome] = []
     try:
-        plan = _build_plan(cfg.order, selected_policies, loaded_tasks, run_trials)
+        plan = _build_plan(cfg.order, selected_policies, loaded_tasks, run_trials, cfg.seed)
         for policy_spec, task, trial in plan:
             if cancel is not None and cancel.is_set():
                 run_state = "cancelled"

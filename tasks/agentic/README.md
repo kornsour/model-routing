@@ -50,10 +50,23 @@ would in a real handoff.
 
 ## Tasks (`tasks.jsonl`)
 
-30 tasks (~10 easy / ~12 medium / ~8 hard), spread across all three repos and
-six categories (bugfix, feature, refactor, tests, docs, config). Each line is
-one `AgentTask` (see `src/model_routing/dispatch/types.py` - **do not**
-change that contract from this task set):
+Two generations of tasks, spread across all three repos:
+
+- **`-01` tasks (30):** the original set across six categories (bugfix,
+  feature, refactor, tests, docs, config). Their briefs name the fix, and the
+  2026-09-22 pilot found the cheapest model passes them all, so they carry
+  no routing headroom on their own.
+- **`-02` tasks (24):** authored 2026-09-23 against issue #11 to need real
+  investigation: multi-file changes with hidden coupling, underspecified
+  briefs where intent must be inferred from code and tests, cross-module and
+  ordering bugs, performance fixes checked by a deterministic budget (call
+  counters, never wall-clock), migrations across many call sites, and named
+  spec compliance. Each has a *trap*: an obvious local fix passes the visible
+  suite but fails the hidden tests. Most inject their situation through a
+  `setup/<id>/` overlay so the shared fixture repos stay untouched.
+
+Each line is one `AgentTask` (see `src/model_routing/dispatch/types.py` -
+**do not** change that contract from this task set):
 
 | field | meaning |
 |---|---|
@@ -65,6 +78,10 @@ change that contract from this task set):
 | `repo` | fixture repo dir name under `repos/` |
 | `grader` | at minimum `{"allowed_paths": [...]}`; see below |
 | `difficulty`, `category`, `max_turns`, `tags` | as in the contract |
+| `measured` (optional) | written by `make dispatch-calibration ... WRITE=1`: per-candidate pass rates and trial counts from a calibration run, with the date. When present, `difficulty` is the **measured** label (easy = cheapest model passed every trial, medium = some, hard = only the strongest passed) and the original human guess moves to `difficulty_human`. |
+
+`max_turns` is a human guess and is not applied by the runner (the config's
+`max_turns` is); it is kept as documentation of the expected size.
 
 `grader["allowed_paths"]` is a list of `fnmatch` globs (repo-relative) the
 scope check compares every changed file against. Keep it tight - only the
@@ -96,9 +113,9 @@ convention:
 - `setup/<id>/` -> `grader["setup_overlay"]`. Copied onto the repo *before*
   the sandbox's initial commit, i.e. before the agent ever sees it - for a
   task that needs a bug injected on top of an otherwise-shared fixture repo.
-  Unused by the current 30 tasks (all their bugs/gaps are baked into the
-  fixture repos directly), but supported by the loader and sandbox for
-  future tasks that need it.
+  Unused by the `-01` tasks (their bugs/gaps are baked into the fixture
+  repos directly); used by most of
+  the `-02` tasks, which use it to inject a bug or a larger module.
 - `mutants/<id>/` -> `grader["mutation_overlay"]`. Used only by "add a
   missing test" tasks (`inv-test-01`, `notes-test-01`, `log-test-01`): a
   known-buggy version of the file(s) the test should exercise. The grader
@@ -146,6 +163,17 @@ overwrites that one file; you don't need to restate the whole repo.
 6. Run `make check` - fixture/hidden/solution/mutant code must stay
    ruff-clean (`select = ["E", "F", "I", "UP", "B", "SIM"]`, line length
    100) and pyright-clean where it's imported from `tests/`.
+
+## What makes a task hard but fair
+
+A `-02` task must satisfy all of: the brief states symptoms and acceptance
+criteria in outcome terms and never names the fix; every hidden assertion is
+derivable from the brief plus the repo's existing docstrings (each hidden
+test carries a comment naming the brief sentence it checks); an obvious
+local fix passes the visible suite but fails the hidden tests; and solving
+it needs investigation across files, modules or call order. Difficulty is
+then *measured* by running every task on every static candidate
+(`experiments/agentic/exp05_calibrate.toml`) rather than asserted.
 
 ## Why task text must not reveal hidden tests
 

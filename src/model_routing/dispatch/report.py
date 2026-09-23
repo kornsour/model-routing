@@ -15,6 +15,25 @@ Paired, task-clustered bootstrap comparisons for the pre-registered hypotheses
   margin alone is not evidence of harm - it is too little data.
 * ``inconclusive``  = everything else (too little data, or the CIs straddle
   the thresholds).
+
+Alongside the intervals every comparison carries p-values so a reader can
+apply their own threshold:
+
+* ``p_saving``   - two-sided, task-clustered permutation (label-swap) test of
+  the cost-per-completed-task saving under H0 "the two policies are
+  exchangeable within a task".  Trials of one task swap together.
+* ``p_pass``     - the same permutation test for the pass-rate delta.
+* ``p_noninf``   - one-sided bootstrap p-value for H0 "treatment is worse
+  than control by at least the margin" (share of bootstrap draws with
+  delta <= -margin).  Small means non-inferiority is supported.
+* ``p_adjusted`` - Holm step-down adjustment of ``p_saving`` across the
+  secondary hypotheses (H-D2..H-D7), which are exploratory.  H-D1 is the
+  single pre-registered primary comparison and is not adjusted.
+
+A run is ``confirmatory`` only when ``meta.preregistration`` exists and the
+task-set hash, trials, task count, margin and primary comparison all match
+it and the run is not fake; otherwise it is ``exploratory`` and the summary
+says which field deviated.
 """
 
 from __future__ import annotations
@@ -57,17 +76,40 @@ def _percentile(values: list[float], q: float) -> float:
     return values[lo] * (1 - frac) + values[hi] * frac
 
 
+def _paired_stats(
+    treatment: dict[tuple[str, int], dict[str, Any]],
+    control: dict[tuple[str, int], dict[str, Any]],
+    keys: list[tuple[str, int]],
+) -> tuple[float, float | None]:
+    """(pass delta in points, saving fraction or None when undefined) over ``keys``."""
+    n = len(keys)
+    if not n:
+        return 0.0, None
+    t_passes = sum(bool(treatment[k]["passed"]) for k in keys)
+    c_passes = sum(bool(control[k]["passed"]) for k in keys)
+    delta_pp = (t_passes - c_passes) / n * 100
+    if not (t_passes and c_passes):
+        return delta_pp, None
+    t_cpt = sum(_outcome_cost(treatment[k]) for k in keys) / t_passes
+    c_cpt = sum(_outcome_cost(control[k]) for k in keys) / c_passes
+    return delta_pp, (1 - t_cpt / c_cpt) if c_cpt else None
+
+
 def _bootstrap(
     label: str,
     treatment: dict[tuple[str, int], dict[str, Any]],
     control: dict[tuple[str, int], dict[str, Any]],
+    margin_pp: float = 5.0,
     draws: int = 2000,
-) -> tuple[list[float], list[float], int]:
-    """Task-clustered paired bootstrap.  Returns (delta_pass_ci_pp, saving_ci, n_task_clusters)."""
+) -> tuple[list[float], list[float], int, float | None]:
+    """Task-clustered paired bootstrap.  Returns (delta_pass_ci_pp, saving_ci,
+    n_task_clusters, p_noninferiority).  ``p_noninferiority`` is the share of
+    draws in which treatment is worse than control by at least ``margin_pp``:
+    a one-sided bootstrap p-value for the non-inferiority null."""
     keys = sorted(treatment.keys() & control.keys())
     tasks = sorted({k[0] for k in keys})
     if len(tasks) < 2:
-        return [0.0, 0.0], [0.0, 0.0], len(tasks)
+        return [0.0, 0.0], [0.0, 0.0], len(tasks), None
     by_task = {t: [k for k in keys if k[0] == t] for t in tasks}
     seed = int.from_bytes(hashlib.sha256(label.encode()).digest()[:8])
     rng = random.Random(seed)
@@ -75,26 +117,96 @@ def _bootstrap(
     savings: list[float] = []
     for _ in range(draws):
         selected = [k for _ in tasks for k in by_task[rng.choice(tasks)]]
-        n = len(selected)
-        if not n:
+        if not selected:
             continue
-        t_pass = sum(bool(treatment[k]["passed"]) for k in selected) / n
-        c_pass = sum(bool(control[k]["passed"]) for k in selected) / n
-        pass_deltas.append((t_pass - c_pass) * 100)
-        t_cost = sum(_outcome_cost(treatment[k]) for k in selected)
-        c_cost = sum(_outcome_cost(control[k]) for k in selected)
-        t_passes = sum(bool(treatment[k]["passed"]) for k in selected)
-        c_passes = sum(bool(control[k]["passed"]) for k in selected)
-        if t_passes and c_passes:
-            t_cpt = t_cost / t_passes
-            c_cpt = c_cost / c_passes
-            if c_cpt:
-                savings.append(1 - t_cpt / c_cpt)
+        delta_pp, saving = _paired_stats(treatment, control, selected)
+        pass_deltas.append(delta_pp)
+        if saving is not None:
+            savings.append(saving)
     pass_ci = [_percentile(pass_deltas, 0.025), _percentile(pass_deltas, 0.975)]
     saving_ci = (
         [_percentile(savings, 0.025), _percentile(savings, 0.975)] if savings else [0.0, 0.0]
     )
-    return pass_ci, saving_ci, len(tasks)
+    p_noninf = sum(d <= -margin_pp for d in pass_deltas) / len(pass_deltas) if pass_deltas else None
+    return pass_ci, saving_ci, len(tasks), p_noninf
+
+
+def _permutation_p_values(
+    label: str,
+    treatment: dict[tuple[str, int], dict[str, Any]],
+    control: dict[tuple[str, int], dict[str, Any]],
+    draws: int = 2000,
+) -> tuple[float | None, float | None]:
+    """Task-clustered label-swap permutation test: (p_saving, p_pass), two-sided.
+
+    Under H0 the two policies are exchangeable within a task, so swapping the
+    treatment/control labels of every trial of a task (all of them together,
+    to respect clustering) is as likely as not.  p = share of the 2^k
+    relabellings (sampled) whose |statistic| is at least the observed one,
+    with the observed labelling counted once (so p >= 1/(draws+1)).  The cost
+    statistic is the *log* ratio of cost per completed task, which is
+    antisymmetric under a full label swap; the saving fraction (1 - ratio) is
+    not, and would make the two-sided test depend on which side is called
+    treatment."""
+    keys = sorted(treatment.keys() & control.keys())
+    tasks = sorted({k[0] for k in keys})
+    if len(tasks) < 2:
+        return None, None
+    by_task = {t: [k for k in keys if k[0] == t] for t in tasks}
+    obs_delta, obs_saving = _paired_stats(treatment, control, keys)
+    obs_log = _log_ratio(obs_saving)
+    seed = int.from_bytes(hashlib.sha256((label + "|perm").encode()).digest()[:8])
+    rng = random.Random(seed)
+    ge_saving = 0
+    n_saving = 0
+    ge_pass = 0
+    for _ in range(draws):
+        flip = {t: rng.random() < 0.5 for t in tasks}
+        t_side: dict[tuple[str, int], dict[str, Any]] = {}
+        c_side: dict[tuple[str, int], dict[str, Any]] = {}
+        for t, ks in by_task.items():
+            for k in ks:
+                if flip[t]:
+                    t_side[k], c_side[k] = control[k], treatment[k]
+                else:
+                    t_side[k], c_side[k] = treatment[k], control[k]
+        delta, saving = _paired_stats(t_side, c_side, keys)
+        if abs(delta) >= abs(obs_delta) - 1e-12:
+            ge_pass += 1
+        perm_log = _log_ratio(saving)
+        if obs_log is not None and perm_log is not None:
+            n_saving += 1
+            if abs(perm_log) >= abs(obs_log) - 1e-12:
+                ge_saving += 1
+    p_pass = (ge_pass + 1) / (draws + 1)
+    p_saving = (ge_saving + 1) / (n_saving + 1) if obs_log is not None and n_saving else None
+    return p_saving, p_pass
+
+
+def _log_ratio(saving: float | None) -> float | None:
+    """log(treatment cpt / control cpt) from a saving fraction; None when undefined."""
+    if saving is None or saving >= 1.0:
+        return None
+    return math.log(1.0 - saving)
+
+
+def holm_adjust(p_values: list[float | None]) -> list[float | None]:
+    """Holm step-down adjusted p-values (family-wise error control).  ``None``
+    entries (undefined tests) are left alone and not counted in the family."""
+    idx = [i for i, p in enumerate(p_values) if p is not None]
+    m = len(idx)
+    out: list[float | None] = list(p_values)
+    if not m:
+        return out
+    order = sorted(idx, key=lambda i: p_values[i])  # type: ignore[arg-type]
+    running = 0.0
+    for rank, i in enumerate(order):
+        p = p_values[i]
+        assert p is not None
+        adjusted = min(1.0, (m - rank) * p)
+        running = max(running, adjusted)
+        out[i] = running
+    return out
 
 
 def _verdict(delta_pass_ci: list[float], saving_ci: list[float], margin_pp: float) -> str:
@@ -153,6 +265,8 @@ def _policy_stats(name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     router_cost = sum(float(r.get("router_cost_usd", 0.0)) for r in rows)
     setup_cost = sum(float(r.get("setup_cost_usd", 0.0)) for r in rows)
     escalations = sum(int(r.get("escalations", 0)) for r in rows)
+    errors = sum(int(r.get("errors", 0)) for r in rows)
+    full_cost = sum(float(r.get("cost_usd_full", r.get("cost_usd", 0.0))) for r in rows)
     turns = [int(r.get("turns", 0)) for r in rows]
     by_diff: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     model_mix: dict[str, int] = defaultdict(int)
@@ -177,6 +291,8 @@ def _policy_stats(name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
         "cost_per_pass_ci": cost_per_pass_ci,
         "router_share": (router_cost / total_cost) if total_cost else 0.0,
         "escalation_rate": (escalations / n) if n else 0.0,
+        "error_rate": (errors / n) if n else 0.0,
+        "cost_per_task_full": full_cost / n if n else 0.0,
         "mean_turns": statistics.fmean(turns) if turns else 0.0,
         "setup_cost_usd": setup_cost,
         "by_difficulty": {k: {"n": v[0], "passes": v[1]} for k, v in by_diff.items()},
@@ -291,9 +407,9 @@ def _comparison(
     c_rows = by_policy_rows[control_name]
     if not t_rows or not c_rows:
         return None
-    pass_ci, saving_ci, clusters = _bootstrap(
-        f"{comp_id}:{treatment_name}:{control_name}", t_rows, c_rows
-    )
+    label = f"{comp_id}:{treatment_name}:{control_name}"
+    pass_ci, saving_ci, clusters, p_noninf = _bootstrap(label, t_rows, c_rows, margin_pp)
+    p_saving, p_pass = _permutation_p_values(label, t_rows, c_rows)
     verdict = _verdict(pass_ci, saving_ci, margin_pp) if clusters >= 2 else "inconclusive"
     keys = sorted(t_rows.keys() & c_rows.keys())
     t_pass = sum(bool(t_rows[k]["passed"]) for k in keys) / len(keys) if keys else 0.0
@@ -321,6 +437,11 @@ def _comparison(
         "saving_pct": saving * 100,
         "saving_ci": [saving_ci[0] * 100, saving_ci[1] * 100],
         "discordant_rate": discordant,
+        "p_saving": p_saving,
+        "p_pass": p_pass,
+        "p_noninf": p_noninf,
+        "p_adjusted": None,
+        "role": "primary" if comp_id == "H-D1" else "secondary (exploratory)",
         "verdict": verdict,
         "sentence": _sentence(
             treatment_name,
@@ -333,6 +454,47 @@ def _comparison(
             verdict,
         ),
     }
+
+
+def preregistration_check(meta: dict[str, Any]) -> dict[str, Any]:
+    """Compare a run's ``meta.json`` with the ``[preregistration]`` table it was
+    run with.  Returns ``{"confirmatory": bool, "registered": bool,
+    "deviations": [...]}``.  Every deviation is a reason the run is exploratory."""
+    reg = meta.get("preregistration")
+    if not isinstance(reg, dict) or not reg:
+        return {
+            "confirmatory": False,
+            "registered": False,
+            "deviations": ["no [preregistration] table in the config"],
+        }
+    deviations: list[str] = []
+    if meta.get("fake"):
+        deviations.append("fake provider run")
+    checks = [
+        ("taskset_sha256", meta.get("taskset_sha256"), reg.get("taskset_sha256")),
+        ("trials", meta.get("trials"), reg.get("trials")),
+        ("margin_pp", meta.get("margin_pp"), reg.get("margin_pp")),
+        ("primary", meta.get("primary"), reg.get("primary")),
+        ("order", meta.get("order"), reg.get("order")),
+    ]
+    for name, actual, expected in checks:
+        if expected is None:
+            deviations.append(f"{name} not registered")
+        elif actual != expected:
+            deviations.append(f"{name}: run has {actual!r}, registered {expected!r}")
+    n_reg = reg.get("n_tasks")
+    n_run = meta.get("n_tasks")
+    if n_reg is None:
+        deviations.append("n_tasks not registered")
+    elif n_run is None or int(n_run) < int(n_reg):
+        deviations.append(f"n_tasks: run has {n_run!r}, registered at least {n_reg!r}")
+    selected = {p.get("name") for p in meta.get("policies", []) if isinstance(p, dict)}
+    primary = meta.get("primary") or {}
+    for key in ("treatment", "control"):
+        name = primary.get(key)
+        if selected and name not in selected and name != "oracle":
+            deviations.append(f"primary {key} {name!r} was not among the selected policies")
+    return {"confirmatory": not deviations, "registered": True, "deviations": deviations}
 
 
 def summarize(run_dir: str | Path) -> dict[str, Any]:
@@ -376,6 +538,10 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
         comp = _comparison(comp_id, treatment, control, by_policy_cells, margin_pp)
         if comp is not None:
             comparisons.append(comp)
+    secondary = [c for c in comparisons if c["id"] != "H-D1"]
+    for c, adj in zip(secondary, holm_adjust([c["p_saving"] for c in secondary]), strict=True):
+        c["p_adjusted"] = adj
+    prereg = preregistration_check(meta)
 
     h_d1 = next((c for c in comparisons if c["id"] == "H-D1"), None)
     n_tasks = int(meta.get("n_tasks", 0))
@@ -400,6 +566,8 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
         "oracle": oracle_stats,
         "comparisons": comparisons,
         "headline": headline,
+        "confirmatory": prereg["confirmatory"],
+        "preregistration": prereg,
         "power_note": _rough_power_note(
             n_tasks,
             int(h_d1["n_paired"]) if h_d1 else 0,
@@ -421,40 +589,74 @@ def _fmt_money(x: float | None) -> str:
 def _render_markdown(summary: dict[str, Any]) -> str:
     lines = [f"# {summary['experiment']}", ""]
     lines.append(f"**{summary['headline']}**")
+    prereg = summary.get("preregistration") or {}
+    status = (
+        "confirmatory (matches the pre-registration)"
+        if summary.get("confirmatory")
+        else ("exploratory: " + "; ".join(prereg.get("deviations") or ["not pre-registered"]))
+    )
     lines += [
         "",
         f"Run: `{summary['run_dir']}` · tasks: {summary['n_tasks']} · trials: {summary['trials']} "
         f"· fake: {summary['fake']} · total spend: {_fmt_money(summary['spent_usd'])}",
         "",
+        f"Status: **{status}**",
+        "",
         "## Policies",
         "",
-        "| policy | n | pass rate | cost/task | cost/pass | router share | escalation rate | "
-        "mean turns | setup cost |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| policy | n | pass rate (95% CI) | cost/task | cost/pass (95% CI) | router share | "
+        "escalation rate | error rate | mean turns | setup cost |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for p in summary["policies"]:
+        ci = p.get("pass_ci") or [p["pass_rate"], p["pass_rate"]]
+        cpp_ci = p.get("cost_per_pass_ci")
+        cpp = _fmt_money(p["cost_per_pass"])
+        if cpp_ci:
+            cpp += f" ({_fmt_money(cpp_ci[0])}-{_fmt_money(cpp_ci[1])})"
         lines.append(
-            f"| {p['name']} | {p['n']} | {p['pass_rate']:.0%} | {_fmt_money(p['cost_per_task'])} | "
-            f"{_fmt_money(p['cost_per_pass'])} | {p['router_share']:.0%} | "
-            f"{p['escalation_rate']:.2f} | {p['mean_turns']:.1f} | "
-            f"{_fmt_money(p['setup_cost_usd'])} |"
+            f"| {p['name']} | {p['n']} | {p['pass_rate']:.0%} ({ci[0]:.0%}-{ci[1]:.0%}) | "
+            f"{_fmt_money(p['cost_per_task'])} | {cpp} | {p['router_share']:.0%} | "
+            f"{p['escalation_rate']:.2f} | {p.get('error_rate', 0.0):.2f} | "
+            f"{p['mean_turns']:.1f} | {_fmt_money(p['setup_cost_usd'])} |"
         )
     if summary.get("oracle"):
         o = summary["oracle"]
         lines.append(
             f"| oracle (computed) | {o['n']} | {o['pass_rate']:.0%} | "
-            f"{_fmt_money(o['cost_per_task'])} | {_fmt_money(o['cost_per_pass'])} | - | - | - | - |"
+            f"{_fmt_money(o['cost_per_task'])} | {_fmt_money(o['cost_per_pass'])} | - | - | - | - "
+            "| - |"
         )
     lines += [
         "",
         "## Comparisons",
         "",
-        "| id | treatment | control | verdict | sentence |",
-        "|---|---|---|---|---|",
+        "Intervals are 95% task-clustered bootstrap.  p_saving / p_pass are two-sided "
+        "task-clustered permutation p-values; p_noninf is the one-sided bootstrap p-value for "
+        "'worse by at least the margin'; p_adj is Holm-adjusted p_saving across the secondary "
+        "(exploratory) hypotheses.  H-D1 is the only pre-registered comparison.",
+        "",
+        "| id | role | treatment | control | n paired | saving % (95% CI) | p_saving | p_adj | "
+        "Δpass pts (95% CI) | p_pass | p_noninf | verdict |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for c in summary["comparisons"]:
         lines.append(
-            f"| {c['id']} | {c['treatment']} | {c['control']} | {c['verdict']} | {c['sentence']} |"
+            f"| {c['id']} | {c['role']} | {c['treatment']} | {c['control']} | {c['n_paired']} | "
+            f"{c['saving_pct']:.0f} ({c['saving_ci'][0]:.0f} to {c['saving_ci'][1]:.0f}) | "
+            f"{_fmt_p(c['p_saving'])} | {_fmt_p(c['p_adjusted'])} | "
+            f"{c['delta_pass_pp']:+.0f} ({c['delta_pass_ci'][0]:+.0f} to "
+            f"{c['delta_pass_ci'][1]:+.0f}) | {_fmt_p(c['p_pass'])} | {_fmt_p(c['p_noninf'])} | "
+            f"{c['verdict']} |"
         )
+    lines += ["", "Plain-English readings:", ""]
+    for c in summary["comparisons"]:
+        lines.append(f"- {c['sentence']}")
     lines += ["", "## Power", "", summary.get("power_note", "")]
     return "\n".join(lines) + "\n"
+
+
+def _fmt_p(p: float | None) -> str:
+    if p is None:
+        return "-"
+    return "<0.001" if p < 0.001 else f"{p:.3f}"

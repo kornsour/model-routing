@@ -1,0 +1,62 @@
+# Smoke run for the policy paths the 2026-09-22 pilot never exercised on real
+# models: in-session A and A_switch (resume without fork, mid-session switch),
+# the inline C1 pick, and cascade D actually escalating.  Two tasks, one
+# trial, about $1-3.  Record anything surprising in the findings doc before the
+# confirmatory run.  Not a hypothesis test.
+#
+#   make dispatch-estimate EXP=experiments/agentic/exp05_smoke_paths.toml SAMPLE=2
+#   make dispatch-run      EXP=experiments/agentic/exp05_smoke_paths.toml SAMPLE=2 BUDGET=4.00
+
+[experiment]
+name = "exp05_smoke_paths"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+difficulties = ["hard"]         # D only escalates when the cheapest model fails
+trials = 1
+order = "by_task"
+seed = 1
+max_turns = 40
+hypothesis = "Smoke only: exercise A, A_switch, C1_inline and D escalation on real models."
+primary = { treatment = "C1_inline", control = "B" }
+margin_pp = 10
+max_budget_per_session_usd = 2.0
+parent = "opus"
+menu = ["haiku", "sonnet", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[[policies]]
+name = "A"
+kind = "in_session"
+
+[[policies]]
+name = "A_switch"
+kind = "in_session"
+switch_to = "sonnet"
+
+[[policies]]
+name = "B"
+kind = "spawn_static"
+candidate = "opus"
+
+[[policies]]
+name = "C1_inline"
+kind = "spawn_parent_pick_inline"
+
+[[policies]]
+name = "D"
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
