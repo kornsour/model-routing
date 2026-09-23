@@ -7,6 +7,7 @@ model-routing report   results/<experiment>/<run>
 model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
 model-routing dispatch-run      experiments/agentic/exp05_dispatch.toml --budget-usd X
 model-routing dispatch-report   results/<experiment>/<run>
+model-routing dispatch-paper    results/<experiment>/<run> [more runs] [--out draft.md]
 model-routing harvest-chips
 """
 
@@ -221,6 +222,18 @@ def cmd_dispatch_report(args: argparse.Namespace) -> int:
     summary = summarize(args.run_dir)
     print(summary["headline"])
     print(f"summary: {Path(args.run_dir) / 'summary.md'}")
+    return 0
+
+
+def cmd_dispatch_paper(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from model_routing.dispatch.paper import render_paper
+
+    default = f"docs/experiments/findings/{date.today().isoformat()}-exp05-paper-draft.md"
+    out = args.out or default
+    path = render_paper([Path(d) for d in args.run_dirs], out=Path(out))
+    print(f"paper draft: {path}")
     return 0
 
 
@@ -449,6 +462,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     drp.add_argument("run_dir")
     drp.set_defaults(fn=cmd_dispatch_report)
+
+    dpp = sub.add_parser(
+        "dispatch-paper",
+        help="render a white-paper Markdown draft from dispatch run dir(s) (pooled if several)",
+    )
+    dpp.add_argument("run_dirs", nargs="+", help="one or more results/<exp>/<stamp> directories")
+    dpp.add_argument(
+        "--out", help="output .md (default: docs/experiments/findings/<date>-exp05-paper-draft.md)"
+    )
+    dpp.set_defaults(fn=cmd_dispatch_paper)
 
     dc = sub.add_parser(
         "dispatch-calibration",

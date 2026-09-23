@@ -122,6 +122,29 @@ Agents run with tools inside a throwaway sandbox copy of the fixture repo,
 on the operator's own `claude` / `codex` login. Nothing runs without an
 estimate and a budget; the budget is checked after every session.
 
+### Codex track caveats
+
+The Codex/ChatGPT replication (`exp05_dispatch_codex.toml`, with
+`exp05_calibrate_codex.toml` and `exp05_smoke_paths_codex.toml`) runs the
+same policies through `codex exec`, checked against codex-cli 0.154.0
+(`CodexAgentProvider` in `src/model_routing/dispatch/agents.py` has the
+details). Where it cannot match the Claude track, and what it does instead:
+
+| Claude track | Codex track | Effect on the comparison |
+|---|---|---|
+| `--max-budget-usd` stops a session on spend | no equivalent (the `token_budget` feature is unreleased) | the budget is policed only **between** sessions; one runaway session can overshoot `--budget-usd` by up to its own cost. The wall clock (`timeout_s`, 1200 s) is the only hard stop inside a session |
+| `--max-turns 40` counts model turns | the provider kills the session after more than 40 **tool calls** (one Codex turn can batch several) | the Codex cap binds no later than Claude's; capped sessions end with `error = "max_turns"` and are graded as-is |
+| `--tools ""` removes every tool for router/classifier calls | read-only sandbox, shell tools disabled, and a one-line "answer from this conversation alone" notice appended to the prompt | a no-tools call cannot change files, but its prompt differs by that line and it may still *attempt* a tool call (visible in `tool_calls`) |
+| `--resume --fork-session` | `codex exec fork` (new thread, parent untouched); `codex exec resume` for A / A_switch | equivalent. `resume`/`fork` take no `-s`/`-C`; the sandbox is passed as `-c sandbox_mode=...` (0.154.0 builds it from the current invocation, not the original session) |
+| `total_cost_usd` reported | no dollar figure; list price from `pricing.toml` only | no cross-check against a vendor-reported cost |
+| usage per session from the `result` event | `turn.completed` reports the **thread-cumulative** total, seeded from the parent on resume/fork | the provider subtracts the parent's totals (`raw.usage_baseline_known`); a timed-out, capped or failed session is billed from its rollout file under `$CODEX_HOME/sessions` (`raw.usage_source = "rollout"`), or at $0 if none exists (`"none"`) |
+| `--setting-sources ""`, `--strict-mcp-config` | `--ignore-user-config --ignore-rules`, plugins/apps/memories/multi-agent/web search off, no network in the sandbox | skills installed under `~/.codex/skills` / `~/.agents/skills` are still listed in every session's context (no switch for it in 0.154.0), so Codex sessions carry a larger fixed prompt |
+| effort: CLI default per alias | effort pinned to the catalog default (luna/terra medium, sol low) | `sol` already defaults to low, so the `opus_low` arm has no Codex counterpart and is omitted |
+
+Every Codex failure mode (timeout, cap, non-zero exit, `turn.failed`, missing
+binary) still returns a result with `error` set, and the task is graded on
+whatever the agent left in the sandbox (intention to treat).
+
 ## Running
 
 ```bash
@@ -157,6 +180,11 @@ make dispatch-run EXP=experiments/agentic/exp05_dispatch.toml BUDGET=200.00 \
 # (re)build summary.json/summary.md for an existing run directory.
 make dispatch-report RUN=results/exp05_dispatch/20260922-120000
 
+# White-paper Markdown draft (numbers filled, prose left as [TODO: author]);
+# several RUNS are pooled. Never copies model output into the draft.
+make dispatch-paper RUNS="results/exp05_dispatch/20260922-120000" \
+  OUT=docs/experiments/findings/2026-09-30-exp05-paper-draft.md
+
 # Scan local Claude Code transcripts for spawned task chips to grow the task set.
 make harvest-chips
 ```
@@ -168,6 +196,7 @@ model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
 model-routing dispatch-run experiments/agentic/exp05_dispatch.toml \
   --budget-usd 25.00 --sample 8 --trials 3 [--policies A,B,C1,D] [--fake] [--keep-sandboxes]
 model-routing dispatch-report results/exp05_dispatch/<stamp>
+model-routing dispatch-paper results/exp05_dispatch/<stamp> [more run dirs] [--out draft.md]
 model-routing harvest-chips [--projects-dir ~/.claude/projects] [--out tasks/agentic/private/harvested.jsonl]
 ```
 

@@ -1,0 +1,80 @@
+# Smoke run for the Codex track, mirroring exp05_smoke_paths.toml: every path
+# that behaves differently on the Codex CLI - fresh sessions (B), resume in
+# place with write access (A), resume with a mid-session model switch
+# (A_switch), the native fork for the inline pick with a read-only sandbox
+# (C1_inline), a fresh no-tools classifier (C2), and cascade D escalating.
+# Two hard tasks, one trial.  Not a hypothesis test.
+#
+#   make dispatch-estimate EXP=experiments/agentic/exp05_smoke_paths_codex.toml SAMPLE=2
+#   uv run model-routing dispatch-run experiments/agentic/exp05_smoke_paths_codex.toml \
+#     --sample 2 --budget-usd 4.00 --keep-sandboxes
+#
+# Check in sessions.jsonl afterwards (see "Codex track caveats" in
+# docs/experiments/dispatch-routing.md): no error on any session; A's worker
+# has the setup's session_id and changed files; C1_inline's router has
+# raw.forked = true, a new session_id, tool_calls = 0 and its setup sandbox
+# unchanged; every resumed/forked session has raw.usage_baseline_known = true
+# and a cost well below its parent's cumulative figure.
+
+[experiment]
+name = "exp05_smoke_paths_codex"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+difficulties = ["hard"]         # D only escalates when the cheapest model fails
+trials = 1
+order = "by_task"
+seed = 1
+max_turns = 40
+hypothesis = "Smoke only: exercise B, A, A_switch, C1_inline, C2 and D escalation on real Codex models."
+primary = { treatment = "C1_inline", control = "B" }
+margin_pp = 10
+max_budget_per_session_usd = 2.0
+parent = "sol"
+menu = ["luna", "terra", "sol"]
+
+[auth]
+mode = "subscription"
+
+# Efforts pinned to the catalog defaults (see exp05_dispatch_codex.toml).
+[candidates.luna]
+provider = "codex_cli"
+model = "gpt-5.6-luna"
+effort = "medium"
+
+[candidates.terra]
+provider = "codex_cli"
+model = "gpt-5.6-terra"
+effort = "medium"
+
+[candidates.sol]
+provider = "codex_cli"
+model = "gpt-5.6-sol"
+effort = "low"
+
+[[policies]]
+name = "A"
+kind = "in_session"
+
+[[policies]]
+name = "A_switch"
+kind = "in_session"
+switch_to = "terra"
+
+[[policies]]
+name = "B"
+kind = "spawn_static"
+candidate = "sol"
+
+[[policies]]
+name = "C1_inline"
+kind = "spawn_parent_pick_inline"
+
+[[policies]]
+name = "C2"
+kind = "spawn_classifier"
+classifier = "luna"
+
+[[policies]]
+name = "D"
+kind = "spawn_cascade"
+chain = ["luna", "terra", "sol"]

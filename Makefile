@@ -3,7 +3,7 @@
 PY := uv run
 
 .PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab \
-	dispatch-estimate dispatch-run dispatch-sim dispatch-report dispatch-calibration dispatch-preregister harvest-chips app \
+	dispatch-estimate dispatch-run dispatch-sim dispatch-report dispatch-paper dispatch-calibration dispatch-preregister harvest-chips app \
 	export backup restore backup-status backup-config
 
 help: ## Show this help
@@ -72,6 +72,9 @@ dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
 
 dispatch-report: ## Rebuild summary.json/md for a dispatch run dir (RUN=results/<exp>/<stamp>)
 	$(PY) model-routing dispatch-report $(RUN)
+
+dispatch-paper: ## Markdown white-paper draft from dispatch run dir(s) (RUNS="results/a [results/b]", OUT=path.md)
+	$(PY) model-routing dispatch-paper $(RUNS) $(if $(OUT),--out $(OUT))
 
 dispatch-calibration: ## Measured per-task pass rates by model from calibration run(s) (RUNS="results/a results/b", WRITE=1 relabels tasks.jsonl)
 	$(PY) model-routing dispatch-calibration $(RUNS) $(if $(WRITE),--write)

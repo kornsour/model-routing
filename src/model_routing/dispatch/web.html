@@ -81,6 +81,21 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .hyp-card.supported { border-left-color: var(--good); }
 .hyp-card.not_supported { border-left-color: var(--critical); }
 .hyp-card.inconclusive { border-left-color: var(--warn); }
+.status-banner { border: 1px solid var(--border); border-left: 4px solid var(--text-3); border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; background: var(--surface-2); }
+.status-banner.confirmatory { border-left-color: var(--good); }
+.status-banner.exploratory { border-left-color: var(--warn); }
+.status-banner ul { margin: 6px 0 0; padding-left: 18px; }
+.role { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border); white-space: nowrap; }
+.role.primary { color: var(--s1); border-color: var(--s1); }
+.role.secondary { color: var(--text-3); }
+tr.primary-row td { background: var(--surface-2); }
+table.comparisons td:first-child { white-space: nowrap; }
+.verdict-chip { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.verdict-chip.supported { color: var(--good); }
+.verdict-chip.not_supported { color: var(--critical); }
+.verdict-chip.inconclusive { color: var(--warn); }
+.warn-text { color: var(--critical); font-weight: 600; }
+.power-note { border-left: 3px solid var(--s1); padding-left: 10px; color: var(--text-2); }
 .banner { border: 2px dashed var(--s4); border-radius: 8px; padding: 10px 14px; font-weight: 600; margin-bottom: 14px; color: var(--s4); }
 details { margin: 6px 0; }
 summary { cursor: pointer; color: var(--text-2); }
@@ -216,13 +231,233 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 
 <div class="tip" id="tip" style="position:fixed;pointer-events:none;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.15);display:none;max-width:320px;z-index:10"></div>
 </div>
-<script>
+<script id="run-render">
+// Pure rendering of a dispatch run summary (no DOM access): the page calls
+// these, and tests/test_dispatch_web.py runs this block under Node to check
+// what a summary.json renders to.
 (() => {
-const TOKEN = '__TOKEN__';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = x => x == null ? '–' : '$' + Number(x).toFixed(4);
 const pct = x => x == null ? '–' : Math.round(x * 100) + '%';
 const ci = x => x ? `${(x[0]*100).toFixed(1)}–${(x[1]*100).toFixed(1)}%` : 'n/a';
+const fmtP = p => p == null ? '–' : (p < 0.001 ? '<0.001' : Number(p).toFixed(3));
+const pHtml = p => esc(fmtP(p));
+const signed = (x, d) => x == null ? '–' : (x >= 0 ? '+' : '') + Number(x).toFixed(d);
+
+const POLICY_DESCRIPTIONS = {
+  A: 'Keep going in the same session',
+  A_switch: 'Same session, switch model mid-way',
+  B: 'Hand off on the same big model (today’s default)',
+  C1: 'Parent picks the model in a separate router call (pessimistic overhead)',
+  C1_inline: 'Parent picks the model while writing the brief (the idea being tested)',
+  C2: 'A cheap classifier picks the model, no parent context',
+  D: 'Start cheap, escalate only if checks fail',
+  D_ideal: 'Start cheap, escalate using the hidden tests as a perfect checker (upper bound, not deployable)',
+  static_haiku: 'Always the small model',
+  static_haiku_terse: 'Small model, terse brief',
+  static_sonnet: 'Always the mid model',
+  static_opus_low: 'Always the big model, low effort',
+  oracle: 'Cheapest model that passed, in hindsight (computed, not run)',
+};
+// Graceful fallback for policy names the page doesn't know about yet.
+function policyDescription(name) {
+  if (POLICY_DESCRIPTIONS[name]) return POLICY_DESCRIPTIONS[name];
+  if (name.startsWith('static_')) return 'Fixed model: ' + name.slice(7).replace(/_/g, ' ');
+  return name.replace(/_/g, ' ');
+}
+
+function svgChart(policies, oracle) {
+  const pts = policies.filter(p => p.cost_per_pass != null && p.pass_rate != null);
+  if (!pts.length) return '<p class="muted small">No comparable cost/pass data.</p>';
+  const all = oracle ? pts.concat([Object.assign({}, oracle, { name: 'oracle', _oracle: true })]) : pts;
+  const maxCost = Math.max(...all.map(p => p.cost_per_pass), 0.0001);
+  const w = 560, h = 320, pad = 46;
+  const x = c => pad + (c / maxCost) * (w - pad * 2);
+  const y = r => h - pad - r * (h - pad * 2);
+
+  // Simple label-collision avoidance: points that land on (almost) the same
+  // pixel get nudged apart horizontally, then any labels still stacked too
+  // close vertically get pushed down a line, with a thin leader line back
+  // to the true dot position so the reading stays honest.
+  const buckets = new Map();
+  all.forEach(p => {
+    const key = Math.round(x(p.cost_per_pass) / 6) + ':' + Math.round(y(p.pass_rate) / 6);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(p);
+  });
+  let placed = [];
+  buckets.forEach(group => {
+    group.forEach((p, i) => {
+      const jitter = (i - (group.length - 1) / 2) * 9;
+      placed.push({ p, cx: x(p.cost_per_pass) + jitter, cy: y(p.pass_rate) });
+    });
+  });
+  placed = placed.map(d => ({ ...d, ly: d.cy + 4 })).sort((a, b) => a.cx - b.cx);
+  for (let i = 1; i < placed.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (Math.abs(placed[i].cx - placed[j].cx) < 96 && Math.abs(placed[i].ly - placed[j].ly) < 14) {
+        placed[i].ly = placed[j].ly + 14;
+      }
+    }
+  }
+
+  const grid = [0, .25, .5, .75, 1].map(r => `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${y(r)}" y2="${y(r)}"/><text x="4" y="${y(r)+4}">${Math.round(r*100)}%</text>`).join('');
+  const marks = placed.map((d, i) => {
+    const isOracle = !!d.p._oracle;
+    const nudged = Math.abs(d.ly - (d.cy + 4)) > 1;
+    const leader = nudged
+      ? `<line x1="${d.cx}" y1="${d.cy}" x2="${d.cx + 8}" y2="${d.ly - 4}" stroke="var(--text-3)" stroke-width="1"/>`
+      : '';
+    return `${leader}<circle cx="${d.cx}" cy="${d.cy}" r="6" fill="var(--s${(i % 4) + 1})" ${isOracle ? 'class="dot-oracle"' : ''}/>` +
+      `<text x="${d.cx + 9}" y="${d.ly}" class="lbl">${esc(d.p.name)}</text>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Cost per completed task vs pass rate">` +
+    `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${h-pad}" y2="${h-pad}"/><line class="axis" x1="${pad}" x2="${pad}" y1="${pad}" y2="${h-pad}"/>` +
+    grid +
+    `<text x="${w/2}" y="${h-8}" text-anchor="middle">cost per completed task ($)</text>` +
+    `<text x="12" y="${pad-10}">pass rate</text>` +
+    marks + `</svg>`;
+}
+
+function verdictClass(v) { return (v || 'inconclusive').replace(/\s+/g, '_'); }
+
+function statusBanner(summary) {
+  if (summary.confirmatory == null) {
+    return '<div class="status-banner unknown"><b>Status unknown</b> — this summary predates the pre-registration check; rebuild it with <code>make dispatch-report</code>.</div>';
+  }
+  const prereg = summary.preregistration || {};
+  if (summary.confirmatory) {
+    return '<div class="status-banner confirmatory"><b>Confirmatory run</b> — matches the pre-registration (task-set hash, trials, task count, margin, primary comparison, ordering). H-D1 is the confirmatory test.</div>';
+  }
+  const devs = prereg.deviations && prereg.deviations.length ? prereg.deviations : ['not pre-registered'];
+  return '<div class="status-banner exploratory"><b>Exploratory run</b> — ' +
+    (prereg.registered ? 'deviates from the pre-registration' : 'no pre-registration to match') +
+    ', so no verdict here is confirmatory. Deviations:' +
+    `<ul class="small">${devs.map(d => `<li>${esc(d)}</li>`).join('')}</ul></div>`;
+}
+
+function comparisonsTable(comparisons) {
+  if (!comparisons.length) return '<p class="muted small">No comparisons in this run.</p>';
+  const rows = comparisons.map(c => {
+    const primary = c.role === 'primary' || (c.role == null && c.id === 'H-D1');
+    const role = c.role || (c.id === 'H-D1' ? 'primary' : 'secondary (exploratory)');
+    const sci = c.saving_ci || [null, null];
+    const dci = c.delta_pass_ci || [null, null];
+    return `<tr${primary ? ' class="primary-row"' : ''}>
+      <td><b>${esc(c.id)}</b></td>
+      <td><span class="role ${primary ? 'primary' : 'secondary'}">${esc(role)}</span></td>
+      <td class="small"><span class="policy-code" title="${esc(policyDescription(c.treatment || ''))}">${esc(c.treatment)}</span> vs <span class="policy-code" title="${esc(policyDescription(c.control || ''))}">${esc(c.control)}</span></td>
+      <td class="num">${c.n_paired ?? '–'}</td>
+      <td class="num">${c.saving_pct != null ? Number(c.saving_pct).toFixed(0) + '%' : '–'} <span class="muted small">(${signed(sci[0], 0)} to ${signed(sci[1], 0)})</span></td>
+      <td class="num">${pHtml(c.p_saving)}</td>
+      <td class="num">${pHtml(c.p_adjusted)}</td>
+      <td class="num">${signed(c.delta_pass_pp, 1)} <span class="muted small">(${signed(dci[0], 1)} to ${signed(dci[1], 1)})</span></td>
+      <td class="num">${pHtml(c.p_pass)}</td>
+      <td class="num">${pHtml(c.p_noninf)}</td>
+      <td><span class="verdict-chip ${verdictClass(c.verdict)}">${esc(c.verdict || 'inconclusive')}</span></td>
+    </tr>`;
+  }).join('');
+  return `<div class="table-wrap"><table class="comparisons"><thead><tr><th>Id</th><th>Role</th><th>Comparison</th><th class="num">n paired</th><th class="num">Saving (95% CI)</th><th class="num">p_saving</th><th class="num">p_adj</th><th class="num">Δpass pts (95% CI)</th><th class="num">p_pass</th><th class="num">p_noninf</th><th>Verdict</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function runViewHtml(summary) {
+  const comparisons = summary.comparisons || [];
+  const h_d1 = comparisons.find(c => c.id === 'H-D1');
+  const secondary = comparisons.filter(c => c.id !== 'H-D1');
+  const banner = summary.fake ? '<div class="banner">SIMULATED — no real models were called</div>' : '';
+  const verdict = h_d1 ? `
+    <div class="verdict ${verdictClass(h_d1.verdict)}">
+      <div class="label">H-D1 — dispatch-time routing${summary.confirmatory ? ' · confirmatory' : ' · exploratory'}</div>
+      <div class="headline">${esc(h_d1.verdict || 'inconclusive')}</div>
+      <p>${esc(h_d1.sentence || summary.headline || '')}</p>
+      <p class="small muted">p_saving ${pHtml(h_d1.p_saving)} · p_pass ${pHtml(h_d1.p_pass)} · p_noninf ${pHtml(h_d1.p_noninf)}</p>
+    </div>` : `<p class="muted">${esc(summary.headline || 'No primary comparison in this run.')}</p>`;
+  const policies = summary.policies || [];
+  // Table rows show only the short policy code (with a tooltip for the full
+  // description) so columns fit at 800px; the legend below spells every
+  // code out for touch devices that have no hover.
+  const rows = policies.map(p => `<tr>
+      <td><span class="policy-code" title="${esc(policyDescription(p.name))}">${esc(p.name)}</span></td>
+      <td class="num">${pct(p.pass_rate)} <span class="muted small">(${ci(p.pass_ci)})</span></td>
+      <td class="num">${money(p.cost_per_task)}</td>
+      <td class="num">${money(p.cost_per_pass)} <span class="muted small">(${p.cost_per_pass_ci ? money(p.cost_per_pass_ci[0]) + '–' + money(p.cost_per_pass_ci[1]) : 'n/a'})</span></td>
+      <td class="num">${pct(p.router_share)}</td>
+      <td class="num">${p.escalation_rate != null ? pct(p.escalation_rate) : '–'}</td>
+      <td class="num${p.error_rate ? ' warn-text' : ''}">${p.error_rate != null ? pct(p.error_rate) : '–'}</td>
+      <td class="num">${p.mean_turns != null ? p.mean_turns.toFixed(1) : '–'}</td>
+      <td class="small">${esc(Object.entries(p.model_mix || {}).map(([m, s]) => `${m} ${pct(s)}`).join(', '))}</td>
+    </tr>`).join('');
+  const legend = policies.map(p =>
+    `<div><b>${esc(p.name)}</b> — ${esc(policyDescription(p.name))}</div>`
+  ).join('');
+  const hypCards = secondary.map(c => `<div class="hyp-card ${verdictClass(c.verdict)}"><b>${esc(c.id)}</b> — ${esc(c.verdict)} <span class="muted small">(exploratory · p_adj ${pHtml(c.p_adjusted)})</span><p class="small">${esc(c.sentence)}</p></div>`).join('');
+  const power = summary.power_note ? `<h3>Power</h3><p class="small power-note">${esc(summary.power_note)}</p>` : '';
+  return `
+    <h2>Results: ${esc(summary.experiment || '')}</h2>
+    ${banner}
+    ${statusBanner(summary)}
+    ${verdict}
+    <h3>Cost per completed task vs pass rate</h3>
+    <div class="card">${svgChart(policies, summary.oracle)}</div>
+    <details open><summary>What do these metrics mean?</summary>
+      <ul class="small">
+        <li><b>pass rate</b>: share of (task, trial) cells that passed the deterministic grader; the interval is a 95% task-clustered bootstrap.</li>
+        <li><b>cost per task</b>: list-price spend divided by cells run (setup sessions excluded).</li>
+        <li><b>cost per completed task</b>: spend divided by cells that passed — the headline metric (95% bootstrap interval in brackets).</li>
+        <li><b>router share</b>: fraction of a policy's cost spent choosing the model, not doing the task.</li>
+        <li><b>escalations</b>: how often a cascade policy needed a stronger model after a failed check.</li>
+        <li><b>error rate</b>: share of cells with a provider error (timeout, cap, non-zero exit); they are graded as-is and counted (intention to treat).</li>
+        <li><b>p_saving / p_pass</b>: two-sided task-clustered permutation p-values for the cost ratio and the pass-rate difference. <b>p_noninf</b>: one-sided p for “worse by at least the margin” (small = non-inferior). <b>p_adj</b>: Holm-adjusted p_saving across the secondary hypotheses.</li>
+      </ul>
+    </details>
+    <h3>Policies</h3>
+    <details class="small"><summary>Policy legend (code &rarr; what it does)</summary><div class="policy-legend">${legend}</div></details>
+    <div class="table-wrap"><table class="policies-table"><thead><tr><th>Policy</th><th class="num">Pass rate (95% CI)</th><th class="num">Cost/task</th><th class="num">Cost/completed task (95% CI)</th><th class="num">Router share</th><th class="num">Escalations</th><th class="num">Error rate</th><th class="num">Mean turns</th><th>Model mix</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h3>Comparisons</h3>
+    <p class="small muted">H-D1 is the only pre-registered (primary) comparison; the others are secondary and exploratory. Intervals are 95% task-clustered bootstrap.</p>
+    ${comparisonsTable(comparisons)}
+    ${power}
+    <h3>Secondary hypotheses</h3>
+    <div class="hyp-cards">${hypCards || '<p class="muted small">No secondary comparisons in this run.</p>'}</div>
+    <div class="row" style="margin-top:10px"><button id="copyMd">Copy summary as Markdown</button></div>
+  `;
+}
+
+function runMarkdown(summary) {
+  const comparisons = summary.comparisons || [];
+  const h_d1 = comparisons.find(c => c.id === 'H-D1');
+  const policies = summary.policies || [];
+  const prereg = summary.preregistration || {};
+  const status = summary.confirmatory == null ? 'status unknown'
+    : summary.confirmatory ? 'confirmatory'
+    : 'exploratory: ' + ((prereg.deviations || []).join('; ') || 'not pre-registered');
+  const lines = [
+    `# ${summary.experiment || 'Dispatch run'}`,
+    summary.fake ? '_SIMULATED — no real models were called_' : '',
+    `Status: **${status}**`,
+    '',
+    h_d1 ? `**H-D1 (${h_d1.verdict}):** ${h_d1.sentence}` : (summary.headline || ''),
+    '',
+    '| Policy | Pass rate (95% CI) | Cost/task | Cost/completed task (95% CI) | Error rate |',
+    '| --- | --- | --- | --- | --- |',
+    ...policies.map(p => `| ${p.name} | ${pct(p.pass_rate)} (${ci(p.pass_ci)}) | ${money(p.cost_per_task)} | ${money(p.cost_per_pass)} (${p.cost_per_pass_ci ? money(p.cost_per_pass_ci[0]) + '–' + money(p.cost_per_pass_ci[1]) : 'n/a'}) | ${pct(p.error_rate)} |`),
+    '',
+    '| Id | Role | Comparison | Saving % | p_saving | p_adj | Δpass pts | p_pass | p_noninf | Verdict |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...comparisons.map(c => `| ${c.id} | ${c.role || ''} | ${c.treatment} vs ${c.control} | ${c.saving_pct != null ? Number(c.saving_pct).toFixed(0) : '–'} | ${fmtP(c.p_saving)} | ${fmtP(c.p_adjusted)} | ${signed(c.delta_pass_pp, 1)} | ${fmtP(c.p_pass)} | ${fmtP(c.p_noninf)} | ${c.verdict} |`),
+    '',
+    summary.power_note || '',
+  ];
+  return lines.join('\n');
+}
+
+window.DispatchRender = { esc, money, pct, ci, fmtP, policyDescription, svgChart, verdictClass, statusBanner, runViewHtml, runMarkdown };
+})();
+</script>
+<script>
+(() => {
+const TOKEN = '__TOKEN__';
+const { esc, money, pct, policyDescription, runViewHtml, runMarkdown } = window.DispatchRender;
 
 try { document.getElementById('theme').value = localStorage.getItem('theme') || 'auto'; } catch {}
 function applyTheme() { document.documentElement.dataset.theme = document.getElementById('theme').value; }
@@ -246,26 +481,6 @@ async function post(path, data) {
   });
 }
 
-const POLICY_DESCRIPTIONS = {
-  A: 'Keep going in the same session',
-  A_switch: 'Same session, switch model mid-way',
-  B: 'Hand off on the same big model (today’s default)',
-  C1: 'Parent picks the model (the idea being tested)',
-  C2: 'A cheap classifier picks the model, no parent context',
-  D: 'Start cheap, escalate only if checks fail',
-  D_ideal: 'Start cheap, escalate using the hidden tests as a perfect checker (upper bound, not deployable)',
-  static_haiku: 'Always the small model',
-  static_haiku_terse: 'Small model, terse brief',
-  static_sonnet: 'Always the mid model',
-  static_opus_low: 'Always the big model, low effort',
-  oracle: 'Cheapest model that passed, in hindsight (computed, not run)',
-};
-// Graceful fallback for policy names the page doesn't know about yet.
-function policyDescription(name) {
-  if (POLICY_DESCRIPTIONS[name]) return POLICY_DESCRIPTIONS[name];
-  if (name.startsWith('static_')) return 'Fixed model: ' + name.slice(7).replace(/_/g, ' ');
-  return name.replace(/_/g, ' ');
-}
 function policyLabel(name) { return `${name} — ${policyDescription(name)}`; }
 
 let STATUS = null;
@@ -541,7 +756,7 @@ function relTime(iso) {
 
 function renderHistory() {
   const rows = (STATUS.history || []).map(h => `<tr><td>${esc(h.experiment || '')}<div class="small muted">${esc(h.run_dir)}</div></td>` +
-    `<td class="small muted">${esc(h.fake ? 'simulated' : 'real')}</td><td class="num">${money(h.spent_usd)}</td><td class="small">${esc(h.headline || '')}</td>` +
+    `<td class="small muted">${esc(h.fake ? 'simulated' : 'real')}${h.confirmatory === true ? ' · confirmatory' : h.confirmatory === false ? ' · exploratory' : ''}</td><td class="num">${money(h.spent_usd)}</td><td class="small">${esc(h.headline || '')}</td>` +
     `<td>${backupBadge(h.run_dir)}</td>` +
     `<td><button data-run="${esc(h.run_dir)}">View</button> ` +
     `<a href="/api/runs/report?dir=${encodeURIComponent(h.run_dir)}" target="_blank" rel="noopener">Open report</a> ` +
@@ -655,126 +870,11 @@ function startPolling() {
 }
 function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } }
 
-function svgChart(policies, oracle) {
-  const pts = policies.filter(p => p.cost_per_pass != null && p.pass_rate != null);
-  if (!pts.length) return '<p class="muted small">No comparable cost/pass data.</p>';
-  const all = oracle ? pts.concat([Object.assign({}, oracle, { name: 'oracle', _oracle: true })]) : pts;
-  const maxCost = Math.max(...all.map(p => p.cost_per_pass), 0.0001);
-  const w = 560, h = 320, pad = 46;
-  const x = c => pad + (c / maxCost) * (w - pad * 2);
-  const y = r => h - pad - r * (h - pad * 2);
-
-  // Simple label-collision avoidance: points that land on (almost) the same
-  // pixel get nudged apart horizontally, then any labels still stacked too
-  // close vertically get pushed down a line, with a thin leader line back
-  // to the true dot position so the reading stays honest.
-  const buckets = new Map();
-  all.forEach(p => {
-    const key = Math.round(x(p.cost_per_pass) / 6) + ':' + Math.round(y(p.pass_rate) / 6);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(p);
-  });
-  let placed = [];
-  buckets.forEach(group => {
-    group.forEach((p, i) => {
-      const jitter = (i - (group.length - 1) / 2) * 9;
-      placed.push({ p, cx: x(p.cost_per_pass) + jitter, cy: y(p.pass_rate) });
-    });
-  });
-  placed = placed.map(d => ({ ...d, ly: d.cy + 4 })).sort((a, b) => a.cx - b.cx);
-  for (let i = 1; i < placed.length; i++) {
-    for (let j = 0; j < i; j++) {
-      if (Math.abs(placed[i].cx - placed[j].cx) < 96 && Math.abs(placed[i].ly - placed[j].ly) < 14) {
-        placed[i].ly = placed[j].ly + 14;
-      }
-    }
-  }
-
-  const grid = [0, .25, .5, .75, 1].map(r => `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${y(r)}" y2="${y(r)}"/><text x="4" y="${y(r)+4}">${Math.round(r*100)}%</text>`).join('');
-  const marks = placed.map((d, i) => {
-    const isOracle = !!d.p._oracle;
-    const nudged = Math.abs(d.ly - (d.cy + 4)) > 1;
-    const leader = nudged
-      ? `<line x1="${d.cx}" y1="${d.cy}" x2="${d.cx + 8}" y2="${d.ly - 4}" stroke="var(--text-3)" stroke-width="1"/>`
-      : '';
-    return `${leader}<circle cx="${d.cx}" cy="${d.cy}" r="6" fill="var(--s${(i % 4) + 1})" ${isOracle ? 'class="dot-oracle"' : ''}/>` +
-      `<text x="${d.cx + 9}" y="${d.ly}" class="lbl">${esc(d.p.name)}</text>`;
-  }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}" width="100%" role="img" aria-label="Cost per completed task vs pass rate">` +
-    `<line class="axis" x1="${pad}" x2="${w-pad}" y1="${h-pad}" y2="${h-pad}"/><line class="axis" x1="${pad}" x2="${pad}" y1="${pad}" y2="${h-pad}"/>` +
-    grid +
-    `<text x="${w/2}" y="${h-8}" text-anchor="middle">cost per completed task ($)</text>` +
-    `<text x="12" y="${pad-10}">pass rate</text>` +
-    marks + `</svg>`;
-}
-
-function verdictClass(v) { return (v || 'inconclusive').replace(/\s+/g, '_'); }
-
 function renderRunView(summary) {
   const el = document.getElementById('runView');
-  const h_d1 = (summary.comparisons || []).find(c => c.id === 'H-D1');
-  const secondary = (summary.comparisons || []).filter(c => c.id !== 'H-D1');
-  const banner = summary.fake ? '<div class="banner">SIMULATED — no real models were called</div>' : '';
-  const verdict = h_d1 ? `
-    <div class="verdict ${verdictClass(h_d1.verdict)}">
-      <div class="label">H-D1 — dispatch-time routing</div>
-      <div class="headline">${esc(h_d1.verdict || 'inconclusive')}</div>
-      <p>${esc(h_d1.sentence || summary.headline || '')}</p>
-    </div>` : `<p class="muted">${esc(summary.headline || 'No primary comparison in this run.')}</p>`;
-  const policies = summary.policies || [];
-  // Table rows show only the short policy code (with a tooltip for the full
-  // description) so columns fit at 800px; the legend below spells every
-  // code out for touch devices that have no hover.
-  const rows = policies.map(p => `<tr>
-      <td><span class="policy-code" title="${esc(policyDescription(p.name))}">${esc(p.name)}</span></td>
-      <td class="num">${pct(p.pass_rate)} <span class="muted small">(${ci(p.pass_ci)})</span></td>
-      <td class="num">${money(p.cost_per_task)}</td>
-      <td class="num">${money(p.cost_per_pass)} <span class="muted small">(${p.cost_per_pass_ci ? money(p.cost_per_pass_ci[0]) + '–' + money(p.cost_per_pass_ci[1]) : 'n/a'})</span></td>
-      <td class="num">${pct(p.router_share)}</td>
-      <td class="num">${p.escalation_rate != null ? pct(p.escalation_rate) : '–'}</td>
-      <td class="num">${p.mean_turns != null ? p.mean_turns.toFixed(1) : '–'}</td>
-      <td class="small">${esc(Object.entries(p.model_mix || {}).map(([m, s]) => `${m} ${pct(s)}`).join(', '))}</td>
-    </tr>`).join('');
-  const legend = policies.map(p =>
-    `<div><b>${esc(p.name)}</b> — ${esc(policyDescription(p.name))}</div>`
-  ).join('');
-  const hypCards = secondary.map(c => `<div class="hyp-card ${verdictClass(c.verdict)}"><b>${esc(c.id)}</b> — ${esc(c.verdict)}<p class="small">${esc(c.sentence)}</p></div>`).join('');
-  el.innerHTML = `
-    <h2>Results: ${esc(summary.experiment || '')}</h2>
-    ${banner}
-    ${verdict}
-    <h3>Cost per completed task vs pass rate</h3>
-    <div class="card">${svgChart(policies, summary.oracle)}</div>
-    <details open><summary>What do these metrics mean?</summary>
-      <ul class="small">
-        <li><b>pass rate</b>: share of (task, trial) cells that passed the deterministic grader.</li>
-        <li><b>cost per task</b>: list-price spend divided by cells run (setup sessions excluded).</li>
-        <li><b>cost per completed task</b>: spend divided by cells that passed — the headline metric.</li>
-        <li><b>router share</b>: fraction of a policy's cost spent choosing the model, not doing the task.</li>
-        <li><b>escalations</b>: how often a cascade policy needed a stronger model after a failed check.</li>
-      </ul>
-    </details>
-    <h3>Policies</h3>
-    <details class="small"><summary>Policy legend (code &rarr; what it does)</summary><div class="policy-legend">${legend}</div></details>
-    <div class="table-wrap"><table><thead><tr><th>Policy</th><th class="num">Pass rate</th><th class="num">Cost/task</th><th class="num">Cost/completed task</th><th class="num">Router share</th><th class="num">Escalations</th><th class="num">Mean turns</th><th>Model mix</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <h3>Secondary hypotheses</h3>
-    <div class="hyp-cards">${hypCards || '<p class="muted small">No secondary comparisons in this run.</p>'}</div>
-    <div class="row" style="margin-top:10px"><button id="copyMd">Copy summary as Markdown</button></div>
-  `;
+  el.innerHTML = runViewHtml(summary);
   document.getElementById('copyMd').addEventListener('click', () => {
-    const lines = [
-      `# ${summary.experiment || 'Dispatch run'}`,
-      summary.fake ? '_SIMULATED — no real models were called_' : '',
-      '',
-      h_d1 ? `**H-D1 (${h_d1.verdict}):** ${h_d1.sentence}` : (summary.headline || ''),
-      '',
-      '| Policy | Pass rate | Cost/task | Cost/completed task |',
-      '| --- | --- | --- | --- |',
-      ...policies.map(p => `| ${p.name} | ${pct(p.pass_rate)} | ${money(p.cost_per_task)} | ${money(p.cost_per_pass)} |`),
-      '',
-      ...secondary.map(c => `**${c.id} (${c.verdict}):** ${c.sentence}`),
-    ].filter(l => l !== undefined);
-    const text = lines.join('\n');
+    const text = runMarkdown(summary);
     navigator.clipboard && navigator.clipboard.writeText(text).catch(() => {});
   });
 }

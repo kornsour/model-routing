@@ -1,0 +1,59 @@
+# Difficulty calibration, Codex track: every task on every static Codex
+# candidate, mirroring exp05_calibrate.toml.  Not a hypothesis test.  Labels in
+# tasks.jsonl come from the Claude calibration; this run measures how the same
+# tasks spread across the OpenAI tiers so the replication can say whether the
+# set is comparably hard for both families (read it, do not relabel from it).
+#
+#   make dispatch-estimate EXP=experiments/agentic/exp05_calibrate_codex.toml
+#   make dispatch-run      EXP=experiments/agentic/exp05_calibrate_codex.toml BUDGET=... TRIALS=1
+#
+# See docs/experiments/dispatch-routing.md ("Codex track caveats").
+
+[experiment]
+name = "exp05_calibrate_codex"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+trials = 1
+order = "randomized"
+seed = 20260923
+max_turns = 40
+hypothesis = "Calibration only: measured pass rate per task per Codex candidate model."
+primary = { treatment = "static_luna", control = "static_sol" }
+margin_pp = 10
+max_budget_per_session_usd = 2.0
+parent = "sol"
+menu = ["luna", "terra", "sol"]
+
+[auth]
+mode = "subscription"
+
+# Efforts pinned to the catalog defaults (see exp05_dispatch_codex.toml).
+[candidates.luna]
+provider = "codex_cli"
+model = "gpt-5.6-luna"
+effort = "medium"
+
+[candidates.terra]
+provider = "codex_cli"
+model = "gpt-5.6-terra"
+effort = "medium"
+
+[candidates.sol]
+provider = "codex_cli"
+model = "gpt-5.6-sol"
+effort = "low"
+
+[[policies]]
+name = "static_luna"
+kind = "spawn_static"
+candidate = "luna"
+
+[[policies]]
+name = "static_terra"
+kind = "spawn_static"
+candidate = "terra"
+
+[[policies]]
+name = "static_sol"
+kind = "spawn_static"
+candidate = "sol"

@@ -10,9 +10,14 @@ in the same shape to cover paths the two real calls did not happen to hit.
 from __future__ import annotations
 
 import json
+import os
+import sys
+import textwrap
+import time
 from pathlib import Path
 
 from model_routing.dispatch.agents import (
+    CODEX_NO_TOOLS_NOTICE,
     ClaudeAgentProvider,
     CodexAgentProvider,
     FakeAgentProvider,
@@ -135,66 +140,110 @@ def test_claude_build_args_effort_and_default_system_prompt():
 # --------------------------------------------------------------------------- #
 
 
-def test_codex_build_args_fresh_session_workspace_write():
-    args = CodexAgentProvider().build_args(
-        "gpt-5.6-luna",
-        "create hello.txt",
+def _codex_args(
+    *,
+    model: str = "gpt-5.6-luna",
+    prompt: str = "do it",
+    system: str | None = None,
+    effort: str | None = None,
+    resume_session: str | None = None,
+    tools: bool = True,
+    fork: bool = False,
+) -> list[str]:
+    return CodexAgentProvider().build_args(
+        model,
+        prompt,
         workdir=Path("/sandbox/task"),
-        system=None,
-        effort="low",
-        resume_session=None,
-        tools=True,
+        system=system,
+        effort=effort,
+        resume_session=resume_session,
+        tools=tools,
+        fork=fork,
     )
-    assert args[:4] == ["codex", "exec", "--json", "--ignore-user-config"]
-    assert "--skip-git-repo-check" in args
+
+
+def _flag_values(args, flag):
+    return [args[i + 1] for i, a in enumerate(args) if a == flag]
+
+
+def test_codex_build_args_fresh_session_workspace_write():
+    args = _codex_args(prompt="create hello.txt", effort="low", tools=True)
+    assert args[:3] == ["codex", "exec", "-s"]
     assert args[args.index("-s") + 1] == "workspace-write"
     assert args[args.index("-C") + 1] == "/sandbox/task"
+    assert 'sandbox_mode="workspace-write"' in _flag_values(args, "-c")
     assert args[args.index("-m") + 1] == "gpt-5.6-luna"
     assert 'model_reasoning_effort="low"' in args
+    assert "--json" in args
     assert args[-1] == "create hello.txt"
+    assert "shell_tool" not in args
 
 
-def test_codex_build_args_no_tools_is_read_only():
-    args = CodexAgentProvider().build_args(
-        "gpt-5.6-luna",
-        "look only",
-        workdir=Path("/sandbox/task"),
-        system=None,
-        effort=None,
-        resume_session=None,
-        tools=False,
-    )
+def test_codex_build_args_isolation_flags_on_every_invocation_shape():
+    shapes: list[tuple[bool, str | None, bool]] = [
+        (True, None, False),
+        (False, None, False),
+        (True, "t-1", False),
+        (False, "t-1", True),
+    ]
+    for tools, resume, fork in shapes:
+        kw = (tools, resume, fork)
+        args = _codex_args(tools=tools, resume_session=resume, fork=fork)
+        for flag in ("--ignore-user-config", "--ignore-rules", "--skip-git-repo-check", "--json"):
+            assert flag in args, (kw, flag)
+        disabled = _flag_values(args, "--disable")
+        for feature in ("plugins", "apps", "memories", "multi_agent"):
+            assert feature in disabled, (kw, feature)
+        assert 'web_search="disabled"' in _flag_values(args, "-c")
+        assert "sandbox_workspace_write.network_access=false" in _flag_values(args, "-c")
+
+
+def test_codex_build_args_no_tools_is_read_only_without_shell():
+    args = _codex_args(prompt="look only", tools=False)
     assert args[args.index("-s") + 1] == "read-only"
+    assert 'sandbox_mode="read-only"' in _flag_values(args, "-c")
+    assert {"shell_tool", "unified_exec"} <= set(_flag_values(args, "--disable"))
+    assert args[-1] == "look only" + CODEX_NO_TOOLS_NOTICE
 
 
-def test_codex_build_args_resume_drops_sandbox_and_cwd_flags():
-    args = CodexAgentProvider().build_args(
-        "gpt-5.6-terra",
-        "keep going",
-        workdir=Path("/sandbox/task"),
-        system=None,
-        effort=None,
-        resume_session="thread-abc",
-        tools=True,
+def test_codex_build_args_resume_sets_sandbox_via_config_not_flags():
+    args = _codex_args(
+        model="gpt-5.6-terra", prompt="keep going", resume_session="thread-abc", tools=True
     )
     assert args[:4] == ["codex", "exec", "resume", "thread-abc"]
-    # codex exec resume has no -s/-C flags: the CLI keeps the original session's
-    # sandbox mode and working directory, so we must not pass either.
+    # `codex exec resume` has no -s/-C; 0.154.0 takes the resumed thread's
+    # sandbox from the current config, so it must be passed with -c or a
+    # resumed worker would lose write access.
     assert "-s" not in args
     assert "-C" not in args
+    assert 'sandbox_mode="workspace-write"' in _flag_values(args, "-c")
     assert args[args.index("-m") + 1] == "gpt-5.6-terra"
+    assert args[-1] == "keep going"
+
+
+def test_codex_build_args_resumed_router_without_tools_is_read_only():
+    args = _codex_args(resume_session="thread-abc", tools=False)
+    assert args[:4] == ["codex", "exec", "resume", "thread-abc"]
+    assert 'sandbox_mode="read-only"' in _flag_values(args, "-c")
+    assert 'sandbox_mode="workspace-write"' not in _flag_values(args, "-c")
+    assert "shell_tool" in _flag_values(args, "--disable")
+
+
+def test_codex_build_args_fork_uses_native_fork_subcommand_read_only():
+    args = _codex_args(resume_session="thread-abc", fork=True, tools=False)
+    assert args[:4] == ["codex", "exec", "fork", "thread-abc"]
+    assert "-s" not in args and "-C" not in args
+    assert 'sandbox_mode="read-only"' in _flag_values(args, "-c")
+
+
+def test_codex_build_args_fork_without_resume_is_a_fresh_session():
+    args = _codex_args(fork=True, tools=True)
+    assert args[:2] == ["codex", "exec"]
+    assert "fork" not in args[:4] and "resume" not in args[:4]
 
 
 def test_codex_build_args_prepends_context_like_single_shot_provider():
-    args = CodexAgentProvider().build_args(
-        "gpt-5.6-luna",
-        "question",
-        workdir=Path("/sandbox/task"),
-        system="the brief",
-        effort=None,
-        resume_session=None,
-        tools=True,
-    )
+    args = _codex_args(prompt="question", system="the brief", tools=True)
     assert args[-1].startswith("<context>\nthe brief\n</context>")
 
 
@@ -303,44 +352,216 @@ def test_parse_codex_stream_turn_failed():
     assert r.session_id == "thread-codex-sanitized-2"
 
 
-def test_codex_run_flags_nonzero_exit(monkeypatch, tmp_path):
-    class FakeProc:
-        stdout = _read("codex_stream_luna_success.jsonl")
-        stderr = "boom"
-        returncode = 1
+def test_parse_codex_stream_turn_failed_structured_error():
+    stdout = (
+        '{"type":"thread.started","thread_id":"t-9"}\n'
+        '{"type":"turn.failed","error":{"message":"quota"}}\n'
+    )
+    r = parse_codex_stream(stdout, wall_ms=1)
+    assert r.error == "quota"
 
-    monkeypatch.setattr("model_routing.dispatch.agents.subprocess.run", lambda *a, **k: FakeProc())
-    provider = CodexAgentProvider()
-    result = provider.run("gpt-5.6-luna", "hi", workdir=tmp_path)
+
+def test_parse_codex_stream_retried_error_event_is_not_fatal():
+    lines = _read("codex_stream_luna_success.jsonl").splitlines()
+    lines.insert(2, json.dumps({"type": "error", "message": "Reconnecting... 1/5"}))
+    r = parse_codex_stream("\n".join(lines), wall_ms=1)
+    assert r.error is None
+    assert r.raw is not None and r.raw["stream_errors"] == ["Reconnecting... 1/5"]
+
+
+def test_parse_codex_stream_error_event_without_turn_completed_is_fatal():
+    stdout = (
+        '{"type":"thread.started","thread_id":"t-9"}\n{"type":"error","message":"auth expired"}\n'
+    )
+    assert parse_codex_stream(stdout, wall_ms=1).error == "auth expired"
+
+
+# --------------------------------------------------------------------------- #
+# Codex: running a (fake) codex binary - timeout, turn cap, usage accounting
+# --------------------------------------------------------------------------- #
+
+
+def _fake_codex(tmp_path: Path, body: str) -> str:
+    """A stand-in ``codex`` executable: a Python script that ignores its args
+    (they are appended to ``args.txt``) and runs ``body``."""
+    script = tmp_path / "fake_codex.py"
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys, time\n"
+        "from pathlib import Path\n"
+        f"Path({str(tmp_path / 'args.txt')!r}).open('a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "def emit(ev):\n"
+        "    print(json.dumps(ev), flush=True)\n" + textwrap.dedent(body)
+    )
+    script.chmod(0o755)
+    return str(script)
+
+
+def _usage_ev(inp, cached, out):
+    return {
+        "type": "turn.completed",
+        "usage": {
+            "input_tokens": inp,
+            "cached_input_tokens": cached,
+            "cache_write_input_tokens": 0,
+            "output_tokens": out,
+            "reasoning_output_tokens": 0,
+        },
+    }
+
+
+def test_codex_run_success_via_binary(tmp_path):
+    fixture = FIXTURES / "codex_stream_luna_success.jsonl"
+    binary = _fake_codex(tmp_path, f"sys.stdout.write(open({str(fixture)!r}).read())\n")
+    result = CodexAgentProvider(binary=binary).run("gpt-5.6-luna", "hi", workdir=tmp_path)
+    assert result.error is None
+    assert result.session_id == "thread-codex-sanitized-1"
+    assert result.usage.cache_read == 19968
+    assert result.raw is not None and result.raw["usage_source"] == "stream"
+
+
+def test_codex_run_flags_nonzero_exit(tmp_path):
+    fixture = FIXTURES / "codex_stream_luna_success.jsonl"
+    binary = _fake_codex(
+        tmp_path,
+        f"sys.stdout.write(open({str(fixture)!r}).read())\nsys.stderr.write('boom')\nsys.exit(1)\n",
+    )
+    result = CodexAgentProvider(binary=binary).run("gpt-5.6-luna", "hi", workdir=tmp_path)
     assert result.error is not None and result.error.startswith("exit 1")
 
 
-def test_codex_run_fork_requested_notes_resumed_in_place(monkeypatch, tmp_path):
-    class FakeProc:
-        stdout = _read("codex_stream_luna_success.jsonl")
-        stderr = ""
-        returncode = 0
-
-    monkeypatch.setattr("model_routing.dispatch.agents.subprocess.run", lambda *a, **k: FakeProc())
-    provider = CodexAgentProvider()
-    result = provider.run(
-        "gpt-5.6-luna", "hi", workdir=tmp_path, resume_session="thread-abc", fork=True
+def test_codex_run_missing_binary_returns_error_result(tmp_path):
+    result = CodexAgentProvider(binary=str(tmp_path / "nope")).run(
+        "gpt-5.6-luna", "hi", workdir=tmp_path
     )
-    assert result.raw is not None
-    assert result.raw["fork_requested"] is True
-    assert result.raw["forked"] is False
+    assert result.error is not None and result.error.startswith("spawn failed")
+    assert result.usage == Usage()
 
 
-def test_codex_run_timeout(monkeypatch, tmp_path):
-    import subprocess
+def test_codex_run_resume_and_fork_bill_only_their_own_tokens(tmp_path):
+    # Codex reports thread-cumulative totals, and resume/fork seed them from the
+    # parent: setup reports 1000 in / 200 cached / 50 out, then the resumed call
+    # reports 1600 / 500 / 80 - of which only 600 / 300 / 30 are its own.
+    binary = _fake_codex(
+        tmp_path,
+        """
+        argv = sys.argv[1:]
+        if argv[1] in ("resume", "fork"):
+            tid = argv[2] if argv[1] == "resume" else "t-forked"
+            emit({"type": "thread.started", "thread_id": tid})
+            emit({"type": "turn.started"})
+            emit({"type": "item.completed", "item": {"type": "agent_message", "text": "ok"}})
+            emit(RESUMED_USAGE)
+        else:
+            emit({"type": "thread.started", "thread_id": "t-setup"})
+            emit({"type": "turn.started"})
+            emit({"type": "item.completed", "item": {"type": "agent_message", "text": "ready"}})
+            emit(SETUP_USAGE)
+        """.replace("RESUMED_USAGE", repr(_usage_ev(1600, 500, 80))).replace(
+            "SETUP_USAGE", repr(_usage_ev(1000, 200, 50))
+        ),
+    )
+    provider = CodexAgentProvider(binary=binary, env={"CODEX_HOME": str(tmp_path / "ch")})
+    setup = provider.run("gpt-5.6-sol", "seed", workdir=tmp_path)
+    assert setup.usage == Usage(input_tokens=800, cache_read=200, output_tokens=50)
 
-    def fake_run(*a, **k):
-        raise subprocess.TimeoutExpired(cmd="codex", timeout=1)
+    resumed = provider.run("gpt-5.6-sol", "go", workdir=tmp_path, resume_session="t-setup")
+    assert resumed.session_id == "t-setup"
+    assert resumed.usage == Usage(input_tokens=300, cache_read=300, output_tokens=30)
+    assert resumed.raw is not None
+    assert resumed.raw["forked"] is False and resumed.raw["usage_baseline_known"] is True
 
-    monkeypatch.setattr("model_routing.dispatch.agents.subprocess.run", fake_run)
-    provider = CodexAgentProvider()
+    # The resume above moved t-setup's totals to 1600/500/80; a fork reporting
+    # exactly those seeded totals has spent nothing of its own.
+    forked = provider.run(
+        "gpt-5.6-sol", "pick", workdir=tmp_path, resume_session="t-setup", fork=True, tools=False
+    )
+    assert forked.session_id == "t-forked"
+    assert forked.raw is not None
+    assert forked.raw["forked"] is True and forked.raw["forked_from"] == "t-setup"
+    assert forked.raw["sandbox"] == "read-only"
+    assert forked.usage.output_tokens == 0
+    calls = [json.loads(x) for x in (tmp_path / "args.txt").read_text().splitlines()]
+    assert calls[2][:3] == ["exec", "fork", "t-setup"]
+
+
+def test_codex_run_timeout_kills_and_keeps_thread_id(tmp_path):
+    binary = _fake_codex(
+        tmp_path,
+        """
+        emit({"type": "thread.started", "thread_id": "t-slow"})
+        emit({"type": "turn.started"})
+        time.sleep(60)
+        """,
+    )
+    t0 = time.monotonic()
+    result = CodexAgentProvider(binary=binary).run(
+        "gpt-5.6-luna", "hi", workdir=tmp_path, timeout_s=1
+    )
+    assert time.monotonic() - t0 < 20
+    assert result.error == "timeout"
+    assert result.session_id == "t-slow"  # usable result: runner grades the sandbox as-is
+    assert result.raw is not None and result.raw["usage_source"] == "none"
+
+
+def test_codex_run_timeout_bills_tokens_from_rollout(tmp_path):
+    codex_home = tmp_path / "codex_home"
+    day = codex_home / "sessions" / "2026" / "09" / "23"
+    day.mkdir(parents=True)
+    rollout = day / "rollout-2026-09-23T10-00-00-t-roll.jsonl"
+    token_count = {
+        "type": "event_msg",
+        "payload": {
+            "type": "token_count",
+            "info": {
+                "total_token_usage": {
+                    "input_tokens": 5000,
+                    "cached_input_tokens": 3000,
+                    "cache_write_input_tokens": 0,
+                    "output_tokens": 400,
+                    "reasoning_output_tokens": 100,
+                    "total_tokens": 5400,
+                }
+            },
+        },
+    }
+    rollout.write_text(
+        json.dumps({"type": "session_meta", "payload": {}}) + "\n" + json.dumps(token_count) + "\n"
+    )
+    binary = _fake_codex(
+        tmp_path,
+        """
+        emit({"type": "thread.started", "thread_id": "t-roll"})
+        time.sleep(60)
+        """,
+    )
+    provider = CodexAgentProvider(binary=binary, env={**os.environ, "CODEX_HOME": str(codex_home)})
     result = provider.run("gpt-5.6-luna", "hi", workdir=tmp_path, timeout_s=1)
     assert result.error == "timeout"
+    assert result.raw is not None and result.raw["usage_source"] == "rollout"
+    assert result.usage == Usage(
+        input_tokens=2000, cache_read=3000, output_tokens=400, reasoning=100
+    )
+
+
+def test_codex_run_stops_at_turn_cap(tmp_path):
+    binary = _fake_codex(
+        tmp_path,
+        """
+        emit({"type": "thread.started", "thread_id": "t-loop"})
+        emit({"type": "turn.started"})
+        for i in range(50):
+            emit({"type": "item.completed", "item": {"type": "command_execution", "command": "ls"}})
+            time.sleep(0.05)
+        emit({"type": "turn.completed", "usage": {}})
+        """,
+    )
+    result = CodexAgentProvider(binary=binary).run(
+        "gpt-5.6-luna", "hi", workdir=tmp_path, max_turns=3, timeout_s=30
+    )
+    assert result.error == "max_turns"
+    assert result.session_id == "t-loop"
+    assert 3 < result.tool_calls < 50
 
 
 # --------------------------------------------------------------------------- #

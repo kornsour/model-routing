@@ -56,7 +56,7 @@ Two generations of tasks, spread across all three repos:
   feature, refactor, tests, docs, config). Their briefs name the fix, and the
   2026-09-22 pilot found the cheapest model passes them all, so they carry
   no routing headroom on their own.
-- **`-02` tasks (24):** authored 2026-09-23 against issue #11 to need real
+- **`-02` and `-03` tasks (36):** authored 2026-09-23 against issue #11 to need real
   investigation: multi-file changes with hidden coupling, underspecified
   briefs where intent must be inferred from code and tests, cross-module and
   ordering bugs, performance fixes checked by a deterministic budget (call

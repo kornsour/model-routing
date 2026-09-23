@@ -44,6 +44,16 @@ The confirmatory run is pre-registered: see
 for the hypothesis, margin, decision rule, sample size and the gates that
 must be met before it runs.
 
+`make dispatch-paper RUNS="results/exp05_dispatch/<stamp>" [OUT=...]` turns
+one or more run directories (pooled when several) into a Markdown white-paper
+draft under `docs/experiments/findings/`: methods, provenance hashes, the
+policy and comparison tables with CIs and p-values, per-difficulty pass
+rates, a pessimistic re-billing of `C1_inline`, a threats-to-validity
+checklist and a per-task pass/fail appendix. Numbers are computed
+deterministically; interpretation is left as `[TODO: author]`, and no model
+output is copied into the draft. The lab's run view (`make app`) shows the
+same confirmatory/exploratory status, p-values and intervals.
+
 ## Layout
 
 ```
