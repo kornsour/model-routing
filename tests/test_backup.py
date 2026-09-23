@@ -283,12 +283,36 @@ def test_backup_all_snapshots_index_and_keeps_last_ten(tmp_path):
     conn.close()
 
     index_dir = backup_dir / "_index"
+    source = snap.name.split("-")[1]
     for i in range(15):
-        (index_dir / f"index-fake{i:02d}.sqlite").write_text("")
+        (index_dir / f"index-{source}-2000010{i:02d}T000000Z.sqlite").write_text("")
     from model_routing.backup import _snapshot_index
 
     _snapshot_index(results, settings)
-    assert len(list(index_dir.glob("index-*.sqlite"))) <= backup_mod.KEEP_INDEX_SNAPSHOTS
+    mine = list(index_dir.glob(f"index-{source}-*.sqlite"))
+    assert len(mine) == backup_mod.KEEP_INDEX_SNAPSHOTS
+
+
+def test_index_snapshots_from_two_checkouts_never_overwrite_or_prune_each_other(tmp_path):
+    from model_routing.backup import _snapshot_index
+
+    settings = Settings(backup_dir=tmp_path / "backups", auto_backup=True)
+    snaps = []
+    for name in ("main", "worktree"):
+        results = tmp_path / name / "results"
+        results.mkdir(parents=True)
+        conn = sqlite3.connect(results / "index.sqlite")
+        conn.execute(f"CREATE TABLE {name} (x)")
+        conn.commit()
+        conn.close()
+        snaps.append(_snapshot_index(results, settings))
+    assert snaps[0] != snaps[1]
+    for snap, table in zip(snaps, ("main", "worktree"), strict=True):
+        assert snap is not None
+        conn = sqlite3.connect(snap)
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master")}
+        conn.close()
+        assert table in tables
 
 
 def test_backup_all_copies_dispatch_jobs(tmp_path):

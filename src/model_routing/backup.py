@@ -608,8 +608,16 @@ def _snapshot_index(results_dir: Path, settings: Settings) -> str | None:
         return None
     index_dir = Path(settings.backup_dir) / "_index"
     index_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    dest = index_dir / f"index-{stamp}.sqlite"
+    # Several checkouts (main + worktrees) can back up to one folder, so the
+    # name carries which results/ it came from; otherwise two snapshots taken
+    # in the same second overwrite each other and pruning crosses sources.
+    source = hashlib.sha256(str(results_dir.resolve()).encode()).hexdigest()[:8]
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    dest = index_dir / f"index-{source}-{stamp}.sqlite"
+    n = 1
+    while dest.exists():
+        n += 1
+        dest = index_dir / f"index-{source}-{stamp}-{n}.sqlite"
     src_conn = sqlite3.connect(db_path)
     dst_conn = sqlite3.connect(dest)
     try:
@@ -617,7 +625,8 @@ def _snapshot_index(results_dir: Path, settings: Settings) -> str | None:
     finally:
         dst_conn.close()
         src_conn.close()
-    snapshots = sorted(index_dir.glob("index-*.sqlite"))
+    (index_dir / f"index-{source}.source.txt").write_text(str(results_dir.resolve()) + "\n")
+    snapshots = sorted(index_dir.glob(f"index-{source}-*.sqlite"))
     for stale in snapshots[:-KEEP_INDEX_SNAPSHOTS]:
         stale.unlink(missing_ok=True)
     return str(dest)
