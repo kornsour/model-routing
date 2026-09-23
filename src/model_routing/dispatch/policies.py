@@ -71,7 +71,8 @@ ROUTER_PROMPT_C1 = (
 ROUTER_PROMPT_C1_INLINE = (
     "You are about to hand off the following piece of work to a fresh agent session, which "
     "will not see this conversation. Write the self-contained brief you would give it (goal, "
-    "files, acceptance criteria, constraints) based on everything you know from this session.\n\n"
+    "files, acceptance criteria, constraints) from what you already know in this session. "
+    "Tools are disabled for this reply: do not try to read files or run commands, just write.\n\n"
     "Work to hand off:\n{title}\n\n"
     "Then, on the very last line of your reply and nothing after it, choose which model the "
     "fresh session should run on. Pick the cheapest one from the menu you are confident can "
@@ -159,6 +160,7 @@ def _outcome(
     *,
     chosen: str | None = None,
     escalations: int = 0,
+    router_fallback: bool = False,
 ) -> DispatchOutcome:
     return DispatchOutcome(
         task_id=task.id,
@@ -170,6 +172,7 @@ def _outcome(
         category=task.category,
         chosen_candidate=chosen,
         escalations=escalations,
+        router_fallback=router_fallback,
     )
 
 
@@ -247,7 +250,7 @@ def _policy_c1(
             tools=False,
             resumed_from=setup.session_id,
         )
-        picked, _effort, _fallback = _parse_router_choice(
+        picked, _effort, fallback = _parse_router_choice(
             router.output, ctx.cfg.menu, ctx.cfg.parent
         )
         worker_sandbox = ctx.new_sandbox(task)
@@ -260,7 +263,15 @@ def _policy_c1(
             tools=True,
         )
         grade = ctx.grade(task, worker_sandbox)
-        return _outcome(task, name, trial, [setup, router, worker], grade, chosen=picked)
+        return _outcome(
+            task,
+            name,
+            trial,
+            [setup, router, worker],
+            grade,
+            chosen=picked,
+            router_fallback=fallback,
+        )
     finally:
         ctx.cleanup(sandboxes)
 
@@ -321,7 +332,7 @@ def _policy_c1_inline(
             resumed_from=setup.session_id,
             bill=lambda result: _inline_router_marginal_usage(menu_text, result),
         )
-        picked, _effort, _fallback = _parse_router_choice(
+        picked, _effort, fallback = _parse_router_choice(
             router.output, ctx.cfg.menu, ctx.cfg.parent
         )
         worker_sandbox = ctx.new_sandbox(task)
@@ -334,7 +345,15 @@ def _policy_c1_inline(
             tools=True,
         )
         grade = ctx.grade(task, worker_sandbox)
-        return _outcome(task, name, trial, [setup, router, worker], grade, chosen=picked)
+        return _outcome(
+            task,
+            name,
+            trial,
+            [setup, router, worker],
+            grade,
+            chosen=picked,
+            router_fallback=fallback,
+        )
     finally:
         ctx.cleanup(sandboxes)
 

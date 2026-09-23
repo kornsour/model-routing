@@ -154,7 +154,9 @@ context) is kept as the pessimistic routing variant.
 2. Smoke run of the untested paths on real models
    (`experiments/agentic/exp05_smoke_paths.toml`): `A`, `A_switch`,
    `C1_inline`, and `D` escalating at least once. Surprises recorded in
-   `docs/experiments/findings/`.
+   `docs/experiments/findings/`. Status 2026-09-23: `A`, `A_switch` and
+   `C1_inline` verified (`findings/2026-09-23-exp05-smoke-paths.md`); `D`
+   escalation still to be exercised on a task the cheapest model fails.
 3. `make dispatch-estimate` for the registered policies within budget.
 4. `make dispatch-preregister ... WRITE=1`, commit, then run.
 

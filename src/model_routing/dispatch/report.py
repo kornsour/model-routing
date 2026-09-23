@@ -266,6 +266,7 @@ def _policy_stats(name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
     setup_cost = sum(float(r.get("setup_cost_usd", 0.0)) for r in rows)
     escalations = sum(int(r.get("escalations", 0)) for r in rows)
     errors = sum(int(r.get("errors", 0)) for r in rows)
+    fallbacks = sum(int(bool(r.get("router_fallback", False))) for r in rows)
     full_cost = sum(float(r.get("cost_usd_full", r.get("cost_usd", 0.0))) for r in rows)
     turns = [int(r.get("turns", 0)) for r in rows]
     by_diff: dict[str, list[int]] = defaultdict(lambda: [0, 0])
@@ -292,6 +293,7 @@ def _policy_stats(name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
         "router_share": (router_cost / total_cost) if total_cost else 0.0,
         "escalation_rate": (escalations / n) if n else 0.0,
         "error_rate": (errors / n) if n else 0.0,
+        "router_fallback_rate": (fallbacks / n) if n else 0.0,
         "cost_per_task_full": full_cost / n if n else 0.0,
         "mean_turns": statistics.fmean(turns) if turns else 0.0,
         "setup_cost_usd": setup_cost,
@@ -605,8 +607,8 @@ def _render_markdown(summary: dict[str, Any]) -> str:
         "## Policies",
         "",
         "| policy | n | pass rate (95% CI) | cost/task | cost/pass (95% CI) | router share | "
-        "escalation rate | error rate | mean turns | setup cost |",
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "escalation rate | error rate | router fallback | mean turns | setup cost |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for p in summary["policies"]:
         ci = p.get("pass_ci") or [p["pass_rate"], p["pass_rate"]]
@@ -618,6 +620,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
             f"| {p['name']} | {p['n']} | {p['pass_rate']:.0%} ({ci[0]:.0%}-{ci[1]:.0%}) | "
             f"{_fmt_money(p['cost_per_task'])} | {cpp} | {p['router_share']:.0%} | "
             f"{p['escalation_rate']:.2f} | {p.get('error_rate', 0.0):.2f} | "
+            f"{p.get('router_fallback_rate', 0.0):.2f} | "
             f"{p['mean_turns']:.1f} | {_fmt_money(p['setup_cost_usd'])} |"
         )
     if summary.get("oracle"):
@@ -625,7 +628,7 @@ def _render_markdown(summary: dict[str, Any]) -> str:
         lines.append(
             f"| oracle (computed) | {o['n']} | {o['pass_rate']:.0%} | "
             f"{_fmt_money(o['cost_per_task'])} | {_fmt_money(o['cost_per_pass'])} | - | - | - | - "
-            "| - |"
+            "| - | - |"
         )
     lines += [
         "",

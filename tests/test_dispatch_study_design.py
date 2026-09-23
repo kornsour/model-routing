@@ -83,6 +83,30 @@ def test_c1_inline_bills_marginal_pick_only(tmp_path: Path):
     assert worker_call["prompt"].startswith("A full, self-contained brief")
 
 
+def test_c1_inline_records_fallback_when_parent_gives_no_pick(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "C1_inline"\nkind = "spawn_parent_pick_inline"\n',
+        treatment="C1_inline",
+        control="C1_inline",
+    )
+
+    class NoPickProvider(RecordingProvider):
+        def run(self, model: str, prompt: str, *, workdir: Path, tools: bool = True, **kw: Any):
+            r = super().run(model, prompt, workdir=workdir, tools=tools, **kw)
+            if not tools:
+                r.output = "I'll take a quick look at sync.py first."  # tried to use a tool
+            return r
+
+    out = _run(tmp_path, cfg_path, NoPickProvider(), [make_task()])
+    o = _outcomes(out)[0]
+    assert o["router_fallback"] is True and o["chosen_candidate"] == "opus"
+    summary = summarize(out)
+    stats = next(p for p in summary["policies"] if p["name"] == "C1_inline")
+    assert stats["router_fallback_rate"] == 1.0
+    assert "router fallback" in (out / "summary.md").read_text()
+
+
 # -- ordering ------------------------------------------------------------------
 
 
