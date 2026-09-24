@@ -66,6 +66,17 @@ class UsageLimitHit(RuntimeError):
         self.reset_at = reset_at
 
 
+class ProviderOutage(UsageLimitHit):
+    """A session failed on a provider outage (5xx, overloaded, dropped
+    connection) after the CLI's own retries.  Handled like a usage limit: the
+    cell is abandoned and redone after a pause, never graded (deviation
+    recorded 2026-09-24 in the pre-registration doc)."""
+
+    def __init__(self, detail: str = ""):
+        RuntimeError.__init__(self, f"provider outage {detail}".strip())
+        self.reset_at = None
+
+
 PAUSE_POLL_S = 300
 """Between checks while waiting for a usage limit to reset (unknown reset time)."""
 PAUSE_MAX_S = 8 * 3600
@@ -133,14 +144,21 @@ def _spent_so_far(run_dir: Path) -> float:
 
 
 def _is_limit_error(error: str | None) -> bool:
-    from model_routing.dispatch.agents import usage_limit_reset_at
+    """An account limit or a provider outage: either way the cell measured the
+    provider, not the model, and ``--resume`` redoes it."""
+    from model_routing.dispatch.agents import is_provider_outage, usage_limit_reset_at
 
-    return error == "usage_limit" or usage_limit_reset_at(error or "") is not None
+    return (
+        error == "usage_limit"
+        or usage_limit_reset_at(error or "") is not None
+        or is_provider_outage(error)
+    )
 
 
 def purge_limited_cells(run_dir: Path) -> int:
     """Set aside every outcome whose sessions include an account-limit error
-    (graded as a fail by a harness that did not recognise the wording), plus
+    or a provider outage (graded as a fail by a harness that did not recognise
+    the wording, or that predates outage handling), plus
     those sessions, into ``outcomes.poisoned.jsonl`` / ``sessions.poisoned.jsonl``
     so ``--resume`` redoes the cells.  Returns the number of cells moved."""
     run_dir = Path(run_dir)
@@ -1091,6 +1109,10 @@ def run_dispatch(
                 if verbose:
                     print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} USAGE LIMIT HIT")
                 raise UsageLimitHit(reset_at, f"{policy_name}/{task_id}/{role}")
+            if result.error and _is_limit_error(result.error):
+                if verbose:
+                    print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} PROVIDER OUTAGE")
+                raise ProviderOutage(f"{policy_name}/{task_id}/{role}: {result.error[:200]}")
             price_model = (
                 result.resolved_model
                 if result.resolved_model and prices.get(result.resolved_model)
@@ -1228,7 +1250,7 @@ def run_dispatch(
                     run_state = "paused"
                     emit_progress(
                         f"{task.id} · {policy_spec['name']} · trial {trial}",
-                        f"usage limit hit; waiting {wait / 60:.0f} min before retrying this cell",
+                        f"{hit}; waiting {wait / 60:.0f} min before retrying this cell",
                     )
                     if verbose:
                         print(f"PAUSED: {hit}; retrying in {wait / 60:.0f} min")
