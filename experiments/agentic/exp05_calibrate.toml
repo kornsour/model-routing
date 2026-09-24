@@ -1,0 +1,57 @@
+# Difficulty calibration: every task on every static candidate, so difficulty
+# labels can be *measured* instead of guessed (see
+# src/model_routing/dispatch/calibration.py).  Not a hypothesis test.
+#
+#   make dispatch-estimate EXP=experiments/agentic/exp05_calibrate.toml
+#   make dispatch-run      EXP=experiments/agentic/exp05_calibrate.toml BUDGET=... TRIALS=1
+#   make dispatch-calibration RUNS="results/exp05_calibrate/<stamp> ..." WRITE=1
+#
+# Run it once per task-set batch with trials=1 for a cheap first look, then with
+# trials=3 on the whole set before pre-registering (the label needs more than one
+# roll of the dice per model).  "Done" for the routing study: the cheapest model
+# passes about 50-70% of the set, Sonnet clearly more, Opus most.
+
+[experiment]
+name = "exp05_calibrate"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+trials = 1
+order = "randomized"
+seed = 20260923
+max_turns = 40
+hypothesis = "Calibration only: measured pass rate per task per candidate model."
+primary = { treatment = "static_haiku", control = "static_opus" }
+margin_pp = 10
+max_budget_per_session_usd = 2.0
+parent = "opus"
+menu = ["haiku", "sonnet", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[[policies]]
+name = "static_haiku"
+kind = "spawn_static"
+candidate = "haiku"
+
+[[policies]]
+name = "static_sonnet"
+kind = "spawn_static"
+candidate = "sonnet"
+
+[[policies]]
+name = "static_opus"
+kind = "spawn_static"
+candidate = "opus"

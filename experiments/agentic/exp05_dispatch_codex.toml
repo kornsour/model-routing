@@ -1,37 +1,48 @@
 # Experiment 5 (ChatGPT/Codex track) - dispatch-time routing, same design as
 # exp05_dispatch.toml, run against the Codex CLI / OpenAI candidates instead.
-# See docs/experiments/dispatch-routing.md.
+# A replication on a second model family, not part of H-D1.  See
+# docs/experiments/dispatch-routing.md ("Codex track caveats") for where this
+# track cannot match the Claude one (no in-session spend cap, turn cap counted
+# in tool calls, no-tools = read-only sandbox), checked against codex-cli 0.154.0.
+#
+#   make dispatch-estimate EXP=experiments/agentic/exp05_dispatch_codex.toml
+#   (smoke first: experiments/agentic/exp05_smoke_paths_codex.toml)
 
 [experiment]
 name = "exp05_dispatch_codex"
 kind = "dispatch"
 tasks = "tasks/agentic/tasks.jsonl"
 trials = 3                      # pre-registered
-order = "by_policy"             # by_policy | by_task
+order = "randomized"            # by_policy | by_task | randomized
+seed = 20260923
+max_turns = 40
 hypothesis = "Spawning with the parent-recommended model lowers cost per completed task vs. spawning on the parent model, with pass rate non-inferior within the margin."
-primary = { treatment = "C1", control = "B" }   # pre-registered
-margin_pp = 5                   # pre-registered non-inferiority margin, percentage points
+primary = { treatment = "C1_inline", control = "B" }   # pre-registered (see exp05_dispatch.toml)
+margin_pp = 10                  # pre-registered non-inferiority margin, percentage points (see exp05_dispatch.toml)
 max_budget_per_session_usd = 2.0
 parent = "sol"                  # the model the user's main session runs on
-# The menu the parent (C1) and classifier (C2) choose from, cheapest first.
+# The menu the parent (C1 / C1_inline) and classifier (C2) choose from, cheapest first.
 menu = ["luna", "terra", "sol"]
 
 [auth]
 mode = "subscription"
 
+# Efforts are pinned to the Codex model catalog's defaults as of 2026-09-23
+# (`codex debug models`: luna medium, terra medium, sol low) so a catalog change
+# between runs cannot move them silently.  Because sol already defaults to
+# low, the Claude track's `opus_low` / `static_opus_low` arm has no distinct
+# Codex counterpart (sol supports nothing below low) and is left out.
 [candidates.luna]
 provider = "codex_cli"
 model = "gpt-5.6-luna"
+effort = "medium"
 
 [candidates.terra]
 provider = "codex_cli"
 model = "gpt-5.6-terra"
+effort = "medium"
 
 [candidates.sol]
-provider = "codex_cli"
-model = "gpt-5.6-sol"
-
-[candidates.sol_low]
 provider = "codex_cli"
 model = "gpt-5.6-sol"
 effort = "low"
@@ -51,8 +62,12 @@ kind = "spawn_static"
 candidate = "sol"               # = parent
 
 [[policies]]
-name = "C1"
+name = "C1"                     # pessimistic: forked router call re-reads the parent context
 kind = "spawn_parent_pick"
+
+[[policies]]
+name = "C1_inline"              # realistic: brief + pick in one parent turn (codex exec fork), marginal tokens billed
+kind = "spawn_parent_pick_inline"
 
 [[policies]]
 name = "C2"
@@ -71,7 +86,7 @@ chain = ["luna", "terra", "sol"]
 escalate_on = "hidden"
 
 [[policies]]
-name = "static_haiku"           # naming kept for report comparability; luna is the cheap tier here
+name = "static_haiku"           # name kept for the report's H-D6 comparison; luna is the cheap tier here
 kind = "spawn_static"
 candidate = "luna"
 
@@ -85,8 +100,3 @@ brief = "terse"
 name = "static_sonnet"
 kind = "spawn_static"
 candidate = "terra"
-
-[[policies]]
-name = "static_opus_low"
-kind = "spawn_static"
-candidate = "sol_low"

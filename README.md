@@ -34,8 +34,25 @@ make dispatch-estimate EXP=experiments/agentic/exp05_dispatch.toml   # no spend
 make dispatch-sim EXP=experiments/agentic/exp05_pilot.toml           # full run, fake provider, no spend
 make dispatch-run EXP=experiments/agentic/exp05_dispatch.toml BUDGET=5.00
 make dispatch-report RUN=results/exp05_dispatch/<stamp>
+make dispatch-calibration RUNS="results/exp05_calibrate/<stamp>" WRITE=1   # measured difficulty labels
+make dispatch-preregister EXP=experiments/agentic/exp05_dispatch.toml WRITE=1  # freeze the design
 make harvest-chips                                                   # scan local transcripts for task chips
 ```
+
+The confirmatory run is pre-registered: see
+[`docs/experiments/preregistration-exp05.md`](docs/experiments/preregistration-exp05.md)
+for the hypothesis, margin, decision rule, sample size and the gates that
+must be met before it runs.
+
+`make dispatch-paper RUNS="results/exp05_dispatch/<stamp>" [OUT=...]` turns
+one or more run directories (pooled when several) into a Markdown white-paper
+draft under `docs/experiments/findings/`: methods, provenance hashes, the
+policy and comparison tables with CIs and p-values, per-difficulty pass
+rates, a pessimistic re-billing of `C1_inline`, a threats-to-validity
+checklist and a per-task pass/fail appendix. Numbers are computed
+deterministically; interpretation is left as `[TODO: author]`, and no model
+output is copied into the draft. The lab's run view (`make app`) shows the
+same confirmatory/exploratory status, p-values and intervals.
 
 ## Layout
 
@@ -54,7 +71,7 @@ src/model_routing/
   cli.py          model-routing smoke | estimate | run | report | dashboard
   dispatch/       agentic, dispatch-time routing (see docs/experiments/dispatch-routing.md):
                     types.py runner.py policies.py report.py agents.py tasks.py
-                    sandbox.py grading.py harvest.py api.py
+                    sandbox.py grading.py harvest.py api.py calibration.py
 tasks/llm/        task sets (JSONL) + shared context documents
 tasks/agentic/    fixture repos + briefs for dispatch experiments
 experiments/llm/  one TOML per single-shot experiment
@@ -73,6 +90,8 @@ results/          run output (git-ignored); promote findings to docs/experiments
 | `exp05_dispatch` (agentic) | Does dispatch-time routing (letting the parent pick the model when it spawns a task) lower cost per completed task? See `docs/experiments/dispatch-routing.md`. |
 | `exp05_dispatch_codex` (agentic) | Same design, ChatGPT/Codex candidates |
 | `exp05_pilot` (agentic) | Small, cheap pilot to size variance/cost before the confirmatory run |
+| `exp05_calibrate` (agentic) | Every task on every static candidate: measured difficulty labels and the routing-headroom gate |
+| `exp05_smoke_paths` (agentic) | Exercise A, A_switch, C1_inline and cascade escalation on real models before registering |
 
 ## Data safety
 

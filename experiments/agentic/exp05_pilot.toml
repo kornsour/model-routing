@@ -8,7 +8,9 @@ name = "exp05_pilot"
 kind = "dispatch"
 tasks = "tasks/agentic/tasks.jsonl"
 trials = 1
-order = "by_policy"
+order = "randomized"
+seed = 20260923
+max_turns = 40
 hypothesis = "Pilot only: sizes cost and variance for exp05_dispatch before the confirmatory run."
 primary = { treatment = "C1", control = "B" }
 margin_pp = 5
@@ -44,6 +46,10 @@ candidate = "opus"
 [[policies]]
 name = "C1"
 kind = "spawn_parent_pick"
+
+[[policies]]
+name = "C1_inline"
+kind = "spawn_parent_pick_inline"
 
 [[policies]]
 name = "D"

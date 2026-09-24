@@ -7,6 +7,7 @@ model-routing report   results/<experiment>/<run>
 model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
 model-routing dispatch-run      experiments/agentic/exp05_dispatch.toml --budget-usd X
 model-routing dispatch-report   results/<experiment>/<run>
+model-routing dispatch-paper    results/<experiment>/<run> [more runs] [--out draft.md]
 model-routing harvest-chips
 """
 
@@ -192,8 +193,12 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
         f"(mid ${est['usd_mid']:.2f}) over {est['sessions']} sessions. "
         f"Budget: ${args.budget_usd:.2f}."
     )
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    out = Path(args.out) / cfg.name / (("fake-" if args.fake else "") + stamp)
+    if args.resume:
+        out = Path(args.resume)
+        print(f"Resuming {out}: cells already in outcomes.jsonl are skipped.")
+    else:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out = Path(args.out) / cfg.name / (("fake-" if args.fake else "") + stamp)
     run_dispatch(
         cfg,
         out_dir=out,
@@ -203,6 +208,7 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
         policies=policies,
         fake=args.fake,
         keep_sandboxes=args.keep_sandboxes,
+        resume=bool(args.resume),
     )
     from model_routing.dispatch.report import summarize
 
@@ -221,6 +227,61 @@ def cmd_dispatch_report(args: argparse.Namespace) -> int:
     summary = summarize(args.run_dir)
     print(summary["headline"])
     print(f"summary: {Path(args.run_dir) / 'summary.md'}")
+    return 0
+
+
+def cmd_dispatch_paper(args: argparse.Namespace) -> int:
+    from datetime import date
+
+    from model_routing.dispatch.paper import render_paper
+
+    default = f"docs/experiments/findings/{date.today().isoformat()}-exp05-paper-draft.md"
+    out = args.out or default
+    path = render_paper([Path(d) for d in args.run_dirs], out=Path(out))
+    print(f"paper draft: {path}")
+    return 0
+
+
+def cmd_dispatch_calibration(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.calibration import (
+        calibration_table,
+        relabel_tasks,
+        render_calibration,
+    )
+
+    table = calibration_table(list(args.run_dirs))
+    if not table:
+        print("no static/cascade outcomes found in those run directories")
+        return 1
+    print(render_calibration(table))
+    if args.write:
+        counts = relabel_tasks(args.tasks, table)
+        print(
+            f"relabelled {counts['relabelled']} task(s) in {args.tasks}; "
+            f"{counts['unchanged']} unchanged, {counts['uncalibrated']} without data"
+        )
+        print("Re-run `make check`, then `dispatch-preregister` before the confirmatory run.")
+    return 0
+
+
+def cmd_dispatch_preregister(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.calibration import preregistration_block
+    from model_routing.dispatch.runner import load_dispatch_config
+
+    cfg = load_dispatch_config(args.config)
+    block = preregistration_block(cfg, n_tasks=args.n_tasks)
+    if args.write:
+        import tomllib
+
+        text = Path(args.config).read_text()
+        if "[preregistration]" in text:
+            print(f"{args.config} already has a [preregistration] table; refusing to overwrite.")
+            print("Remove it by hand if you really intend to re-register (and say why in the doc).")
+            return 1
+        Path(args.config).write_text(text.rstrip("\n") + "\n\n" + block)
+        tomllib.loads(Path(args.config).read_text())  # must still parse
+        print(f"appended to {args.config}:\n")
+    print(block)
     return 0
 
 
@@ -399,6 +460,12 @@ def main(argv: list[str] | None = None) -> int:
         "--keep-sandboxes", action="store_true", help="do not delete sandbox copies after grading"
     )
     dr.add_argument("--out", default="results")
+    dr.add_argument(
+        "--resume",
+        metavar="RUN_DIR",
+        help="continue an existing run directory (same config, sample, trials, policies); "
+        "completed cells are skipped",
+    )
     dr.set_defaults(fn=cmd_dispatch_run)
 
     drp = sub.add_parser(
@@ -406,6 +473,36 @@ def main(argv: list[str] | None = None) -> int:
     )
     drp.add_argument("run_dir")
     drp.set_defaults(fn=cmd_dispatch_report)
+
+    dpp = sub.add_parser(
+        "dispatch-paper",
+        help="render a white-paper Markdown draft from dispatch run dir(s) (pooled if several)",
+    )
+    dpp.add_argument("run_dirs", nargs="+", help="one or more results/<exp>/<stamp> directories")
+    dpp.add_argument(
+        "--out", help="output .md (default: docs/experiments/findings/<date>-exp05-paper-draft.md)"
+    )
+    dpp.set_defaults(fn=cmd_dispatch_paper)
+
+    dc = sub.add_parser(
+        "dispatch-calibration",
+        help="measured per-task pass rates by model from calibration run(s); --write relabels",
+    )
+    dc.add_argument("run_dirs", nargs="+", help="one or more results/<exp>/<stamp> directories")
+    dc.add_argument("--tasks", default="tasks/agentic/tasks.jsonl")
+    dc.add_argument(
+        "--write", action="store_true", help="rewrite difficulty labels in --tasks from the data"
+    )
+    dc.set_defaults(fn=cmd_dispatch_calibration)
+
+    dp = sub.add_parser(
+        "dispatch-preregister",
+        help="print (or --write) the [preregistration] table freezing a config + task set",
+    )
+    dp.add_argument("config")
+    dp.add_argument("--n-tasks", type=int, help="registered task count (default: all tasks)")
+    dp.add_argument("--write", action="store_true", help="append the table to the config file")
+    dp.set_defaults(fn=cmd_dispatch_preregister)
 
     hc = sub.add_parser(
         "harvest-chips", help="scan local Claude Code transcripts for spawned task chips"

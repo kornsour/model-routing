@@ -1,6 +1,9 @@
 import http.client
 import json
+import re
+import shutil
 import socket
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -83,6 +86,8 @@ def _build_summary(cfg, out_dir, fake, total, trials, spent) -> dict:
                 "cost_per_pass_ci": [0.1, 0.2],
                 "router_share": 0.0,
                 "escalation_rate": 0.0,
+                "error_rate": 0.1,
+                "cost_per_task_full": 0.1,
                 "mean_turns": 3.0,
                 "setup_cost_usd": 0.0,
                 "by_difficulty": {},
@@ -98,6 +103,8 @@ def _build_summary(cfg, out_dir, fake, total, trials, spent) -> dict:
                 "cost_per_pass_ci": [0.07, 0.11],
                 "router_share": 0.1,
                 "escalation_rate": 0.0,
+                "error_rate": 0.0,
+                "cost_per_task_full": 0.12,
                 "mean_turns": 2.5,
                 "setup_cost_usd": 0.0,
                 "by_difficulty": {},
@@ -110,15 +117,50 @@ def _build_summary(cfg, out_dir, fake, total, trials, spent) -> dict:
                 "id": "H-D1",
                 "treatment": "C1",
                 "control": "B",
+                "n_paired": total,
+                "task_clusters": total,
                 "delta_pass_pp": 10.0,
                 "delta_pass_ci": [-2.0, 20.0],
-                "saving_pct": 0.28,
-                "saving_ci": [0.1, 0.4],
+                "saving_pct": 28.0,
+                "saving_ci": [10.0, 40.0],
+                "discordant_rate": 0.2,
+                "p_saving": 0.0634,
+                "p_pass": 0.5,
+                "p_noninf": 0.0004,
+                "p_adjusted": None,
+                "role": "primary",
                 "verdict": "supported",
                 "sentence": "C1 costs less with no meaningful quality loss.",
-            }
+            },
+            {
+                "id": "H-D5",
+                "treatment": "C1",
+                "control": "C2",
+                "n_paired": total,
+                "task_clusters": total,
+                "delta_pass_pp": -5.0,
+                "delta_pass_ci": [-25.0, 10.0],
+                "saving_pct": -12.0,
+                "saving_ci": [-40.0, 15.0],
+                "discordant_rate": 0.3,
+                "p_saving": 0.21,
+                "p_pass": 0.8,
+                "p_noninf": 0.3,
+                "p_adjusted": 0.42,
+                "role": "secondary (exploratory)",
+                "verdict": "inconclusive",
+                "sentence": "C1 vs C2: too wide to call.",
+            },
         ],
         "headline": "C1 saves money over B with non-inferior quality.",
+        "confirmatory": False,
+        "preregistration": {
+            "confirmatory": False,
+            "registered": True,
+            "deviations": ["fake provider run", "trials: run has 1, registered 3"],
+        },
+        "power_note": "Primary comparison needs about 98 paired task-trials; this run has "
+        f"{total} - too few.",
     }
 
 
@@ -441,3 +483,144 @@ def test_fake_run_flow_over_http(running_server):
     assert status == 200
     summary = json.loads(body)
     assert summary["comparisons"][0]["id"] == "H-D1"
+
+
+# --------------------------------------------------------------------------
+# Run report rendering (the pure <script id="run-render"> block, under Node)
+# --------------------------------------------------------------------------
+
+WEB_HTML = ROOT / "src" / "model_routing" / "dispatch" / "web.html"
+NODE = shutil.which("node")
+
+
+def _render_block() -> str:
+    match = re.search(r'<script id="run-render">(.*?)</script>', WEB_HTML.read_text(), re.S)
+    assert match, "web.html must keep the pure render block"
+    return match.group(1)
+
+
+def render_with_node(summary: dict) -> dict:
+    assert NODE is not None
+    script = (
+        "globalThis.window = globalThis;\n"
+        + _render_block()
+        + "\nconst s = JSON.parse(require('fs').readFileSync(0, 'utf8'));"
+        + "\nprocess.stdout.write(JSON.stringify({"
+        + "html: window.DispatchRender.runViewHtml(s),"
+        + " md: window.DispatchRender.runMarkdown(s)}));"
+    )
+    proc = subprocess.run(
+        [NODE, "-e", script],
+        input=json.dumps(summary),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    return json.loads(proc.stdout)
+
+
+def _sample_summary(**overrides) -> dict:
+    summary = _build_summary(fake_config(Path("tasks.jsonl")), Path("run"), True, 4, 1, 0.2)
+    summary.update(overrides)
+    return summary
+
+
+def test_page_has_statistics_columns():
+    html = WEB_HTML.read_text()
+    for needle in (
+        '<script id="run-render">',
+        "p_saving",
+        "p_adj",
+        "p_pass",
+        "p_noninf",
+        "Error rate",
+        "Pass rate (95% CI)",
+        "Cost/completed task (95% CI)",
+        "power_note",
+        "status-banner",
+    ):
+        assert needle in html, needle
+
+
+def test_get_run_and_history_pass_new_statistics_through(tmp_path, monkeypatch):
+    tasks = _tasks_file(tmp_path)
+    patch_api(monkeypatch, tasks)
+    run_dir = tmp_path / "exp05_dispatch" / "20260923T000000Z"
+    run_dir.mkdir(parents=True)
+    (run_dir / "summary.json").write_text(json.dumps(_sample_summary()))
+    lab = DispatchLab(ROOT, tmp_path)
+    summary = lab.get_run("exp05_dispatch/20260923T000000Z")
+    assert summary["confirmatory"] is False
+    assert summary["preregistration"]["deviations"][0] == "fake provider run"
+    assert summary["comparisons"][0]["p_noninf"] == 0.0004
+    assert summary["policies"][0]["error_rate"] == 0.1
+    (entry,) = lab.history()
+    assert entry["confirmatory"] is False
+
+
+@pytest.mark.skipif(NODE is None, reason="node is needed to execute the page's render block")
+def test_run_view_renders_status_p_values_cis_and_power():
+    out = render_with_node(_sample_summary())
+    html = out["html"]
+    # Exploratory banner with every deviation.
+    assert "Exploratory run" in html
+    assert "deviates from the pre-registration" in html
+    assert "<li>fake provider run</li>" in html
+    assert "<li>trials: run has 1, registered 3</li>" in html
+    # Comparisons table: p-value columns and roles.
+    for header in ("p_saving", "p_adj", "p_pass", "p_noninf"):
+        assert f'<th class="num">{header}</th>' in html
+    assert '<span class="role primary">primary</span>' in html
+    assert '<span class="role secondary">secondary (exploratory)</span>' in html
+    assert '<td class="num">0.063</td>' in html  # p_saving 0.0634
+    assert '<td class="num">&lt;0.001</td>' in html  # p_noninf 0.0004
+    assert '<td class="num">0.420</td>' in html  # Holm-adjusted H-D5
+    assert "28% <span" in html and "(+10 to +40)" in html
+    assert "(-25.0 to +10.0)" in html
+    # Policies table: pass-rate CI, cost-per-pass CI, error rate.
+    assert "(50.0–100.0%)" in html
+    assert "($0.1000–$0.2000)" in html
+    assert '<td class="num warn-text">10%</td>' in html
+    assert '<th class="num">Error rate</th>' in html
+    # Power note.
+    assert "Primary comparison needs about 98 paired task-trials" in html
+    # Markdown copy carries the same statistics.
+    md = out["md"]
+    assert "Status: **exploratory: fake provider run; trials: run has 1, registered 3**" in md
+    h_d1_row = "| H-D1 | primary | C1 vs B | 28 | 0.063 | – | +10.0 | 0.500 | <0.001 | supported |"
+    assert h_d1_row in md
+
+
+@pytest.mark.skipif(NODE is None, reason="node is needed to execute the page's render block")
+def test_run_view_confirmatory_and_legacy_summaries():
+    confirmed = _sample_summary(
+        confirmatory=True,
+        preregistration={"confirmatory": True, "registered": True, "deviations": []},
+    )
+    html = render_with_node(confirmed)["html"]
+    assert "Confirmatory run" in html and "Exploratory run" not in html
+
+    legacy = _sample_summary()
+    for key in ("confirmatory", "preregistration", "power_note"):
+        legacy.pop(key)
+    for c in legacy["comparisons"]:
+        for key in ("p_saving", "p_pass", "p_noninf", "p_adjusted", "role"):
+            c.pop(key)
+    html = render_with_node(legacy)["html"]
+    assert "Status unknown" in html
+    assert '<span class="role primary">primary</span>' in html  # inferred for H-D1
+
+
+@pytest.mark.skipif(NODE is None, reason="node is needed to execute the page's render block")
+def test_run_view_escapes_deviation_text():
+    evil = _sample_summary(
+        preregistration={
+            "confirmatory": False,
+            "registered": True,
+            "deviations": ["<img src=x onerror=alert(1)>"],
+        }
+    )
+    html = render_with_node(evil)["html"]
+    assert "<img src=x" not in html
+    assert "&lt;img src=x onerror=alert(1)&gt;" in html

@@ -1,4 +1,5 @@
-"""Policy implementations: ``A``, ``A_switch``, ``B``, ``C1``, ``C2``, ``D``, ``static``.
+"""Policy implementations: ``A``, ``A_switch``, ``B``, ``C1``, ``C1_inline``, ``C2``, ``D``,
+``static``.
 
 Each policy function takes a policy spec (one ``[[policies]]`` table from the config),
 the ``AgentTask`` and trial number, and a ``PolicyRunContext`` (supplied by
@@ -25,7 +26,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from model_routing.dispatch.types import AgentTask, DispatchOutcome, GradeResult, SessionRecord
+from model_routing.dispatch.types import (
+    AgentResult,
+    AgentTask,
+    DispatchOutcome,
+    GradeResult,
+    SessionRecord,
+)
+from model_routing.types import Usage
 
 if TYPE_CHECKING:
     from model_routing.dispatch.runner import DispatchConfig
@@ -60,6 +68,24 @@ ROUTER_PROMPT_C1 = (
     '{{"candidate": "<menu name>", "effort": "<low|default|high>", "reason": "<one sentence>"}}'
 )
 
+ROUTER_PROMPT_C1_INLINE = (
+    "You are about to hand off the following piece of work to a fresh agent session, which "
+    "will not see this conversation. Write the self-contained brief you would give it (goal, "
+    "files, acceptance criteria, constraints) from what you already know in this session. "
+    "Tools are disabled for this reply: do not try to read files or run commands, just write.\n\n"
+    "Work to hand off:\n{title}\n\n"
+    "Then, on the very last line of your reply and nothing after it, choose which model the "
+    "fresh session should run on. Pick the cheapest one from the menu you are confident can "
+    "complete the work correctly (prices are relative to your own):\n{menu}\n\n"
+    "Last line, JSON only, exactly this shape:\n"
+    '{{"candidate": "<menu name>", "effort": "<low|default|high>", "reason": "<one sentence>"}}'
+)
+"""The parent writes the brief *and* the pick in one turn, which is what a
+real spawner does.  Only the pick's marginal tokens are billed to the task
+(``_inline_router_marginal_usage``); the brief-writing turn is the sunk cost
+of spawning at all, and the fresh worker still gets the canned ``task.brief``
+so that C1_inline and B differ *only* in the model, not in brief quality."""
+
 CLASSIFIER_PROMPT_C2 = (
     "Rate how much model capability the following task brief needs, and pick the cheapest "
     "candidate from the menu below that can do it. You do not have any other context.\n\n"
@@ -67,7 +93,9 @@ CLASSIFIER_PROMPT_C2 = (
     'Respond with JSON only: {{"candidate": "<menu name>"}}'
 )
 
-_JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
+_JSON_RE = re.compile(r"\{[^{}]*\}(?!.*\{[^{}]*\})", re.DOTALL)
+"""The last brace-delimited object in the output: an inline router reply is a brief
+(which may itself contain braces in code) followed by the pick JSON on its final line."""
 
 
 def _brief(task: AgentTask, spec: dict[str, Any]) -> str:
@@ -132,6 +160,7 @@ def _outcome(
     *,
     chosen: str | None = None,
     escalations: int = 0,
+    router_fallback: bool = False,
 ) -> DispatchOutcome:
     return DispatchOutcome(
         task_id=task.id,
@@ -143,6 +172,7 @@ def _outcome(
         category=task.category,
         chosen_candidate=chosen,
         escalations=escalations,
+        router_fallback=router_fallback,
     )
 
 
@@ -220,7 +250,7 @@ def _policy_c1(
             tools=False,
             resumed_from=setup.session_id,
         )
-        picked, _effort, _fallback = _parse_router_choice(
+        picked, _effort, fallback = _parse_router_choice(
             router.output, ctx.cfg.menu, ctx.cfg.parent
         )
         worker_sandbox = ctx.new_sandbox(task)
@@ -233,7 +263,97 @@ def _policy_c1(
             tools=True,
         )
         grade = ctx.grade(task, worker_sandbox)
-        return _outcome(task, name, trial, [setup, router, worker], grade, chosen=picked)
+        return _outcome(
+            task,
+            name,
+            trial,
+            [setup, router, worker],
+            grade,
+            chosen=picked,
+            router_fallback=fallback,
+        )
+    finally:
+        ctx.cleanup(sandboxes)
+
+
+def _approx_tokens(text: str) -> int:
+    """Chars/4: a deliberately simple, stated approximation (no tokenizer at runtime)."""
+    return max(1, len(text) // 4)
+
+
+def _inline_router_marginal_usage(menu_text: str, result: AgentResult) -> Usage:
+    """Tokens the model choice *added* to a brief-writing turn the parent runs anyway.
+
+    Input: the menu and the pick instruction (uncached, since they are new text).
+    Output: the JSON line with the pick.  Everything else in the turn - reading the
+    parent context, writing the brief - is the cost of spawning at all and is
+    recorded on the session but not billed to the task."""
+    instruction = (
+        "Then, on the very last line of your reply and nothing after it, choose which model the "
+        "fresh session should run on. Pick the cheapest one from the menu you are confident can "
+        "complete the work correctly (prices are relative to your own):\n"
+        "Last line, JSON only, exactly this shape:\n"
+        '{"candidate": "<menu name>", "effort": "<low|default|high>", "reason": "<one sentence>"}'
+    )
+    m = _JSON_RE.search(result.output or "")
+    pick_text = m.group(0) if m else ""
+    return Usage(
+        input_tokens=_approx_tokens(menu_text + instruction),
+        output_tokens=_approx_tokens(pick_text) if pick_text else 0,
+    )
+
+
+def _policy_c1_inline(
+    name: str, spec: dict[str, Any], task: AgentTask, trial: int, ctx: PolicyRunContext
+) -> DispatchOutcome:
+    """C1_inline: the parent writes the brief and the pick in one forked turn; the task is
+    billed only the marginal tokens of the pick (the realistic routing overhead).  The
+    forked C1 (``_policy_c1``) stays as the pessimistic variant."""
+    setup_sandbox = ctx.new_sandbox(task)
+    sandboxes = [setup_sandbox]
+    try:
+        setup = ctx.run_session(
+            ctx.cfg.parent,
+            role="setup",
+            prompt=SETUP_PROMPT.format(parent_context=task.parent_context),
+            workdir=setup_sandbox.path,
+            tools=True,
+        )
+        router_prompt = ROUTER_PROMPT_C1_INLINE.format(title=task.title, menu=ctx.menu_text)
+        menu_text = ctx.menu_text
+        router = ctx.run_session(
+            ctx.cfg.parent,
+            role="router",
+            prompt=router_prompt,
+            workdir=setup_sandbox.path,
+            resume_session=setup.session_id,
+            fork=True,
+            tools=False,
+            resumed_from=setup.session_id,
+            bill=lambda result: _inline_router_marginal_usage(menu_text, result),
+        )
+        picked, _effort, fallback = _parse_router_choice(
+            router.output, ctx.cfg.menu, ctx.cfg.parent
+        )
+        worker_sandbox = ctx.new_sandbox(task)
+        sandboxes.append(worker_sandbox)
+        worker = ctx.run_session(
+            picked,
+            role="worker",
+            prompt=_brief(task, spec),
+            workdir=worker_sandbox.path,
+            tools=True,
+        )
+        grade = ctx.grade(task, worker_sandbox)
+        return _outcome(
+            task,
+            name,
+            trial,
+            [setup, router, worker],
+            grade,
+            chosen=picked,
+            router_fallback=fallback,
+        )
     finally:
         ctx.cleanup(sandboxes)
 
@@ -315,6 +435,7 @@ _DISPATCH = {
     "in_session": _policy_in_session,
     "spawn_static": _policy_spawn_static,
     "spawn_parent_pick": _policy_c1,
+    "spawn_parent_pick_inline": _policy_c1_inline,
     "spawn_classifier": _policy_c2,
     "spawn_cascade": _policy_d,
 }

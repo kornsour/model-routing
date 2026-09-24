@@ -17,16 +17,19 @@ per-``assistant``-message usage would double count retries and is wrong.
 Tool calls are not in ``result``, so they are counted separately by walking
 ``assistant`` events for ``tool_use`` content blocks.  Codex's
 ``codex exec --json`` stream has no single terminal totals event; usage comes
-from ``turn.completed``, mirroring ``providers/codex_cli.py``.
+from ``turn.completed`` (thread-cumulative: see ``CodexAgentProvider``).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import shutil
+import signal
 import subprocess
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -181,6 +184,36 @@ class ClaudeAgentProvider:
         return result
 
 
+_USAGE_LIMIT_RE = re.compile(
+    r"usage limit reached(?:\|(?P<epoch>\d{9,11}))?"
+    r"|(?:usage|spend|spending|monthly|weekly|session) limit"
+    r"|limit resets"
+    r"|rate.?limit"
+    r"|\b429\b"
+    r"|out of extra usage",
+    re.IGNORECASE,
+)
+"""Every wording the Claude CLI has used for an account limit.  Seen on
+2026-09-23: "You've hit your monthly spend limit · raise it at ... · your
+session limit resets 5:40pm (America/Detroit)" (no epoch, so the runner
+polls).  Keep this broad: a limit graded as a fail poisons a whole run."""
+
+
+def usage_limit_reset_at(text: str) -> float | None:
+    """If ``text`` (a result/error message or stderr) says the subscription or
+    API usage limit was hit, return the reset time as a unix timestamp when the
+    message carries one (``Claude AI usage limit reached|<epoch>``), else 0.0
+    (limit hit, reset time unknown).  ``None`` means it is not a limit error.
+    A limit hit is a *pause* condition for the runner, never a graded fail."""
+    if not text:
+        return None
+    m = _USAGE_LIMIT_RE.search(text)
+    if not m:
+        return None
+    epoch = m.groupdict().get("epoch")
+    return float(epoch) if epoch else 0.0
+
+
 def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentResult:
     """Fold ``--output-format stream-json`` events into one :class:`AgentResult`.
 
@@ -213,8 +246,14 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
     if result_event is None:
         err_tail = (stderr or "").strip()[-300:]
         detail = f"missing result event: {err_tail}" if err_tail else "missing result event"
+        reset = usage_limit_reset_at((stderr or "") + "\n" + stdout[-2000:])
         return AgentResult(
-            output="", usage=Usage(), duration_ms=wall_ms, tool_calls=tool_calls, error=detail
+            output="",
+            usage=Usage(),
+            duration_ms=wall_ms,
+            tool_calls=tool_calls,
+            error="usage_limit" if reset is not None else detail,
+            raw={"usage_limit_reset_at": reset} if reset is not None else None,
         )
     data = result_event
     u = data.get("usage") or {}
@@ -232,12 +271,16 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
         key = list(model_usage)[-1]
         resolved = model_usage[key].get("canonicalModel") or key
     error = None
+    reset: float | None = None
     if data.get("is_error"):
         text = data.get("result")
         if not text:
             errors = data.get("errors")
             text = "; ".join(errors) if errors else "error"
         error = str(text)[:500]
+        reset = usage_limit_reset_at(str(text) + "\n" + (stderr or ""))
+        if reset is not None:
+            error = "usage_limit"
     return AgentResult(
         output=str(data.get("result", "")),
         usage=usage,
@@ -255,6 +298,7 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             "terminal_reason": data.get("terminal_reason"),
             "modelUsage": model_usage or None,
             "permission_denials": len(data.get("permission_denials") or []),
+            "usage_limit_reset_at": reset,
         },
     )
 
@@ -263,24 +307,118 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
 # Codex
 # --------------------------------------------------------------------------- #
 
+CODEX_CLI_VERSION_CHECKED = "0.154.0"
+"""The ``codex-cli`` version the flags below were checked against (``--help`` of
+``codex exec``, ``codex exec resume`` and ``codex exec fork``, and the
+``rust-v0.154.0`` source of ``codex-rs/exec``)."""
+
+# Applied to every Codex session (fresh, resume, fork), so a run measures the
+# model and the task rather than the operator's local Codex setup - the
+# counterpart of the Claude track's ``--setting-sources "" --strict-mcp-config``.
+# Every flag and value was validated against 0.154.0's config loader (an
+# unknown feature or value is a hard error there).
+CODEX_ISOLATION_ARGS: tuple[str, ...] = (
+    "--ignore-user-config",  # no ~/.codex/config.toml (auth still comes from CODEX_HOME)
+    "--ignore-rules",  # no user execpolicy rules: approved prefixes would run *outside* the sandbox
+    "--skip-git-repo-check",
+    # Nothing that reaches past the sandbox, spawns sub-agents on other models,
+    # or carries state between trials (memories).
+    "--disable",
+    "plugins",
+    "--disable",
+    "apps",
+    "--disable",
+    "memories",
+    "--disable",
+    "multi_agent",
+    "--disable",
+    "image_generation",
+    "--disable",
+    "browser_use",
+    "--disable",
+    "computer_use",
+    "-c",
+    'web_search="disabled"',
+    "-c",
+    "sandbox_workspace_write.network_access=false",
+)
+
+# ``tools=False`` (router / classifier calls).  Claude gets ``--tools ""``;
+# Codex has no switch that removes every tool, so: the read-only sandbox (the
+# hard guarantee - no file can change), the shell tools switched off, and a
+# one-line notice appended to the prompt so the model does not burn turns on
+# tool calls that would be refused anyway.
+CODEX_NO_TOOLS_ARGS: tuple[str, ...] = ("--disable", "shell_tool", "--disable", "unified_exec")
+CODEX_NO_TOOLS_NOTICE = (
+    "\n\n(Answer from this conversation alone: do not run commands, read files, "
+    "or modify any files.)"
+)
+
+_CODEX_TOOL_ITEM_TYPES = frozenset(
+    {
+        "file_change",
+        "command_execution",
+        "mcp_tool_call",
+        "collab_tool_call",
+        "web_search",
+        "local_shell_call",
+    }
+)
+_CODEX_USAGE_KEYS: tuple[str, ...] = (
+    "input_tokens",
+    "cached_input_tokens",
+    "cache_write_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+)
+
 
 class CodexAgentProvider:
-    """``codex exec`` / ``codex exec resume`` with JSONL parsing.
+    """``codex exec`` / ``codex exec resume`` / ``codex exec fork`` with JSONL parsing.
 
-    Two contract gaps versus Claude, both real CLI limitations (codex-cli
-    0.154.0), not oversights here:
+    Checked against codex-cli 0.154.0 (``CODEX_CLI_VERSION_CHECKED``).  How each
+    part of the dispatch contract maps onto that CLI:
 
-    * No ``--max-budget-usd`` equivalent - Codex never stops itself on spend,
-      so the runner must police the budget from the outside (e.g. checking
-      cost after each session, or a hard wall-clock ``timeout_s``).
-    * No ``-s``/``-C`` (sandbox mode / working directory) on ``codex exec
-      resume`` - a resumed session keeps the sandbox and directory it was
-      started with. Callers must always resume a session in the same
-      ``workdir`` it was created in.
-    * No session fork: ``codex exec`` does have an undocumented-here ``fork``
-      subcommand, but per this workstream's contract we do not use it -
-      ``fork=True`` with a ``resume_session`` still just resumes in place
-      (same session id continues), and that is recorded in ``raw``.
+    * **Sandbox.**  ``resume`` and ``fork`` accept neither ``-s`` nor ``-C``, but
+      they do *not* inherit the original session's sandbox either: 0.154.0
+      builds the resumed/forked thread's sandbox and cwd from the *current*
+      invocation's config (``thread_resume_params_from_config`` in
+      ``codex-rs/exec/src/lib.rs``).  So every call passes
+      ``-c sandbox_mode=...`` explicitly (fresh sessions also get ``-s``), and
+      the process cwd is ``workdir``.  Without it a resumed ``tools=True``
+      worker (A / A_switch) would fall back to the default sandbox, and a
+      resumed ``tools=False`` router could get a writable one.
+    * **Fork.**  0.154.0 has ``codex exec fork <id>``: a new thread seeded
+      with the parent's history, the parent left untouched - the same
+      semantics as Claude's ``--resume --fork-session``, so ``fork=True`` uses
+      it.  ``raw`` records ``forked`` and ``forked_from``.
+    * **No tools.**  ``tools=False`` means a read-only sandbox plus
+      ``CODEX_NO_TOOLS_ARGS`` plus ``CODEX_NO_TOOLS_NOTICE`` on the prompt; a
+      no-tools call can never change a file, but unlike Claude's
+      ``--tools ""`` the model may still *attempt* a tool call (counted in
+      ``tool_calls``).
+    * **Turn cap.**  Codex has no ``--max-turns``.  The provider streams the
+      JSONL and stops the session (whole process group) once it has made more
+      than ``max_turns`` tool calls - an approximation: Claude counts model
+      turns, and one Codex turn can batch several tool calls, so the Codex
+      cap binds no later than Claude's.  ``error = "max_turns"``.
+    * **Spend cap.**  No ``--max-budget-usd`` equivalent and no stable config
+      knob (``token_budget`` / ``rollout_budget`` are "under development" in
+      0.154.0), so ``max_budget_usd`` is ignored and the budget is policed
+      only *between* sessions by the runner; the wall-clock ``timeout_s`` is
+      the only hard stop inside one.  ``error = "timeout"``.
+    * **Usage.**  ``turn.completed`` carries the *thread's cumulative* totals,
+      and resume/fork seed those totals from the parent's rollout
+      (``codex-rs/core/src/session/mod.rs``), so a resumed or forked session
+      would re-bill its parent.  The provider subtracts the parent's last
+      known totals (from an earlier call on this instance, else the parent's
+      rollout file).  When the stream has no totals (timeout, cap, failed
+      turn) the tokens actually spent are read back from the session's
+      rollout file under ``$CODEX_HOME/sessions`` so an interrupted session is
+      still billed (intention to treat).  ``raw["usage_source"]`` says which.
+
+    Every failure mode returns an :class:`AgentResult` with ``error`` set and
+    never raises, so the runner grades the sandbox as the agent left it.
     """
 
     name = "codex_cli"
@@ -288,6 +426,9 @@ class CodexAgentProvider:
     def __init__(self, binary: str = "codex", env: dict[str, str] | None = None):
         self.binary = binary
         self.env = env
+        # thread id -> last cumulative raw usage totals seen for it, so a later
+        # resume/fork of that thread is billed only its own tokens.
+        self._thread_totals: dict[str, dict[str, int]] = {}
 
     def build_args(
         self,
@@ -299,37 +440,24 @@ class CodexAgentProvider:
         effort: str | None,
         resume_session: str | None,
         tools: bool,
+        fork: bool = False,
     ) -> list[str]:
         full_prompt = prompt if not system else f"<context>\n{system}\n</context>\n\n{prompt}"
+        if not tools:
+            full_prompt += CODEX_NO_TOOLS_NOTICE
         sandbox = "workspace-write" if tools else "read-only"
         if resume_session:
-            args = [
-                self.binary,
-                "exec",
-                "resume",
-                resume_session,
-                "--json",
-                "--ignore-user-config",
-                "--skip-git-repo-check",
-                "-m",
-                model,
-            ]
+            # No -s/-C on resume/fork: the sandbox comes from -c below and the
+            # cwd from the process cwd (run() uses workdir).
+            args = [self.binary, "exec", "fork" if fork else "resume", resume_session]
         else:
-            args = [
-                self.binary,
-                "exec",
-                "--json",
-                "--ignore-user-config",
-                "--skip-git-repo-check",
-                "-s",
-                sandbox,
-                "-C",
-                str(workdir),
-                "-m",
-                model,
-            ]
+            args = [self.binary, "exec", "-s", sandbox, "-C", str(workdir)]
+        args += ["--json", *CODEX_ISOLATION_ARGS, "-c", f'sandbox_mode="{sandbox}"']
+        args += ["-m", model]
         if effort:
             args += ["-c", f'model_reasoning_effort="{effort}"']
+        if not tools:
+            args += list(CODEX_NO_TOOLS_ARGS)
         args.append(full_prompt)
         return args
 
@@ -348,7 +476,7 @@ class CodexAgentProvider:
         max_budget_usd: float = 2.0,
         timeout_s: int = 1200,
     ) -> AgentResult:
-        del max_turns, max_budget_usd  # codex exec has no native equivalent; see class docstring
+        del max_budget_usd  # no native or config equivalent; see class docstring
         args = self.build_args(
             model,
             prompt,
@@ -357,40 +485,213 @@ class CodexAgentProvider:
             effort=effort,
             resume_session=resume_session,
             tools=tools,
+            fork=fork,
         )
         t0 = time.monotonic()
         try:
-            proc = subprocess.run(
-                args,
-                cwd=str(workdir),
-                capture_output=True,
-                text=True,
-                timeout=timeout_s,
-                check=False,
-                stdin=subprocess.DEVNULL,
-                env=self.env,
+            returncode, stdout, stderr, stopped = _run_codex_process(
+                args, workdir=workdir, env=self.env, timeout_s=timeout_s, max_tool_calls=max_turns
             )
-        except subprocess.TimeoutExpired:
+        except OSError as exc:  # binary missing, bad cwd, ...
             return AgentResult(
                 output="",
                 usage=Usage(),
                 duration_ms=int((time.monotonic() - t0) * 1000),
-                error="timeout",
+                error=f"spawn failed: {exc}"[:500],
+                raw={"usage_source": "none"},
             )
         wall_ms = int((time.monotonic() - t0) * 1000)
-        result = parse_codex_stream(proc.stdout, wall_ms)
-        if result.error is None and proc.returncode != 0:
-            result.error = f"exit {proc.returncode}: {(proc.stderr or '').strip()[-300:]}"
-        if result.error is None and not result.output and not (result.raw or {}).get("session_id"):
+        result = parse_codex_stream(stdout, wall_ms)
+        raw = dict(result.raw or {})
+
+        # Usage: the stream's cumulative totals, else the rollout file's; then
+        # subtract what the parent thread had already been billed.
+        totals = raw.get("usage_total")
+        source = "stream" if totals else "none"
+        if totals is None and result.session_id:
+            totals = _rollout_totals(result.session_id, self.env)
+            source = "rollout" if totals else "none"
+        baseline = None
+        if resume_session:
+            baseline = self._thread_totals.get(resume_session)
+            if baseline is None:
+                baseline = _rollout_totals(resume_session, self.env)
+            raw["usage_baseline_known"] = baseline is not None
+        if totals is not None:
+            own = {
+                k: max(int(totals.get(k, 0)) - int((baseline or {}).get(k, 0)), 0)
+                for k in _CODEX_USAGE_KEYS
+            }
+            result.usage = _codex_usage(own)
+            if result.session_id:
+                self._thread_totals[result.session_id] = {
+                    k: int(totals.get(k, 0)) for k in _CODEX_USAGE_KEYS
+                }
+        raw["usage_source"] = source
+
+        if stopped is not None:
+            result.error = stopped
+        elif result.error is None and returncode != 0:
+            result.error = f"exit {returncode}: {(stderr or '').strip()[-300:]}"
+        if result.error is None and not result.output and not result.session_id:
             result.error = "no agent_message / thread id in output"
-        if resume_session and fork:
-            result.raw = {**(result.raw or {}), "fork_requested": True, "forked": False}
+        if resume_session:
+            raw["forked"] = bool(fork)
+            raw["resumed_from"] = resume_session
+            if fork:
+                raw["forked_from"] = resume_session
+        raw["sandbox"] = "workspace-write" if tools else "read-only"
+        result.raw = raw
         return result
 
 
-_CODEX_TOOL_ITEM_TYPES = frozenset(
-    {"file_change", "command_execution", "mcp_tool_call", "web_search", "local_shell_call"}
-)
+def _codex_usage(u: dict[str, Any]) -> Usage:
+    """Codex's ``input_tokens`` includes the cached part; ``Usage`` keeps them disjoint."""
+    cached = int(u.get("cached_input_tokens", 0))
+    return Usage(
+        input_tokens=max(int(u.get("input_tokens", 0)) - cached, 0),
+        cache_read=cached,
+        cache_write=int(u.get("cache_write_input_tokens", 0)),
+        output_tokens=int(u.get("output_tokens", 0)),
+        reasoning=int(u.get("reasoning_output_tokens", 0)),
+    )
+
+
+def _is_codex_tool_item(line: str) -> bool:
+    if '"item.completed"' not in line:
+        return False
+    try:
+        ev = json.loads(line)
+    except json.JSONDecodeError:
+        return False
+    return ((ev.get("item") or {}).get("type")) in _CODEX_TOOL_ITEM_TYPES
+
+
+def _kill_process_group(proc: subprocess.Popen[str]) -> None:
+    """Stop codex *and* whatever it spawned (a hung test run, a shell)."""
+    for sig, grace in ((signal.SIGTERM, 5.0), (signal.SIGKILL, 5.0)):
+        try:
+            os.killpg(proc.pid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        try:
+            proc.wait(timeout=grace)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def _run_codex_process(
+    args: list[str],
+    *,
+    workdir: Path,
+    env: dict[str, str] | None,
+    timeout_s: float,
+    max_tool_calls: int | None,
+) -> tuple[int | None, str, str, str | None]:
+    """Run ``args`` streaming stdout; return ``(returncode, stdout, stderr, stopped)``.
+
+    ``stopped`` is ``"timeout"`` when the wall clock ran out and ``"max_turns"``
+    when the session made more than ``max_tool_calls`` tool calls; in both cases
+    the whole process group was killed and the output captured *so far* is
+    returned, so the caller still gets the thread id (and can bill the tokens).
+    """
+    proc = subprocess.Popen(
+        args,
+        cwd=str(workdir),
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+        start_new_session=True,  # own process group, so a kill reaches every child
+    )
+    out_lines: list[str] = []
+    err_chunks: list[str] = []
+    cap_hit = threading.Event()
+
+    def read_stdout() -> None:
+        assert proc.stdout is not None
+        tools_seen = 0
+        for line in proc.stdout:
+            out_lines.append(line)
+            if max_tool_calls and _is_codex_tool_item(line):
+                tools_seen += 1
+                if tools_seen > max_tool_calls:
+                    cap_hit.set()
+
+    def read_stderr() -> None:
+        assert proc.stderr is not None
+        err_chunks.append(proc.stderr.read())
+
+    readers = [
+        threading.Thread(target=read_stdout, daemon=True),
+        threading.Thread(target=read_stderr, daemon=True),
+    ]
+    for t in readers:
+        t.start()
+    deadline = time.monotonic() + timeout_s
+    stopped: str | None = None
+    while True:
+        try:
+            proc.wait(timeout=0.2)
+            break
+        except subprocess.TimeoutExpired:
+            pass
+        if cap_hit.is_set():
+            stopped = "max_turns"
+        elif time.monotonic() >= deadline:
+            stopped = "timeout"
+        if stopped:
+            _kill_process_group(proc)
+            break
+    for t in readers:
+        t.join(timeout=10)  # a detached grandchild holding the pipe must not hang us
+    return proc.returncode, "".join(out_lines), "".join(err_chunks), stopped
+
+
+def _codex_home(env: dict[str, str] | None) -> Path:
+    home = (env or {}).get("CODEX_HOME") or os.environ.get("CODEX_HOME")
+    return Path(home) if home else Path.home() / ".codex"
+
+
+def _rollout_totals(thread_id: str, env: dict[str, str] | None) -> dict[str, int] | None:
+    """Last cumulative ``total_token_usage`` recorded in a thread's rollout file.
+
+    Codex persists every session to
+    ``$CODEX_HOME/sessions/YYYY/MM/DD/rollout-<timestamp>-<thread id>.jsonl`` and
+    appends a ``token_count`` event after each model response, so this is the
+    spend up to the moment the session stopped even when the JSONL stream never
+    got to ``turn.completed``.  Returns ``None`` when there is no such file or it
+    has no token count.  Reads only ``token_count`` lines.
+    """
+    if not re.fullmatch(r"[0-9A-Za-z-]+", thread_id or ""):
+        return None
+    sessions = _codex_home(env) / "sessions"
+    if not sessions.is_dir():
+        return None
+    matches = sorted(sessions.glob(f"*/*/*/rollout-*{thread_id}.jsonl")) or sorted(
+        sessions.rglob(f"rollout-*{thread_id}.jsonl")
+    )
+    last: dict[str, Any] | None = None
+    for path in matches[-1:]:
+        try:
+            with path.open() as fh:
+                for line in fh:
+                    if '"token_count"' not in line:
+                        continue
+                    try:
+                        payload = json.loads(line).get("payload") or {}
+                    except json.JSONDecodeError:
+                        continue
+                    total = (payload.get("info") or {}).get("total_token_usage")
+                    if isinstance(total, dict):
+                        last = total
+        except OSError:
+            return None
+    if last is None:
+        return None
+    return {k: int(last.get(k, 0)) for k in _CODEX_USAGE_KEYS}
 
 
 def parse_codex_stream(stdout: str, wall_ms: int) -> AgentResult:
@@ -400,10 +701,22 @@ def parse_codex_stream(stdout: str, wall_ms: int) -> AgentResult:
     ``input_tokens`` includes the cached portion; ``Usage`` keeps them
     disjoint) with turn counting and tool-call counting from ``item.completed``
     events, which the single-shot provider never sees tools to report.
+
+    ``usage`` here is ``turn.completed``'s figure as-is, which Codex reports as
+    the *thread's cumulative* total; the raw totals are kept in
+    ``raw["usage_total"]`` so :class:`CodexAgentProvider` can subtract a
+    resumed/forked parent's share.
+
+    A top-level ``error`` event is not fatal by itself (0.154.0 also emits one
+    for a transient stream error it then retries), so it only becomes
+    ``error`` when the turn never completed; ``turn.failed`` always does.
+    Every ``error`` message is kept in ``raw["stream_errors"]``.
     """
     output = ""
     usage = Usage()
-    error = None
+    usage_total: dict[str, int] | None = None
+    turn_failed: str | None = None
+    stream_errors: list[str] = []
     session_id = None
     num_turns = 0
     tool_calls = 0
@@ -429,16 +742,17 @@ def parse_codex_stream(stdout: str, wall_ms: int) -> AgentResult:
                 tool_calls += 1
         elif kind == "turn.completed":
             u = ev.get("usage") or {}
-            cached = int(u.get("cached_input_tokens", 0))
-            usage = Usage(
-                input_tokens=max(int(u.get("input_tokens", 0)) - cached, 0),
-                cache_read=cached,
-                cache_write=int(u.get("cache_write_input_tokens", 0)),
-                output_tokens=int(u.get("output_tokens", 0)),
-                reasoning=int(u.get("reasoning_output_tokens", 0)),
-            )
-        elif kind in ("turn.failed", "error"):
-            error = str(ev.get("error") or ev.get("message") or ev)[:500]
+            usage_total = {k: int(u.get(k, 0)) for k in _CODEX_USAGE_KEYS}
+            usage = _codex_usage(u)
+        elif kind == "turn.failed":
+            err = ev.get("error")
+            msg = err.get("message") if isinstance(err, dict) else err
+            turn_failed = str(msg or ev)[:500]
+        elif kind == "error":
+            stream_errors.append(str(ev.get("message") or ev.get("error") or ev)[:500])
+    error = turn_failed
+    if error is None and usage_total is None and stream_errors:
+        error = stream_errors[-1]
     return AgentResult(
         output=output,
         usage=usage,
@@ -449,7 +763,7 @@ def parse_codex_stream(stdout: str, wall_ms: int) -> AgentResult:
         resolved_model=None,
         cost_usd_reported=None,  # Codex reports no dollars; runner prices from pricing.toml
         error=error,
-        raw={"thread_id": session_id},
+        raw={"thread_id": session_id, "usage_total": usage_total, "stream_errors": stream_errors},
     )
 
 

@@ -174,6 +174,9 @@ class DispatchLab:
                     "n_tasks": summary.get("n_tasks"),
                     "trials": summary.get("trials"),
                     "headline": summary.get("headline"),
+                    # Additive: None for summaries written before the
+                    # pre-registration check existed.
+                    "confirmatory": summary.get("confirmatory"),
                 }
             )
         return out

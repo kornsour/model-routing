@@ -3,7 +3,7 @@
 PY := uv run
 
 .PHONY: help setup test lint fmt fmt-check typecheck check clean smoke estimate run report dashboard lab \
-	dispatch-estimate dispatch-run dispatch-sim dispatch-report harvest-chips app \
+	dispatch-estimate dispatch-run dispatch-sim dispatch-report dispatch-paper dispatch-calibration dispatch-preregister harvest-chips app \
 	export backup restore backup-status backup-config
 
 help: ## Show this help
@@ -61,10 +61,11 @@ dispatch-estimate: ## Dry-run list-price estimate for a dispatch experiment (EXP
 	$(PY) model-routing dispatch-estimate $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
 		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES))
 
-dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE=n, TRIALS=n, POLICIES=A,B,C1)
+dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE=n, TRIALS=n, POLICIES=A,B,C1, RESUME=results/<exp>/<stamp>)
 	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
 		--budget-usd $(or $(BUDGET),1.00) \
-		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES))
+		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES)) \
+		$(if $(RESUME),--resume $(RESUME))
 
 dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
 	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
@@ -72,6 +73,15 @@ dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
 
 dispatch-report: ## Rebuild summary.json/md for a dispatch run dir (RUN=results/<exp>/<stamp>)
 	$(PY) model-routing dispatch-report $(RUN)
+
+dispatch-paper: ## Markdown white-paper draft from dispatch run dir(s) (RUNS="results/a [results/b]", OUT=path.md)
+	$(PY) model-routing dispatch-paper $(RUNS) $(if $(OUT),--out $(OUT))
+
+dispatch-calibration: ## Measured per-task pass rates by model from calibration run(s) (RUNS="results/a results/b", WRITE=1 relabels tasks.jsonl)
+	$(PY) model-routing dispatch-calibration $(RUNS) $(if $(WRITE),--write)
+
+dispatch-preregister: ## Print (WRITE=1: append) the [preregistration] table for a config (EXP=...)
+	$(PY) model-routing dispatch-preregister $(or $(EXP),experiments/agentic/exp05_dispatch.toml) $(if $(WRITE),--write)
 
 harvest-chips: ## Scan local Claude Code transcripts for spawned task chips -> tasks/agentic/private/harvested.jsonl
 	$(PY) model-routing harvest-chips
