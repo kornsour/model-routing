@@ -274,7 +274,7 @@ def cmd_dispatch_preregister(args: argparse.Namespace) -> int:
         import tomllib
 
         text = Path(args.config).read_text()
-        if "[preregistration]" in text:
+        if cfg.preregistration is not None:
             print(f"{args.config} already has a [preregistration] table; refusing to overwrite.")
             print("Remove it by hand if you really intend to re-register (and say why in the doc).")
             return 1

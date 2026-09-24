@@ -435,6 +435,18 @@ def test_usage_limit_message_classification():
     assert r.raw is not None and r.raw["usage_limit_reset_at"] == 1790200000.0
     r2 = parse_claude_stream("", 10, stderr="Claude AI usage limit reached|1790200000")
     assert r2.error == "usage_limit"
+    # a limit notice returned as a normal result still pauses the run ...
+    ok_flag = (
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":1,'
+        '"result":"You\'ve hit your session limit \u00b7 resets 5:40pm","session_id":"s1"}\n'
+    )
+    assert parse_claude_stream(ok_flag, 10).error == "usage_limit"
+    # ... but a worker that merely talks about rate limits is not a limit hit
+    worker = (
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":12,'
+        '"result":"Added a rate limit retry with backoff on 429.","session_id":"s1"}\n'
+    )
+    assert parse_claude_stream(worker, 10).error is None
 
 
 class LimitOnceProvider(RecordingProvider):
@@ -621,3 +633,108 @@ def test_report_includes_prespecified_medium_subgroup(tmp_path: Path):
     assert sub["n_paired"] == 3 and sub["task_clusters"] == 3
     assert sub["role"].startswith("pre-specified subgroup")
     assert sub["p_adjusted"] is None  # not part of the Holm family
+
+
+def test_preregister_write_ignores_the_table_name_in_a_comment(tmp_path: Path):
+    from model_routing.cli import main
+
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+        treatment="B",
+        control="B",
+    )
+    cfg_path.write_text("# appends the [preregistration] table\n" + cfg_path.read_text())
+    assert main(["dispatch-preregister", str(cfg_path), "--write"]) == 0
+    assert load_dispatch_config(cfg_path).preregistration is not None
+    assert main(["dispatch-preregister", str(cfg_path), "--write"]) == 1
+
+
+def test_provider_outage_classification():
+    from model_routing.dispatch.agents import is_provider_outage
+
+    for msg in (
+        'API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}',
+        "API Error: 500 Internal server error",
+        "API Error: Connection error.",
+        "API Error: Request timed out.",
+        "request failed: ECONNRESET",
+    ):
+        assert is_provider_outage(msg), msg
+    for msg in (
+        "Reached maximum number of turns (40)",
+        "timeout",
+        "Exceeded USD budget (2.0)",
+        "API Error: 400 prompt is too long",
+        None,
+        "",
+    ):
+        assert not is_provider_outage(msg), msg
+
+
+class OutageOnceProvider(RecordingProvider):
+    """First worker call fails on a provider outage; later calls succeed."""
+
+    def __init__(self):
+        super().__init__()
+        self.failed = False
+
+    def run(self, model: str, prompt: str, *, workdir: Path, tools: bool = True, **kw: Any):
+        if not self.failed:
+            self.failed = True
+            return AgentResult(
+                output="",
+                usage=Usage(input_tokens=10),
+                duration_ms=1,
+                error='API Error: 529 {"type":"error","error":{"type":"overloaded_error"}}',
+            )
+        return super().run(model, prompt, workdir=workdir, tools=tools, **kw)
+
+
+def test_provider_outage_pauses_and_redoes_the_cell(tmp_path: Path):
+    from model_routing.dispatch.runner import PAUSE_POLL_S, run_dispatch
+
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+        treatment="B",
+        control="B",
+    )
+    slept: list[float] = []
+    out = tmp_path / "run"
+    run_dispatch(
+        load_dispatch_config(cfg_path),
+        out_dir=out,
+        budget_usd=100.0,
+        task_loader=lambda path, sample=None, seed=0: [make_task("t1")],
+        sandbox_factory=fake_sandbox_factory,
+        grader=always_pass_grader,
+        agent_provider_factory=lambda name, env=None: OutageOnceProvider(),
+        sleep=slept.append,
+        verbose=False,
+    )
+    assert slept == [PAUSE_POLL_S]
+    outcomes = _outcomes(out)
+    assert len(outcomes) == 1 and outcomes[0]["passed"] and outcomes[0]["errors"] == 0
+    pauses = [json.loads(line) for line in (out / "pauses.jsonl").read_text().splitlines()]
+    assert [p["reason"] for p in pauses] == ["provider_outage"]
+    sa = summarize(out)["set_aside"]
+    assert sa["provider_outage"] == 1 and sa["usage_limit"] == 0
+    assert "Redone cells" in (out / "summary.md").read_text()
+
+
+def test_resume_purges_cells_graded_on_a_provider_outage(tmp_path: Path):
+    from model_routing.dispatch.runner import completed_cells, purge_limited_cells
+
+    out = tmp_path / "run"
+    out.mkdir()
+    outage = "API Error: 500 Internal server error"
+    rows = []
+    for tid, err in (("t1", None), ("t2", outage), ("t3", "Reached maximum number of turns (40)")):
+        row = _outcome_row(tid, "B", passed=err is None, cost=0.1)
+        row["sessions"] = [{"policy": "B", "task_id": tid, "trial": 0, "error": err}]
+        rows.append(row)
+    (out / "outcomes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert purge_limited_cells(out) == 1
+    assert completed_cells(out) == {("B", "t1", 0), ("B", "t3", 0)}
+    assert summarize(out)["set_aside"]["by_policy"]["B"]["provider_outage"] == 1

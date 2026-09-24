@@ -66,6 +66,17 @@ class UsageLimitHit(RuntimeError):
         self.reset_at = reset_at
 
 
+class ProviderOutage(UsageLimitHit):
+    """A session failed on a provider outage (5xx, overloaded, dropped
+    connection) after the CLI's own retries.  Handled like a usage limit: the
+    cell is abandoned and redone after a pause, never graded (deviation
+    recorded 2026-09-24 in the pre-registration doc)."""
+
+    def __init__(self, detail: str = ""):
+        RuntimeError.__init__(self, f"provider outage {detail}".strip())
+        self.reset_at = None
+
+
 PAUSE_POLL_S = 300
 """Between checks while waiting for a usage limit to reset (unknown reset time)."""
 PAUSE_MAX_S = 8 * 3600
@@ -133,14 +144,21 @@ def _spent_so_far(run_dir: Path) -> float:
 
 
 def _is_limit_error(error: str | None) -> bool:
-    from model_routing.dispatch.agents import usage_limit_reset_at
+    """An account limit or a provider outage: either way the cell measured the
+    provider, not the model, and ``--resume`` redoes it."""
+    from model_routing.dispatch.agents import is_provider_outage, usage_limit_reset_at
 
-    return error == "usage_limit" or usage_limit_reset_at(error or "") is not None
+    return (
+        error == "usage_limit"
+        or usage_limit_reset_at(error or "") is not None
+        or is_provider_outage(error)
+    )
 
 
 def purge_limited_cells(run_dir: Path) -> int:
     """Set aside every outcome whose sessions include an account-limit error
-    (graded as a fail by a harness that did not recognise the wording), plus
+    or a provider outage (graded as a fail by a harness that did not recognise
+    the wording, or that predates outage handling), plus
     those sessions, into ``outcomes.poisoned.jsonl`` / ``sessions.poisoned.jsonl``
     so ``--resume`` redoes the cells.  Returns the number of cells moved."""
     run_dir = Path(run_dir)
@@ -201,6 +219,10 @@ class DispatchConfig:
     """Restrict the task set to these human difficulty labels (calibration runs,
     e.g. "can the cheapest model already pass the hard tasks?").  Policies still
     never see the label; this only chooses which tasks run."""
+    task_ids: tuple[str, ...] = ()
+    """Restrict the task set to these ids (smoke runs that must hit specific
+    tasks, e.g. ones the cheapest model fails so a cascade escalates).  Applied
+    before ``difficulties``; an unknown id is an error."""
     seed: int = 0
     """Seeds task sampling and, for ``order = "randomized"``, the per-block policy
     order.  Recorded in ``meta.json`` so a run can be reproduced exactly."""
@@ -303,6 +325,7 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         margin_pp=float(exp.get("margin_pp", 5.0)),
         max_budget_per_session_usd=float(exp.get("max_budget_per_session_usd", 2.0)),
         difficulties=tuple(str(d) for d in exp.get("difficulties", [])),
+        task_ids=tuple(str(t) for t in exp.get("task_ids", [])),
         seed=int(exp.get("seed", 0)),
         max_turns=int(exp.get("max_turns", 30)),
         preregistration=(
@@ -475,18 +498,23 @@ def _select_policies(cfg: DispatchConfig, policies: list[str] | None) -> list[di
 def _select_tasks(
     cfg: DispatchConfig, loader: Callable[..., list[Any]], sample: int | None
 ) -> list[Any]:
-    if not cfg.difficulties:
+    if not cfg.difficulties and not cfg.task_ids:
         return loader(cfg.tasks, sample=sample, seed=cfg.seed)
-    tasks = [
-        t for t in loader(cfg.tasks, sample=None, seed=cfg.seed) if t.difficulty in cfg.difficulties
-    ]
+    tasks = loader(cfg.tasks, sample=None, seed=cfg.seed)
+    if cfg.task_ids:
+        missing = sorted(set(cfg.task_ids) - {t.id for t in tasks})
+        if missing:
+            raise ValueError(f"task_ids not in the task set: {missing}")
+        tasks = [t for t in tasks if t.id in cfg.task_ids]
+    if cfg.difficulties:
+        tasks = [t for t in tasks if t.difficulty in cfg.difficulties]
     return tasks[:sample] if sample else tasks
 
 
 def _estimate_task_count(
     cfg: DispatchConfig, sample: int | None, task_loader: Callable[..., list[Any]] | None
 ) -> int:
-    if sample and not cfg.difficulties:
+    if sample and not cfg.difficulties and not cfg.task_ids:
         return sample
     loader = task_loader
     if loader is None:
@@ -1081,6 +1109,10 @@ def run_dispatch(
                 if verbose:
                     print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} USAGE LIMIT HIT")
                 raise UsageLimitHit(reset_at, f"{policy_name}/{task_id}/{role}")
+            if result.error and _is_limit_error(result.error):
+                if verbose:
+                    print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} PROVIDER OUTAGE")
+                raise ProviderOutage(f"{policy_name}/{task_id}/{role}: {result.error[:200]}")
             price_model = (
                 result.resolved_model
                 if result.resolved_model and prices.get(result.resolved_model)
@@ -1205,20 +1237,39 @@ def run_dispatch(
                     outcome = policies_mod.run_policy(policy_spec, task, trial, cell_ctx)
                     break
                 except UsageLimitHit as hit:
+                    with (out_dir / "pauses.jsonl").open("a") as pf:
+                        pf.write(
+                            json.dumps(
+                                {
+                                    "at": time.time(),
+                                    "policy": policy_spec["name"],
+                                    "task_id": task.id,
+                                    "trial": trial,
+                                    "reason": (
+                                        "provider_outage"
+                                        if isinstance(hit, ProviderOutage)
+                                        else "usage_limit"
+                                    ),
+                                    "detail": str(hit)[:300],
+                                }
+                            )
+                            + "\n"
+                        )
                     wait = PAUSE_POLL_S
                     if hit.reset_at:
                         wait = max(60.0, min(hit.reset_at - time.time() + 30, PAUSE_MAX_S))
                     if paused_for + wait > PAUSE_MAX_S or (cancel is not None and cancel.is_set()):
                         run_state = "paused"
                         stop_message = (
-                            f"usage limit still in force after {paused_for / 60:.0f} min; "
+                            "usage limit or outage still in force after "
+                            f"{paused_for / 60:.0f} min; "
                             f"resume with --resume {out_dir}"
                         )
                         break
                     run_state = "paused"
                     emit_progress(
                         f"{task.id} · {policy_spec['name']} · trial {trial}",
-                        f"usage limit hit; waiting {wait / 60:.0f} min before retrying this cell",
+                        f"{hit}; waiting {wait / 60:.0f} min before retrying this cell",
                     )
                     if verbose:
                         print(f"PAUSED: {hit}; retrying in {wait / 60:.0f} min")

@@ -140,6 +140,12 @@ context) is kept as the pessimistic routing variant.
   in a provider error (timeout, budget cap, non-zero exit) is graded on
   whatever state the sandbox is in and its cost is counted; the report
   shows the error rate per policy.
+- Exception (deviation 1 below): an account usage limit or a provider
+  outage (5xx, overloaded, dropped connection, after the CLI's own retries)
+  is not graded. The run pauses and redoes the cell; the set-aside sessions
+  stay in `sessions.poisoned.jsonl` and in total spend. The turn cap, the
+  wall-clock timeout, the per-session budget cap and 4xx errors are still
+  graded.
 - A run stopped by the budget guard is reported as `over_budget` and is not
   confirmatory unless every registered cell completed.
 - No cell is re-run or dropped after the fact. If a task is found to be
@@ -179,9 +185,30 @@ context) is kept as the pessimistic routing variant.
    `docs/experiments/findings/`. Status 2026-09-23: `A`, `A_switch` and
    `C1_inline` verified (`findings/2026-09-23-exp05-smoke-paths.md`); `D`
    escalation still to be exercised on a task the cheapest model fails.
+   Status 2026-09-24: the cascade re-smoke on two tasks Haiku fails showed
+   the visible checks accept Haiku's partial work, so `D` never escalated.
+   **Decision 2026-09-24, before any confirmatory data:** `D` also escalates
+   when an attempt ends in a session error such as the turn cap
+   (`escalate_on_error = true`), the other signal a deployed orchestrator
+   sees. Calibration puts its reach at 8 of 23 Haiku failures, at the cost of
+   escalating 15 of 109 Haiku passes; `D_ideal` stays the upper bound.
 3. `make dispatch-estimate` for the registered policies within budget.
 4. `make dispatch-preregister ... WRITE=1`, commit, then run.
+   **Registered 2026-09-24T16:52:46Z** (taskset `5b995852…`, 65 tasks,
+   3 trials, margin 10 pts, randomized order, primary `C1_inline` vs `B`).
+   Stage 1 runs `B`, `C1_inline`, `static_haiku`, `static_sonnet` with a
+   $150 budget; `C1` and `D` follow as a second run if usage allows.
 
 ## Deviations
 
-(none yet)
+1. **2026-09-24, during stage 1, before any outcome was analysed: provider
+   outages are redone, not graded.** The registered rule graded every
+   provider error. An outage measures the provider's availability, not the
+   routing decision, and it is not neutral: outage risk is per session, and
+   `C1_inline` runs three sessions per task (setup, router, worker) against
+   one for a static policy, so grading outages biases H-D1 against routing.
+   Usage-limit hits were already redone on the same reasoning. The stage-1
+   process started on the earlier harness, so on completion it is resumed
+   once (`--resume` sets aside any outage-graded cell and redoes it). The
+   report states the outage count and the spend it wasted per policy. No
+   registered field (task set, trials, margin, order, primary) changes.

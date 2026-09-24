@@ -1,0 +1,54 @@
+# Smoke run for cascade D escalation, the one policy path never exercised on
+# real models: the 2026-09-23 smoke used `-01` tasks and Haiku passed both on
+# the first attempt.  These two tasks are ones Haiku failed on both trials in
+# the calibration run (Sonnet passed both), so D should escalate haiku ->
+# sonnet and record it.  Two tasks, one trial, about $1-2.  Not a hypothesis
+# test.
+#
+#   make dispatch-estimate EXP=experiments/agentic/exp05_smoke_cascade.toml
+#   make dispatch-run      EXP=experiments/agentic/exp05_smoke_cascade.toml BUDGET=4.00
+
+[experiment]
+name = "exp05_smoke_cascade"
+kind = "dispatch"
+tasks = "tasks/agentic/tasks.jsonl"
+task_ids = ["log-tz-02", "notes-ics-03"]
+trials = 1
+order = "by_task"
+seed = 1
+max_turns = 40
+hypothesis = "Smoke only: D escalates when the cheapest model fails the visible checks."
+primary = { treatment = "D", control = "D" }
+margin_pp = 10
+max_budget_per_session_usd = 2.0
+parent = "opus"
+menu = ["haiku", "sonnet", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "haiku"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "sonnet"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "opus"
+
+[[policies]]
+name = "D"
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+escalate_on_error = true        # also escalate when the attempt hits the turn cap (2026-09-24 smoke)
+
+# Forces the escalation path (hidden tests as the checker) when D's deployable
+# signals accept the cheapest model's partial work, as they did on 2026-09-24.
+[[policies]]
+name = "D_ideal"
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+escalate_on = "hidden"

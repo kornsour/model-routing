@@ -199,6 +199,46 @@ session limit resets 5:40pm (America/Detroit)" (no epoch, so the runner
 polls).  Keep this broad: a limit graded as a fail poisons a whole run."""
 
 
+_ACCOUNT_LIMIT_REPLY_RE = re.compile(
+    r"usage limit reached|hit your [\w ]{0,20}limit|limit resets|out of extra usage",
+    re.IGNORECASE,
+)
+"""Stricter than ``_USAGE_LIMIT_RE``: for a result *not* flagged as an error, only
+the account-limit wordings count (never "rate limit"/"429", which a worker on a
+retry task may legitimately write), and only on a short, at-most-one-turn reply."""
+
+
+def usage_limit_in_reply(text: str, num_turns: int) -> float | None:
+    """A limit notice returned as an ordinary (``is_error: false``) result.  The
+    CLI has flagged these as errors in every run so far; this guards the
+    6-8 hour confirmatory run against a wording or flag change grading a
+    limit hit as a fail."""
+    if num_turns > 1 or not text or len(text) > 400:
+        return None
+    if not _ACCOUNT_LIMIT_REPLY_RE.search(text):
+        return None
+    return usage_limit_reset_at(text) or 0.0
+
+
+_PROVIDER_OUTAGE_RE = re.compile(
+    r"API Error: (?:5\d\d|Connection|Request timed out)"
+    r"|overloaded_error|\bOverloaded\b|api_error|internal server error"
+    r"|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|socket hang up|fetch failed",
+    re.IGNORECASE,
+)
+"""Server-side or network failures (5xx, overloaded, dropped connections) that
+survived the CLI's own retries.  They measure the provider's availability,
+not the model, so the runner pauses and redoes the cell like a usage limit.
+Deliberately excludes 4xx (a request the harness or the model made bad), the
+turn cap, the wall-clock ``timeout`` and the per-session budget cap, which are
+graded outcomes under intention to treat."""
+
+
+def is_provider_outage(text: str | None) -> bool:
+    """True when ``text`` (an error message or stderr) reports a provider outage."""
+    return bool(text) and _PROVIDER_OUTAGE_RE.search(text or "") is not None
+
+
 def usage_limit_reset_at(text: str) -> float | None:
     """If ``text`` (a result/error message or stderr) says the subscription or
     API usage limit was hit, return the reset time as a unix timestamp when the
@@ -279,6 +319,12 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             text = "; ".join(errors) if errors else "error"
         error = str(text)[:500]
         reset = usage_limit_reset_at(str(text) + "\n" + (stderr or ""))
+        if reset is not None:
+            error = "usage_limit"
+        elif not is_provider_outage(error) and is_provider_outage(stderr):
+            error = f"{error} [stderr: {(stderr or '').strip()[-200:]}]"
+    else:
+        reset = usage_limit_in_reply(str(data.get("result") or ""), int(data.get("num_turns") or 0))
         if reset is not None:
             error = "usage_limit"
     return AgentResult(

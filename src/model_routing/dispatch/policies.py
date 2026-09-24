@@ -161,6 +161,7 @@ def _outcome(
     chosen: str | None = None,
     escalations: int = 0,
     router_fallback: bool = False,
+    cascade_checks: list[dict[str, Any]] | None = None,
 ) -> DispatchOutcome:
     return DispatchOutcome(
         task_id=task.id,
@@ -173,6 +174,7 @@ def _outcome(
         chosen_candidate=chosen,
         escalations=escalations,
         router_fallback=router_fallback,
+        cascade_checks=cascade_checks or [],
     )
 
 
@@ -401,7 +403,10 @@ def _policy_d(
     """D: cheapest-first cascade.  ``escalate_on = "visible"`` (default, deployable) checks
     diff + scope + visible tests; ``"hidden"`` uses the hidden tests as a perfect checker
     (an upper bound for any cascade, not a deployable policy).  The agent never sees
-    hidden test output either way."""
+    hidden test output either way.  ``escalate_on_error = true`` also escalates
+    when the attempt's session ended in an error (e.g. the turn cap), a signal a
+    deployed orchestrator sees; the visible checks alone accept partial work
+    that leaves the visible suite green."""
     chain: list[str] = spec["chain"]
     sandbox = ctx.new_sandbox(task)
     try:
@@ -410,6 +415,7 @@ def _policy_d(
         prompt = brief
         chosen = chain[0]
         escalations = 0
+        checks: list[dict[str, Any]] = []
         for i, cand in enumerate(chain):
             role = "worker" if i == 0 else "escalation"
             rec = ctx.run_session(cand, role=role, prompt=prompt, workdir=sandbox.path, tools=True)
@@ -417,16 +423,31 @@ def _policy_d(
             chosen = cand
             if i == len(chain) - 1:
                 break
-            ok, tail = ctx.run_visible_checker(task, sandbox, spec.get("escalate_on", "visible"))
+            if spec.get("escalate_on_error") and rec.error:
+                ok, tail = False, f"The previous attempt stopped before finishing: {rec.error}"
+            else:
+                ok, tail = ctx.run_visible_checker(
+                    task, sandbox, spec.get("escalate_on", "visible")
+                )
+            checks.append({"candidate": cand, "ok": ok, "reason": tail[-500:]})
             if ok:
                 break
             escalations += 1
             prompt = (
-                f"{brief}\n\nThe previous attempt failed the visible checks:\n{tail}\n"
+                f"{brief}\n\nThe previous attempt was not accepted:\n{tail}\n"
                 "Finish the task; the acceptance checks are stricter than the visible tests."
             )
         grade = ctx.grade(task, sandbox)
-        return _outcome(task, name, trial, sessions, grade, chosen=chosen, escalations=escalations)
+        return _outcome(
+            task,
+            name,
+            trial,
+            sessions,
+            grade,
+            chosen=chosen,
+            escalations=escalations,
+            cascade_checks=checks,
+        )
     finally:
         ctx.cleanup([sandbox])
 

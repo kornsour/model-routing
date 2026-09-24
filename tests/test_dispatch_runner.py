@@ -80,10 +80,16 @@ class RecordingProvider:
 
     name = "fake_test"
 
-    def __init__(self, router_pick: str = "haiku", pass_on_model: str | None = None):
+    def __init__(
+        self,
+        router_pick: str = "haiku",
+        pass_on_model: str | None = None,
+        error_on_model: str | None = None,
+    ):
         self.calls: list[dict[str, Any]] = []
         self.router_pick = router_pick
         self.pass_on_model = pass_on_model
+        self.error_on_model = error_on_model
 
     def run(
         self,
@@ -126,6 +132,11 @@ class RecordingProvider:
             tool_calls=1 if tools else 0,
             session_id=session_id,
             resolved_model=model,
+            error=(
+                "Reached maximum number of turns (40)"
+                if tools and model == self.error_on_model
+                else None
+            ),
         )
 
 
@@ -434,6 +445,39 @@ def test_policy_d_no_escalation_when_first_passes(tmp_path: Path):
     sessions = _sessions(out)
     assert [s["role"] for s in sessions] == ["worker"]
     assert _outcomes(out)[0]["escalations"] == 0
+    assert _outcomes(out)[0]["cascade_checks"] == [{"candidate": "haiku", "ok": True, "reason": ""}]
+
+
+_MARKER_VISIBLE = {
+    "visible_cmd": [
+        "python3",
+        "-c",
+        "import pathlib,sys; sys.exit(0 if pathlib.Path('MARKER').exists() else 1)",
+    ]
+}
+
+
+@pytest.mark.parametrize("escalate_on_error", [False, True])
+def test_policy_d_escalate_on_error(tmp_path: Path, escalate_on_error: bool):
+    # haiku leaves the visible check green but hits the turn cap (the 2026-09-24
+    # smoke): plain D accepts it; escalate_on_error hands it to sonnet.
+    flag = "escalate_on_error = true\n" if escalate_on_error else ""
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "D"\nkind = "spawn_cascade"\nchain = ["haiku", "sonnet"]\n' + flag,
+        treatment="D",
+        control="D",
+    )
+    provider = RecordingProvider(pass_on_model="haiku", error_on_model="haiku")
+    out = _run(
+        tmp_path, cfg_path, provider, [make_task(grader=_MARKER_VISIBLE)], grader=marker_grader
+    )
+    outcome = _outcomes(out)[0]
+    assert outcome["escalations"] == int(escalate_on_error)
+    assert outcome["cascade_checks"][0]["ok"] is (not escalate_on_error)
+    if escalate_on_error:
+        assert "turns" in outcome["cascade_checks"][0]["reason"]
+        assert "stopped before finishing" in provider.calls[-1]["prompt"]
 
 
 # -- budget / cancel ------------------------------------------------------------
@@ -746,3 +790,30 @@ def test_difficulties_filter_selects_only_labelled_tasks(tmp_path: Path):
     ]
     out = _run(tmp_path, cfg_path, RecordingProvider(), tasks)
     assert sorted(o["task_id"] for o in _outcomes(out)) == ["h1", "h2"]
+
+
+def test_task_ids_filter_selects_only_listed_tasks(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="B",
+    )
+    text = cfg_path.read_text().replace("[experiment]\n", '[experiment]\ntask_ids = ["t2", "t3"]\n')
+    cfg_path.write_text(text)
+    tasks = [make_task("t1"), make_task("t2"), make_task("t3")]
+    out = _run(tmp_path, cfg_path, RecordingProvider(), tasks)
+    assert sorted(o["task_id"] for o in _outcomes(out)) == ["t2", "t3"]
+
+
+def test_task_ids_filter_rejects_unknown_id(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="B",
+    )
+    text = cfg_path.read_text().replace("[experiment]\n", '[experiment]\ntask_ids = ["nope"]\n')
+    cfg_path.write_text(text)
+    with pytest.raises(ValueError, match="nope"):
+        _run(tmp_path, cfg_path, RecordingProvider(), [make_task("t1")])
