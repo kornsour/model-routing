@@ -201,6 +201,10 @@ class DispatchConfig:
     """Restrict the task set to these human difficulty labels (calibration runs,
     e.g. "can the cheapest model already pass the hard tasks?").  Policies still
     never see the label; this only chooses which tasks run."""
+    task_ids: tuple[str, ...] = ()
+    """Restrict the task set to these ids (smoke runs that must hit specific
+    tasks, e.g. ones the cheapest model fails so a cascade escalates).  Applied
+    before ``difficulties``; an unknown id is an error."""
     seed: int = 0
     """Seeds task sampling and, for ``order = "randomized"``, the per-block policy
     order.  Recorded in ``meta.json`` so a run can be reproduced exactly."""
@@ -303,6 +307,7 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         margin_pp=float(exp.get("margin_pp", 5.0)),
         max_budget_per_session_usd=float(exp.get("max_budget_per_session_usd", 2.0)),
         difficulties=tuple(str(d) for d in exp.get("difficulties", [])),
+        task_ids=tuple(str(t) for t in exp.get("task_ids", [])),
         seed=int(exp.get("seed", 0)),
         max_turns=int(exp.get("max_turns", 30)),
         preregistration=(
@@ -475,18 +480,23 @@ def _select_policies(cfg: DispatchConfig, policies: list[str] | None) -> list[di
 def _select_tasks(
     cfg: DispatchConfig, loader: Callable[..., list[Any]], sample: int | None
 ) -> list[Any]:
-    if not cfg.difficulties:
+    if not cfg.difficulties and not cfg.task_ids:
         return loader(cfg.tasks, sample=sample, seed=cfg.seed)
-    tasks = [
-        t for t in loader(cfg.tasks, sample=None, seed=cfg.seed) if t.difficulty in cfg.difficulties
-    ]
+    tasks = loader(cfg.tasks, sample=None, seed=cfg.seed)
+    if cfg.task_ids:
+        missing = sorted(set(cfg.task_ids) - {t.id for t in tasks})
+        if missing:
+            raise ValueError(f"task_ids not in the task set: {missing}")
+        tasks = [t for t in tasks if t.id in cfg.task_ids]
+    if cfg.difficulties:
+        tasks = [t for t in tasks if t.difficulty in cfg.difficulties]
     return tasks[:sample] if sample else tasks
 
 
 def _estimate_task_count(
     cfg: DispatchConfig, sample: int | None, task_loader: Callable[..., list[Any]] | None
 ) -> int:
-    if sample and not cfg.difficulties:
+    if sample and not cfg.difficulties and not cfg.task_ids:
         return sample
     loader = task_loader
     if loader is None:

@@ -746,3 +746,30 @@ def test_difficulties_filter_selects_only_labelled_tasks(tmp_path: Path):
     ]
     out = _run(tmp_path, cfg_path, RecordingProvider(), tasks)
     assert sorted(o["task_id"] for o in _outcomes(out)) == ["h1", "h2"]
+
+
+def test_task_ids_filter_selects_only_listed_tasks(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="B",
+    )
+    text = cfg_path.read_text().replace("[experiment]\n", '[experiment]\ntask_ids = ["t2", "t3"]\n')
+    cfg_path.write_text(text)
+    tasks = [make_task("t1"), make_task("t2"), make_task("t3")]
+    out = _run(tmp_path, cfg_path, RecordingProvider(), tasks)
+    assert sorted(o["task_id"] for o in _outcomes(out)) == ["t2", "t3"]
+
+
+def test_task_ids_filter_rejects_unknown_id(tmp_path: Path):
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "haiku"\n',
+        treatment="B",
+        control="B",
+    )
+    text = cfg_path.read_text().replace("[experiment]\n", '[experiment]\ntask_ids = ["nope"]\n')
+    cfg_path.write_text(text)
+    with pytest.raises(ValueError, match="nope"):
+        _run(tmp_path, cfg_path, RecordingProvider(), [make_task("t1")])
