@@ -499,6 +499,42 @@ def preregistration_check(meta: dict[str, Any]) -> dict[str, Any]:
     return {"confirmatory": not deviations, "registered": True, "deviations": deviations}
 
 
+def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Cells redone because an account limit or a provider outage hit them
+    (deviation 1 of the exp05 pre-registration), per policy and reason, and
+    the list-price spend on attempts that no graded outcome uses.  Sources:
+    ``pauses.jsonl`` (live pauses) and ``outcomes.poisoned.jsonl`` (cells
+    graded by an older harness and set aside on ``--resume``)."""
+    from model_routing.dispatch.agents import is_provider_outage
+
+    by_policy: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"usage_limit": 0, "provider_outage": 0, "wasted_usd": 0.0}
+    )
+    for p in _load_jsonl(run_dir / "pauses.jsonl"):
+        by_policy[p["policy"]][p.get("reason", "usage_limit")] += 1
+    for o in _load_jsonl(run_dir / "outcomes.poisoned.jsonl"):
+        errs = [s.get("error") for s in o.get("sessions", [])]
+        reason = "provider_outage" if any(is_provider_outage(e) for e in errs) else "usage_limit"
+        by_policy[o["policy"]][reason] += 1
+
+    def key(s: dict[str, Any]) -> tuple[Any, ...]:
+        fields = ("policy", "task_id", "trial", "role", "candidate", "session_id", "cost_usd_list")
+        return tuple(s.get(k) for k in fields)
+
+    used = {key(s) for o in outcomes for s in o.get("sessions", [])}
+    for name in ("sessions.jsonl", "sessions.poisoned.jsonl"):
+        for s in _load_jsonl(run_dir / name):
+            if key(s) not in used:
+                by_policy[s.get("policy", "?")]["wasted_usd"] += float(s.get("cost_usd_list", 0.0))
+    rows = {k: dict(v) for k, v in sorted(by_policy.items())}
+    return {
+        "usage_limit": sum(v["usage_limit"] for v in rows.values()),
+        "provider_outage": sum(v["provider_outage"] for v in rows.values()),
+        "wasted_usd": sum(v["wasted_usd"] for v in rows.values()),
+        "by_policy": rows,
+    }
+
+
 def summarize(run_dir: str | Path) -> dict[str, Any]:
     run_dir = Path(run_dir)
     meta: dict[str, Any] = {}
@@ -587,6 +623,7 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
         "headline": headline,
         "confirmatory": prereg["confirmatory"],
         "preregistration": prereg,
+        "set_aside": _set_aside(run_dir, outcomes),
         "power_note": _rough_power_note(
             n_tasks,
             int(h_d1["n_paired"]) if h_d1 else 0,
@@ -673,6 +710,23 @@ def _render_markdown(summary: dict[str, Any]) -> str:
     for c in summary["comparisons"]:
         lines.append(f"- {c['sentence']}")
     lines += ["", "## Power", "", summary.get("power_note", "")]
+    sa = summary.get("set_aside") or {}
+    if sa.get("by_policy"):
+        lines += [
+            "",
+            "## Redone cells (usage limits, provider outages)",
+            "",
+            "Not graded: the cell was redone. Wasted = list-price spend on attempts no "
+            "graded outcome uses.",
+            "",
+            "| policy | usage limit | provider outage | wasted |",
+            "|---|---:|---:|---:|",
+        ]
+        for name, v in sa["by_policy"].items():
+            lines.append(
+                f"| {name} | {v['usage_limit']} | {v['provider_outage']} | "
+                f"{_fmt_money(v['wasted_usd'])} |"
+            )
     return "\n".join(lines) + "\n"
 
 

@@ -1237,13 +1237,32 @@ def run_dispatch(
                     outcome = policies_mod.run_policy(policy_spec, task, trial, cell_ctx)
                     break
                 except UsageLimitHit as hit:
+                    with (out_dir / "pauses.jsonl").open("a") as pf:
+                        pf.write(
+                            json.dumps(
+                                {
+                                    "at": time.time(),
+                                    "policy": policy_spec["name"],
+                                    "task_id": task.id,
+                                    "trial": trial,
+                                    "reason": (
+                                        "provider_outage"
+                                        if isinstance(hit, ProviderOutage)
+                                        else "usage_limit"
+                                    ),
+                                    "detail": str(hit)[:300],
+                                }
+                            )
+                            + "\n"
+                        )
                     wait = PAUSE_POLL_S
                     if hit.reset_at:
                         wait = max(60.0, min(hit.reset_at - time.time() + 30, PAUSE_MAX_S))
                     if paused_for + wait > PAUSE_MAX_S or (cancel is not None and cancel.is_set()):
                         run_state = "paused"
                         stop_message = (
-                            f"usage limit still in force after {paused_for / 60:.0f} min; "
+                            "usage limit or outage still in force after "
+                            f"{paused_for / 60:.0f} min; "
                             f"resume with --resume {out_dir}"
                         )
                         break

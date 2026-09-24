@@ -716,6 +716,11 @@ def test_provider_outage_pauses_and_redoes_the_cell(tmp_path: Path):
     assert slept == [PAUSE_POLL_S]
     outcomes = _outcomes(out)
     assert len(outcomes) == 1 and outcomes[0]["passed"] and outcomes[0]["errors"] == 0
+    pauses = [json.loads(line) for line in (out / "pauses.jsonl").read_text().splitlines()]
+    assert [p["reason"] for p in pauses] == ["provider_outage"]
+    sa = summarize(out)["set_aside"]
+    assert sa["provider_outage"] == 1 and sa["usage_limit"] == 0
+    assert "Redone cells" in (out / "summary.md").read_text()
 
 
 def test_resume_purges_cells_graded_on_a_provider_outage(tmp_path: Path):
@@ -732,3 +737,4 @@ def test_resume_purges_cells_graded_on_a_provider_outage(tmp_path: Path):
     (out / "outcomes.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     assert purge_limited_cells(out) == 1
     assert completed_cells(out) == {("B", "t1", 0), ("B", "t3", 0)}
+    assert summarize(out)["set_aside"]["by_policy"]["B"]["provider_outage"] == 1
