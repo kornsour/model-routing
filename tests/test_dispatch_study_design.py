@@ -633,3 +633,18 @@ def test_report_includes_prespecified_medium_subgroup(tmp_path: Path):
     assert sub["n_paired"] == 3 and sub["task_clusters"] == 3
     assert sub["role"].startswith("pre-specified subgroup")
     assert sub["p_adjusted"] is None  # not part of the Holm family
+
+
+def test_preregister_write_ignores_the_table_name_in_a_comment(tmp_path: Path):
+    from model_routing.cli import main
+
+    cfg_path = _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+        treatment="B",
+        control="B",
+    )
+    cfg_path.write_text("# appends the [preregistration] table\n" + cfg_path.read_text())
+    assert main(["dispatch-preregister", str(cfg_path), "--write"]) == 0
+    assert load_dispatch_config(cfg_path).preregistration is not None
+    assert main(["dispatch-preregister", str(cfg_path), "--write"]) == 1
