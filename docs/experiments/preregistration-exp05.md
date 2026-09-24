@@ -111,8 +111,8 @@ context) is kept as the pessimistic routing variant.
   `taskset_sha256`; the report refuses to call a run confirmatory if the
   hash differs from the registered one.
 - Difficulty labels are **measured**, not guessed: a calibration run of every
-  task on every static candidate (`experiments/agentic/exp05_calibrate.toml`,
-  3 trials) is folded by `make dispatch-calibration ... WRITE=1` into
+  task on every static candidate (`experiments/agentic/exp05_calibrate.toml`;
+  2 trials were run on 2026-09-23 for budget, 3 were planned) is folded by `make dispatch-calibration ... WRITE=1` into
   `difficulty` (easy = the cheapest model passed every trial, medium = it
   passed some, hard = only the strongest passed, unsolved = nothing passed).
   Unsolved tasks are removed or fixed before registration.
@@ -149,8 +149,14 @@ context) is kept as the pessimistic routing variant.
 
 ## Before registering (gates)
 
-1. Task set at ≥ 60 tasks, every task validated (`make check`), calibrated
-   with 3 trials, relabelled, headroom gate met.
+1. Task set at ≥ 60 tasks, every task validated (`make check`), calibrated,
+   relabelled, headroom gate met. Status 2026-09-23: 65 active tasks,
+   calibrated with **2** trials (budget; recorded in the run's meta),
+   relabelled (easy 50, medium 15), one task excluded as a gotcha. Haiku
+   passes 83% overall and 68% of the 35 hard-batch tasks, so the gate is met
+   only on the hard subset; the choice between registering all 65, the hard
+   35, or adding a batch is open (see
+   `findings/2026-09-23-exp05-calibration.md`).
 2. Smoke run of the untested paths on real models
    (`experiments/agentic/exp05_smoke_paths.toml`): `A`, `A_switch`,
    `C1_inline`, and `D` escalating at least once. Surprises recorded in

@@ -56,7 +56,7 @@ Two generations of tasks, spread across all three repos:
   feature, refactor, tests, docs, config). Their briefs name the fix, and the
   2026-09-22 pilot found the cheapest model passes them all, so they carry
   no routing headroom on their own.
-- **`-02` and `-03` tasks (36):** authored 2026-09-23 against issue #11 to need real
+- **`-02` and `-03` tasks (35 active, 1 excluded):** authored 2026-09-23 against issue #11 to need real
   investigation: multi-file changes with hidden coupling, underspecified
   briefs where intent must be inferred from code and tests, cross-module and
   ordering bugs, performance fixes checked by a deterministic budget (call
@@ -163,6 +163,11 @@ overwrites that one file; you don't need to restate the whole repo.
 6. Run `make check` - fixture/hidden/solution/mutant code must stay
    ruff-clean (`select = ["E", "F", "I", "UP", "B", "SIM"]`, line length
    100) and pyright-clean where it's imported from `tests/`.
+
+`excluded.jsonl` holds tasks pulled from the active set with an
+`excluded_reason` (currently `inv-aging-03`: every model failed the same
+hidden check, so it measures a gotcha). They keep their overlays and can be
+re-admitted after a rewrite and a fresh calibration.
 
 ## What makes a task hard but fair
 
