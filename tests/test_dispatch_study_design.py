@@ -605,3 +605,19 @@ def test_resume_purges_cells_poisoned_by_an_unrecognised_limit(tmp_path: Path):
 
     assert _spent_so_far(out) == pytest.approx(0.88)  # the poisoned session still cost money
     assert purge_limited_cells(out) == 0  # idempotent
+
+
+def test_report_includes_prespecified_medium_subgroup(tmp_path: Path):
+    outcomes = []
+    for i in range(6):
+        d = "medium" if i % 2 else "easy"
+        b = _outcome_row(f"t{i}", "B", passed=True, cost=1.0)
+        c = _outcome_row(f"t{i}", "C1", passed=True, cost=0.5)
+        b["difficulty"] = c["difficulty"] = d
+        outcomes += [b, c]
+    out = _write_run(tmp_path, "subgroup", outcomes)
+    summary = summarize(out)
+    sub = next(c for c in summary["comparisons"] if c["id"] == "H-D1-medium")
+    assert sub["n_paired"] == 3 and sub["task_clusters"] == 3
+    assert sub["role"].startswith("pre-specified subgroup")
+    assert sub["p_adjusted"] is None  # not part of the Holm family

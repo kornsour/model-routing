@@ -79,7 +79,8 @@ Paired non-inferiority (McNemar approximation, true difference 0):
 | 25% | 196 | 66 |
 | 33% (pilot) | 260 | 87 |
 
-Registered target: **≥ 60 tasks × 3 trials = 180 paired task-trials**,
+Registered target: **all 65 active tasks × 3 trials = 195 paired task-trials**
+(decision 2026-09-24; the earlier floor was 60 tasks),
 measured discordance permitting; if the calibration run shows discordance
 above 25%, raise the task count to 90 before registering. The report's
 power note recomputes this from the observed discordance.
@@ -96,6 +97,15 @@ Estimated spend (`make dispatch-estimate`, profiles from observed sessions):
 The confirmatory run must include at least `B`, `C1_inline`, `static_haiku`
 and `static_sonnet`. Secondary policies may be dropped for budget; that is
 not a deviation for H-D1.
+
+## Pre-specified subgroup
+
+`H-D1-medium`: the primary comparison restricted to tasks whose measured
+difficulty is `medium` (the cheapest model passed some but not all
+calibration trials; 15 tasks on 2026-09-23). Same statistics as H-D1,
+reported alongside it without a verdict role and outside the Holm family.
+It is descriptive of where routing has headroom; the confirmatory claim
+rests on H-D1 over the whole registered set.
 
 ## Secondary hypotheses (exploratory)
 
@@ -156,7 +166,13 @@ context) is kept as the pessimistic routing variant.
    passes 83% overall and 68% of the 35 hard-batch tasks, so the gate is met
    only on the hard subset; the choice between registering all 65, the hard
    35, or adding a batch is open (see
-   `findings/2026-09-23-exp05-calibration.md`).
+   `findings/2026-09-23-exp05-calibration.md`). **Decision 2026-09-24:
+   register all 65 tasks** (option 1), with a pre-specified subgroup
+   analysis of H-D1 on the 15 measured-medium tasks (reported as
+   `H-D1-medium`, no verdict role, not Holm-adjusted). Rationale: keeps the
+   most paired trials (195 at 3 trials); H-D1 does not require the
+   cheapest model to fail, and the subgroup answers the headroom question
+   where routing has room by construction.
 2. Smoke run of the untested paths on real models
    (`experiments/agentic/exp05_smoke_paths.toml`): `A`, `A_switch`,
    `C1_inline`, and `D` escalating at least once. Surprises recorded in

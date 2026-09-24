@@ -540,7 +540,24 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
         comp = _comparison(comp_id, treatment, control, by_policy_cells, margin_pp)
         if comp is not None:
             comparisons.append(comp)
-    secondary = [c for c in comparisons if c["id"] != "H-D1"]
+    # Pre-specified subgroup (2026-09-24): H-D1 restricted to tasks whose
+    # *measured* difficulty is "medium" (the cheapest model passed some but not
+    # all calibration trials) - where routing has headroom by construction.
+    medium_cells = {
+        name: {k: o for k, o in cells.items() if o.get("difficulty") == "medium"}
+        for name, cells in by_policy_cells.items()
+    }
+    comp = _comparison(
+        "H-D1-medium",
+        primary.get("treatment", "C1"),
+        primary.get("control", "B"),
+        medium_cells,
+        margin_pp,
+    )
+    if comp is not None:
+        comp["role"] = "pre-specified subgroup (measured medium)"
+        comparisons.append(comp)
+    secondary = [c for c in comparisons if c["id"] not in ("H-D1", "H-D1-medium")]
     for c, adj in zip(secondary, holm_adjust([c["p_saving"] for c in secondary]), strict=True):
         c["p_adjusted"] = adj
     prereg = preregistration_check(meta)
