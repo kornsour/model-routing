@@ -179,6 +179,13 @@ context) is kept as the pessimistic routing variant.
    `docs/experiments/findings/`. Status 2026-09-23: `A`, `A_switch` and
    `C1_inline` verified (`findings/2026-09-23-exp05-smoke-paths.md`); `D`
    escalation still to be exercised on a task the cheapest model fails.
+   Status 2026-09-24: the cascade re-smoke on two tasks Haiku fails showed
+   the visible checks accept Haiku's partial work, so `D` never escalated.
+   **Decision 2026-09-24, before any confirmatory data:** `D` also escalates
+   when an attempt ends in a session error such as the turn cap
+   (`escalate_on_error = true`), the other signal a deployed orchestrator
+   sees. Calibration puts its reach at 8 of 23 Haiku failures, at the cost of
+   escalating 15 of 109 Haiku passes; `D_ideal` stays the upper bound.
 3. `make dispatch-estimate` for the registered policies within budget.
 4. `make dispatch-preregister ... WRITE=1`, commit, then run.
 

@@ -435,6 +435,18 @@ def test_usage_limit_message_classification():
     assert r.raw is not None and r.raw["usage_limit_reset_at"] == 1790200000.0
     r2 = parse_claude_stream("", 10, stderr="Claude AI usage limit reached|1790200000")
     assert r2.error == "usage_limit"
+    # a limit notice returned as a normal result still pauses the run ...
+    ok_flag = (
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":1,'
+        '"result":"You\'ve hit your session limit \u00b7 resets 5:40pm","session_id":"s1"}\n'
+    )
+    assert parse_claude_stream(ok_flag, 10).error == "usage_limit"
+    # ... but a worker that merely talks about rate limits is not a limit hit
+    worker = (
+        '{"type":"result","subtype":"success","is_error":false,"num_turns":12,'
+        '"result":"Added a rate limit retry with backoff on 429.","session_id":"s1"}\n'
+    )
+    assert parse_claude_stream(worker, 10).error is None
 
 
 class LimitOnceProvider(RecordingProvider):

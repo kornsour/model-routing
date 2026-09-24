@@ -43,3 +43,12 @@ model = "opus"
 name = "D"
 kind = "spawn_cascade"
 chain = ["haiku", "sonnet", "opus"]
+escalate_on_error = true        # also escalate when the attempt hits the turn cap (2026-09-24 smoke)
+
+# Forces the escalation path (hidden tests as the checker) when D's deployable
+# signals accept the cheapest model's partial work, as they did on 2026-09-24.
+[[policies]]
+name = "D_ideal"
+kind = "spawn_cascade"
+chain = ["haiku", "sonnet", "opus"]
+escalate_on = "hidden"

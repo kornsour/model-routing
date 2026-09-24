@@ -86,6 +86,7 @@ classifier = "haiku"
 name = "D"
 kind = "spawn_cascade"
 chain = ["haiku", "sonnet", "opus"]
+escalate_on_error = true        # also escalate when the attempt hits the turn cap (2026-09-24 smoke)
 
 [[policies]]
 name = "D_ideal"                # upper bound: hidden tests as a perfect checker (not deployable)

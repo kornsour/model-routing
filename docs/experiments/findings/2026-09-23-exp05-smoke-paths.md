@@ -63,3 +63,20 @@ policy also escalates on a session error. Whether registered `D` uses it is
 a pre-registration decision.
 
 Raw data: `results/exp05_smoke_cascade/20260924-115049` (backed up).
+
+### Re-smoke with `escalate_on_error`, then forced escalation
+
+With `escalate_on_error = true` (`20260924-122646`, $0.68) Haiku failed both
+tasks again but finished inside the cap (38 and 34 turns), so neither signal
+fired; the new `cascade_checks` log shows the visible suite green both times.
+
+`D_ideal` (hidden tests as the checker, `20260924-123508`, $3.02) forced the
+escalation path, now **verified on real models**: `notes-ics-03` went
+Haiku (turn cap, fail) → Sonnet, pass, $0.72; `log-tz-02` went Haiku → Sonnet
+→ Opus, all failing, $2.31. Sonnet passed `log-tz-02` on both calibration
+trials from a clean checkout but failed in 25 s when it inherited Haiku's
+partial edits: an escalated attempt continues in the same sandbox, and a
+wrong start can anchor the next model. That cost lands on cascades in the
+confirmatory data; it is a property of the policy as designed, not a defect.
+
+Smoke spend on 2026-09-24: $4.55.
