@@ -188,6 +188,10 @@ context) is kept as the pessimistic routing variant.
    escalating 15 of 109 Haiku passes; `D_ideal` stays the upper bound.
 3. `make dispatch-estimate` for the registered policies within budget.
 4. `make dispatch-preregister ... WRITE=1`, commit, then run.
+   **Registered 2026-09-24T16:52:46Z** (taskset `5b995852…`, 65 tasks,
+   3 trials, margin 10 pts, randomized order, primary `C1_inline` vs `B`).
+   Stage 1 runs `B`, `C1_inline`, `static_haiku`, `static_sonnet` with a
+   $150 budget; `C1` and `D` follow as a second run if usage allows.
 
 ## Deviations
 

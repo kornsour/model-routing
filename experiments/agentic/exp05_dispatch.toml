@@ -114,3 +114,13 @@ candidate = "sonnet"
 name = "static_opus_low"
 kind = "spawn_static"
 candidate = "opus_low"
+
+[preregistration]
+registered_at = "2026-09-24T16:52:46+00:00"
+doc = "docs/experiments/preregistration-exp05.md"
+taskset_sha256 = "5b99585211dedaaf8271bf9520d9de8ff2d240cd5e802a0c7c43026847634804"
+n_tasks = 65
+trials = 3
+margin_pp = 10
+order = "randomized"
+primary = { treatment = "C1_inline", control = "B" }
