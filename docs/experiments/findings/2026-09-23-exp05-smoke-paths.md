@@ -28,3 +28,38 @@ Sonnet for one task and (via fallback) Opus for the other.
 
 Raw data: `results/exp05_smoke_paths/20260923-134403`, auto-backed-up to the
 configured Google Drive folder.
+
+## 2026-09-24 · cascade re-smoke: D does not escalate
+
+`exp05_smoke_cascade` (new `task_ids` filter; measured labels left no
+`hard` tasks, so the original smoke config would select nothing): `D` on
+`log-tz-02` and `notes-ics-03`, the two tasks Haiku failed on both
+calibration trials, 1 trial, **$0.85** list price.
+
+Haiku failed both hidden suites and hit the 40-turn cap both times, and **`D`
+did not escalate** (`escalations = 0`, graded as a Haiku fail). No crash: the
+deployable checker (something in scope changed, nothing out of scope, visible
+suite green) accepted Haiku's partial work. The visible suites pass on the
+untouched repo by design, so they only catch an agent that changed nothing or
+strayed out of scope, not one that did the task partly right.
+
+Calibration data puts numbers on the one other signal a deployed
+orchestrator has, the worker hitting its turn cap. Of 132 Haiku cells:
+
+| | turn cap hit | finished |
+|---|---:|---:|
+| passed hidden tests | 15 | 94 |
+| failed hidden tests | 8 | 15 |
+
+Escalating on the cap catches 8 of 23 failures (35%) and escalates 15 of
+109 passes (14%) for nothing. Neither signal makes a good verifier on this
+task set; `D_ideal` (hidden tests as a perfect checker) stays the upper
+bound for what a cascade could do.
+
+Harness changes (this branch): every cascade outcome now records
+`cascade_checks` (candidate, verdict, reason per attempt), so a run shows
+why D did or did not escalate; `escalate_on_error = true` on a cascade
+policy also escalates on a session error. Whether registered `D` uses it is
+a pre-registration decision.
+
+Raw data: `results/exp05_smoke_cascade/20260924-115049` (backed up).

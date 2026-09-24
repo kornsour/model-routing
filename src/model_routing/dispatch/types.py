@@ -178,6 +178,10 @@ class DispatchOutcome:
     """The router produced no usable pick (e.g. the parent tried to use a tool in
     a tools-off turn) and the policy fell back to the parent model.  Reported per
     policy; it biases a routing policy toward ``B``, never away from it."""
+    cascade_checks: list[dict[str, Any]] = field(default_factory=list)
+    """Cascade (D) only: one entry per non-final attempt with the candidate, the
+    escalation checker's verdict and reason, so a run can show *why* a cascade
+    did or did not escalate."""
 
     @property
     def passed(self) -> bool:
@@ -231,6 +235,7 @@ class DispatchOutcome:
             "chosen_candidate": self.chosen_candidate,
             "escalations": self.escalations,
             "router_fallback": self.router_fallback,
+            "cascade_checks": self.cascade_checks,
             "cost_usd": self.cost_usd,
             "cost_usd_full": self.cost_usd_full,
             "errors": self.errors,
