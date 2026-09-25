@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif" role="img" aria-label="Cost per completed task versus pass rate for four dispatch policies">
+<rect width="720" height="420" fill="#fcfcfb"/>
+<text x="78" y="24" font-size="15" font-weight="600" fill="#0b0b0b">Cost per completed task vs pass rate (65 tasks × 3 trials)</text>
+<line x1="78" x2="692" y1="358.0" y2="358.0" stroke="#e6e5e0" stroke-width="1"/>
+<text x="70" y="362.0" font-size="12" text-anchor="end" fill="#52514e">80%</text>
+<line x1="78" x2="692" y1="287.5" y2="287.5" stroke="#e6e5e0" stroke-width="1"/>
+<text x="70" y="291.5" font-size="12" text-anchor="end" fill="#52514e">85%</text>
+<line x1="78" x2="692" y1="217.1" y2="217.1" stroke="#e6e5e0" stroke-width="1"/>
+<text x="70" y="221.1" font-size="12" text-anchor="end" fill="#52514e">90%</text>
+<line x1="78" x2="692" y1="146.6" y2="146.6" stroke="#e6e5e0" stroke-width="1"/>
+<text x="70" y="150.6" font-size="12" text-anchor="end" fill="#52514e">95%</text>
+<line x1="78" x2="692" y1="76.2" y2="76.2" stroke="#e6e5e0" stroke-width="1"/>
+<text x="70" y="80.2" font-size="12" text-anchor="end" fill="#52514e">100%</text>
+<text x="78.0" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.00</text>
+<text x="172.5" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.10</text>
+<text x="266.9" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.20</text>
+<text x="361.4" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.30</text>
+<text x="455.8" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.40</text>
+<text x="550.3" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.50</text>
+<text x="644.8" y="376" font-size="12" text-anchor="middle" fill="#52514e">$0.60</text>
+<line x1="78" x2="692" y1="358" y2="358" stroke="#52514e" stroke-width="1"/>
+<text x="385.0" y="406" font-size="12.5" text-anchor="middle" fill="#52514e">Cost per completed task, list price (bars: 95% task-clustered CI) — lower is better</text>
+<text x="18" y="203.0" font-size="12.5" text-anchor="middle" fill="#52514e" transform="rotate(-90 18 203.0)">Pass rate — higher is better</text>
+<line x1="506.8" x2="643.5" y1="83.2" y2="83.2" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="577.1" cy="83.2" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Spawn on Opus (B): $0.528 per completed task, 100% passed</title></circle>
+<text x="565.1" y="73.2" font-size="12.5" text-anchor="end" fill="#0b0b0b">Spawn on Opus (B) <tspan fill="#52514e">$0.528</tspan></text>
+<line x1="175.9" x2="235.8" y1="76.2" y2="76.2" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="199.5" cy="76.2" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Router picks (C1_inline): $0.129 per completed task, 100% passed</title></circle>
+<text x="213.5" y="98.2" font-size="12.5" text-anchor="start" fill="#0b0b0b">Router picks (C1_inline) <tspan fill="#52514e">$0.129</tspan></text>
+<line x1="266.9" x2="354.9" y1="300.2" y2="300.2" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="303.3" cy="300.2" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Always Haiku: $0.238 per completed task, 84% passed</title></circle>
+<text x="317.3" y="290.2" font-size="12.5" text-anchor="start" fill="#0b0b0b">Always Haiku <tspan fill="#52514e">$0.238</tspan></text>
+<line x1="162.5" x2="180.6" y1="76.2" y2="76.2" stroke="#2a78d6" stroke-width="2" stroke-linecap="round"/>
+<circle cx="171.4" cy="76.2" r="5.5" fill="#2a78d6" stroke="#fcfcfb" stroke-width="2"><title>Always Sonnet: $0.099 per completed task, 100% passed</title></circle>
+<text x="181.4" y="64.2" font-size="12.5" text-anchor="start" fill="#0b0b0b">Always Sonnet <tspan fill="#52514e">$0.099</tspan></text>
+</svg>
