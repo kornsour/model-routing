@@ -33,6 +33,10 @@ packages = ["src/model_routing"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# exp06 fixture repos, setups, hidden tests and reference solutions are task
+# content: a formatter or autofix must never rewrite them (it would change the
+# task set's hash and, for the buggy setups, the task itself).
+extend-exclude = ["tasks/exp06"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
