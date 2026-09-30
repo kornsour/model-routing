@@ -31,7 +31,7 @@ statistics for the two.
 ## Side by side
 
 | metric | synthetic briefs | harvested: all | harvested: `spawn_task` chips | harvested: subagent dispatches |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | items (n) | 54 | 562 | 59 | 503 |
 | chars min / median / p90 / max | 454 / 1076 / 1331 / 1607 | 11 / 4154 / 6540 / 10889 | 941 / 1991 / 2934 / 4031 | 11 / 4353 / 6726 / 10889 |
 | ~tokens (chars/4) min / median / p90 / max | 114 / 269 / 333 / 402 | 3 / 1038 / 1635 / 2722 | 235 / 498 / 733 / 1008 | 3 / 1088 / 1682 / 2722 |

@@ -2,7 +2,7 @@
 
 Python project scaffolded from `kornsour/python-template`. It is an experiment
 harness for model-routing tradeoffs; see `README.md` and
-`docs/experiments/llm-routing.md` before changing routers, providers, or the
+`docs/experiments/exp01-04-llm-routing/design.md` before changing routers, providers, or the
 report.
 
 ## Experiment harness rules
@@ -20,14 +20,14 @@ report.
 - **Ordering is an experimental variable** (prompt caches are model-scoped
   and expire). Keep `order` explicit in configs; do not parallelize calls.
 - **Graders are deterministic.** No LLM-as-judge unless a task set says so.
-- **The confirmatory run is pre-registered.** `docs/experiments/preregistration-exp05.md`
+- **The confirmatory run is pre-registered.** `docs/experiments/exp05-dispatch/preregistration.md`
   is the analysis plan; `make dispatch-preregister ... WRITE=1` freezes the
   design and task-set hash into the config. Do not edit a registered field or
   the task set afterwards without recording a deviation there; the report
   downgrades any mismatching run to exploratory.
 - **Difficulty labels are measured**, not guessed: relabel with
   `make dispatch-calibration RUNS=... WRITE=1` after a calibration run.
-- `results/` is git-ignored. Promote findings to `docs/experiments/findings/`.
+- `results/` is git-ignored. Promote findings to `docs/experiments/<experiment>/findings/`.
 
 - **Env & deps:** `uv`. `make setup` runs `uv sync --extra dev`, installing
   exactly what `uv.lock` pins. Add runtime deps to `[project.dependencies]`;

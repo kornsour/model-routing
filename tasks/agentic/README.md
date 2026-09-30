@@ -1,7 +1,7 @@
 # Agentic task set (dispatch-time routing)
 
 This is the task set for `exp05_dispatch` (see
-[`docs/experiments/dispatch-routing.md`](../../docs/experiments/dispatch-routing.md)).
+[`docs/experiments/exp05-dispatch/design.md`](../../docs/experiments/exp05-dispatch/design.md)).
 Each task is a self-contained "task chip" of the kind a coding session
 spawns to a fresh agent session, run inside a throwaway sandbox copy of a
 small fixture repo, and graded deterministically once the agent is done.

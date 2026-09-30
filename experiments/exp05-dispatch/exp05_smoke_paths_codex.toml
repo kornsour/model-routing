@@ -5,12 +5,12 @@
 # (C1_inline), a fresh no-tools classifier (C2), and cascade D escalating.
 # Two hard tasks, one trial.  Not a hypothesis test.
 #
-#   make dispatch-estimate EXP=experiments/agentic/exp05_smoke_paths_codex.toml SAMPLE=2
-#   uv run model-routing dispatch-run experiments/agentic/exp05_smoke_paths_codex.toml \
+#   make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_smoke_paths_codex.toml SAMPLE=2
+#   uv run model-routing dispatch-run experiments/exp05-dispatch/exp05_smoke_paths_codex.toml \
 #     --sample 2 --budget-usd 4.00 --keep-sandboxes
 #
 # Check in sessions.jsonl afterwards (see "Codex track caveats" in
-# docs/experiments/dispatch-routing.md): no error on any session; A's worker
+# docs/experiments/exp05-dispatch/design.md): no error on any session; A's worker
 # has the setup's session_id and changed files; C1_inline's router has
 # raw.forked = true, a new session_id, tool_calls = 0 and its setup sandbox
 # unchanged; every resumed/forked session has raw.usage_baseline_known = true

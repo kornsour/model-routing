@@ -10,7 +10,7 @@ run can stratify on measured labels instead of guesses.
 ## Pass rates
 
 | task generation | n tasks | Haiku | Sonnet | Opus |
-|---|---:|---:|---:|---:|
+| --- | ---: | ---: | ---: | ---: |
 | `-01` (original) | 30 | 60/60 (100%) | 60/60 | 60/60 |
 | `-02` (hard batch) | 24 | 35/48 (73%) | 48/48 | 47/48 |
 | `-03` (hard batch) | 12 | 14/24 (58%) | 22/24 | 22/24 |
@@ -31,7 +31,7 @@ solved the task (graded as-is) and only some were failures.
 ## Costs per session (list price)
 
 | | Haiku | Sonnet | Opus |
-|---|---:|---:|---:|
+| --- | ---: | ---: | ---: |
 | `-01` tasks | $0.09 | $0.07 | $0.26 |
 | hard tasks | $0.28-0.46 | $0.09-0.15 | $0.63-0.89 |
 

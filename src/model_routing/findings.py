@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from model_routing.pricing import PriceTable
-from model_routing.report import RouterStats, aggregate, pareto
+from model_routing.single_turn.report import RouterStats, aggregate, pareto
 
 SUPPORTED = "supported"
 CONTRADICTED = "contradicted"

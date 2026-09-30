@@ -1,6 +1,6 @@
 # Local routing experiment platform
 
-Start with `make lab`, then open http://127.0.0.1:8765. The static dashboard
+Start with `make lab`, then open <http://127.0.0.1:8765>. The static dashboard
 and existing CLI remain available. No dependencies or cloud resources were added.
 
 The UI supports two same-vendor tracks, light/dark/system themes, expandable
@@ -127,7 +127,7 @@ research needs a provider exposing trainable models and reproducible checkpoints
 server and opens the browser straight to `/dispatch` (equivalent to
 `model-routing serve --open --page dispatch`). It is the operator-facing UI
 for the agentic, dispatch-time routing experiments in
-`docs/experiments/dispatch-routing.md` and `experiments/agentic/*.toml` — a
+`docs/experiments/exp05-dispatch/design.md` and `experiments/exp05-dispatch/*.toml` — a
 separate surface from the single-shot lab at `/` (the two link to each
 other). It uses the `claude` / `codex` CLI logins already on the machine;
 nothing is entered into the page.

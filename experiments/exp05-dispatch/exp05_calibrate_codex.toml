@@ -4,10 +4,10 @@
 # tasks spread across the OpenAI tiers so the replication can say whether the
 # set is comparably hard for both families (read it, do not relabel from it).
 #
-#   make dispatch-estimate EXP=experiments/agentic/exp05_calibrate_codex.toml
-#   make dispatch-run      EXP=experiments/agentic/exp05_calibrate_codex.toml BUDGET=... TRIALS=1
+#   make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_calibrate_codex.toml
+#   make dispatch-run      EXP=experiments/exp05-dispatch/exp05_calibrate_codex.toml BUDGET=... TRIALS=1
 #
-# See docs/experiments/dispatch-routing.md ("Codex track caveats").
+# See docs/experiments/exp05-dispatch/design.md ("Codex track caveats").
 
 [experiment]
 name = "exp05_calibrate_codex"

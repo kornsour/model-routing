@@ -358,7 +358,7 @@ def _render_single_shot_report(run_dir: Path, meta: dict[str, Any]) -> str:
     # Note: this never writes to ``run_dir`` (no ``write_report`` call) -- it
     # is called from ``backup_run``, and a report render must not mutate the
     # source directory it is about to hash and copy.
-    from model_routing.report import aggregate, load_outcomes, render_markdown
+    from model_routing.single_turn.report import aggregate, load_outcomes, render_markdown
 
     spend = None
     table = ""

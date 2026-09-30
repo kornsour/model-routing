@@ -16,8 +16,8 @@ a pass rate no more than the non-inferiority margin (10 points) worse.
 
 This is pre-registered: the metric, margin, policies, ordering, trial count
 and the task-set hash are frozen in the `[preregistration]` table of
-`experiments/agentic/exp05_dispatch.toml` before the confirmatory run (see
-[`preregistration-exp05.md`](preregistration-exp05.md) for the full analysis
+`experiments/exp05-dispatch/exp05_dispatch.toml` before the confirmatory run (see
+[`preregistration.md`](preregistration.md) for the full analysis
 plan and the gates that must be met first). The report only calls a run
 *confirmatory* when it matches that table; everything else is exploratory.
 Pilot and calibration runs size variance, cost and task difficulty; they do
@@ -26,7 +26,7 @@ not test H-D1.
 ## Secondary hypotheses
 
 | # | Hypothesis | Comparison (expected winner first) |
-|---|---|---|
+| --- | --- | --- |
 | H-D2 | Doing the task inside the parent session costs more per completed task than spawning with a brief, because every turn re-reads the parent's context. | `B` vs `A` |
 | H-D3 | Switching model mid-session costs more than staying (cache rewrite) and passes less often. | `A` vs `A_switch` |
 | H-D4 | A cheap-first cascade that escalates only when the checker fails beats a single routed pick when a real checker (tests) exists. | `D` vs `C1` |
@@ -38,7 +38,7 @@ not test H-D1.
 ## Policies
 
 | Policy | What happens | Parent session needed |
-|---|---|---|
+| --- | --- | --- |
 | `A` | Resume the seeded parent session; do the task there on the parent model | yes |
 | `A_switch` | Resume the seeded parent session but with `switch_to` model | yes |
 | `B` | Fresh session, parent model, full brief | no |
@@ -106,7 +106,7 @@ a null.
 ### Controls against the usual confounds
 
 | Confound | Control |
-|---|---|
+| --- | --- |
 | Clock-time / provider drift | `order = "randomized"`: a seeded randomized block design per (task, trial); sessions stay sequential |
 | Model alias drift | every session records the resolved model id; `meta.json` records CLI versions and the harness git SHA |
 | Task-set or config edits after registration | `taskset_sha256` over the whole task tree and the config hash in `meta.json`; the report lists every deviation from `[preregistration]` and downgrades the run to exploratory |
@@ -131,7 +131,7 @@ same policies through `codex exec`, checked against codex-cli 0.154.0
 details). Where it cannot match the Claude track, and what it does instead:
 
 | Claude track | Codex track | Effect on the comparison |
-|---|---|---|
+| --- | --- | --- |
 | `--max-budget-usd` stops a session on spend | no equivalent (the `token_budget` feature is unreleased) | the budget is policed only **between** sessions; one runaway session can overshoot `--budget-usd` by up to its own cost. The wall clock (`timeout_s`, 1200 s) is the only hard stop inside a session |
 | `--max-turns 40` counts model turns | the provider kills the session after more than 40 **tool calls** (one Codex turn can batch several) | the Codex cap binds no later than Claude's; capped sessions end with `error = "max_turns"` and are graded as-is |
 | `--tools ""` removes every tool for router/classifier calls | read-only sandbox, shell tools disabled, and a one-line "answer from this conversation alone" notice appended to the prompt | a no-tools call cannot change files, but its prompt differs by that line and it may still *attempt* a tool call (visible in `tool_calls`) |
@@ -149,32 +149,32 @@ whatever the agent left in the sandbox (intention to treat).
 
 ```bash
 # No-spend cost estimate (states its token-profile assumptions explicitly).
-make dispatch-estimate EXP=experiments/agentic/exp05_dispatch.toml
+make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_dispatch.toml
 
 # Full run end to end with the fake agent provider - exercises every policy,
 # the sandbox/grading/report plumbing, and produces a real summary.json/md,
 # but spends nothing.
-make dispatch-sim EXP=experiments/agentic/exp05_pilot.toml
+make dispatch-sim EXP=experiments/exp05-dispatch/exp05_pilot.toml
 
 # A small, cheap pilot to size variance and cost before the confirmatory run.
 # Pilots do not test H-D1; run more trials/tasks for that.
-make dispatch-run EXP=experiments/agentic/exp05_pilot.toml BUDGET=2.00
+make dispatch-run EXP=experiments/exp05-dispatch/exp05_pilot.toml BUDGET=2.00
 
 # Difficulty calibration: every task on every static candidate, then fold the
 # measured pass rates into tasks.jsonl (WRITE=1 relabels).
-make dispatch-run EXP=experiments/agentic/exp05_calibrate.toml BUDGET=80.00 TRIALS=3
+make dispatch-run EXP=experiments/exp05-dispatch/exp05_calibrate.toml BUDGET=80.00 TRIALS=3
 make dispatch-calibration RUNS="results/exp05_calibrate/<stamp>" WRITE=1
 
 # Smoke the paths the pilot never exercised on real models (A, A_switch,
 # C1_inline, D escalation) before registering.
-make dispatch-run EXP=experiments/agentic/exp05_smoke_paths.toml SAMPLE=2 BUDGET=4.00
+make dispatch-run EXP=experiments/exp05-dispatch/exp05_smoke_paths.toml SAMPLE=2 BUDGET=4.00
 
 # Freeze the design against the current task set (appends [preregistration]).
-make dispatch-preregister EXP=experiments/agentic/exp05_dispatch.toml WRITE=1
+make dispatch-preregister EXP=experiments/exp05-dispatch/exp05_dispatch.toml WRITE=1
 
 # The pre-registered confirmatory run (at least B, C1_inline and the static
-# baselines; see docs/experiments/preregistration-exp05.md for the budget table).
-make dispatch-run EXP=experiments/agentic/exp05_dispatch.toml BUDGET=200.00 \
+# baselines; see docs/experiments/exp05-dispatch/preregistration.md for the budget table).
+make dispatch-run EXP=experiments/exp05-dispatch/exp05_dispatch.toml BUDGET=200.00 \
   POLICIES=B,C1_inline,static_haiku,static_sonnet
 
 # (re)build summary.json/summary.md for an existing run directory.
@@ -183,7 +183,7 @@ make dispatch-report RUN=results/exp05_dispatch/20260922-120000
 # White-paper Markdown draft (numbers filled, prose left as [TODO: author]);
 # several RUNS are pooled. Never copies model output into the draft.
 make dispatch-paper RUNS="results/exp05_dispatch/20260922-120000" \
-  OUT=docs/experiments/findings/2026-09-30-exp05-paper-draft.md
+  OUT=docs/experiments/exp05-dispatch/findings/2026-09-30-exp05-paper-draft.md
 
 # Scan local Claude Code transcripts for spawned task chips to grow the task set.
 make harvest-chips
@@ -192,8 +192,8 @@ make harvest-chips
 Equivalently, via the CLI directly:
 
 ```bash
-model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
-model-routing dispatch-run experiments/agentic/exp05_dispatch.toml \
+model-routing dispatch-estimate experiments/exp05-dispatch/exp05_dispatch.toml
+model-routing dispatch-run experiments/exp05-dispatch/exp05_dispatch.toml \
   --budget-usd 25.00 --sample 8 --trials 3 [--policies A,B,C1,D] [--fake] [--keep-sandboxes]
 model-routing dispatch-report results/exp05_dispatch/<stamp>
 model-routing dispatch-paper results/exp05_dispatch/<stamp> [more run dirs] [--out draft.md]

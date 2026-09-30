@@ -40,8 +40,8 @@ from model_routing.server import serve
 from model_routing.store import index_results
 
 ROOT = Path(__file__).resolve().parents[1]
-DISPATCH_CFG = ROOT / "experiments" / "agentic" / "exp05_pilot.toml"
-LLM_CFG = ROOT / "experiments" / "llm" / "exp02_routing.toml"
+DISPATCH_CFG = ROOT / "experiments" / "exp05-dispatch" / "exp05_pilot.toml"
+LLM_CFG = ROOT / "experiments" / "exp01-04-llm-routing" / "exp02_routing.toml"
 
 
 @pytest.fixture(autouse=True)

@@ -1,7 +1,7 @@
 """Shared contract for dispatch-time routing (agentic, multi-turn sessions).
 
-See ``docs/experiments/dispatch-routing.md``.  The single-shot harness
-(``model_routing.runner``) measures one call per task; this package measures
+See ``docs/experiments/exp05-dispatch/design.md``.  The single-shot harness
+(``model_routing.single_turn.runner``) measures one call per task; this package measures
 one or more *agent sessions* per task, each of which may run many turns with
 tools inside a sandbox copy of a fixture repo.
 

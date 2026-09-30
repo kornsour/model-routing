@@ -7,7 +7,7 @@ from model_routing.findings import compute_findings
 from model_routing.store import connect, index_results, list_runs, run_outcomes
 
 ROOT = Path(__file__).resolve().parents[1]
-CFG = ROOT / "experiments" / "llm" / "exp02_routing.toml"
+CFG = ROOT / "experiments" / "exp01-04-llm-routing" / "exp02_routing.toml"
 
 
 def _fake_run(tmp_path: Path) -> Path:

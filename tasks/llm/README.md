@@ -7,7 +7,7 @@ Each task set is a JSONL file; one task per line:
  "context": "handbook.md", "prompt": "...", "grader": {"type": "number", "value": 405.4, "tol": 0.01}}
 ```
 
-Fields: `id` (unique), `prompt`, `grader` (see `model_routing/graders.py`),
+Fields: `id` (unique), `prompt`, `grader` (see `model_routing/single_turn/graders.py`),
 `difficulty` (`easy|medium|hard`, a human label the oracle router uses),
 `category`, optional `context` (a file under `context/`, prepended as system
 context), optional `schema` (JSON Schema for structured output), `tags`.

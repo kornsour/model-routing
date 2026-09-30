@@ -9,7 +9,7 @@ on it, and no exp07 result changes an exp06 verdict. No registered field of
 exp05 or exp06 changes because of exp07.
 
 **Shared protocol.** To avoid a second task set and a second calibration,
-exp07 reuses the protocol in `docs/paper/exp06-route-on-evidence.md` (v0.3)
+exp07 reuses the protocol in `docs/experiments/exp06-route-on-evidence/paper.md` (v0.3)
 wherever this document is silent: the control, the H0 headroom gate and its
 stopping rule, the strata, calibration at 3 trials, the grouped tuning and
 confirmatory splits, the paired randomized block design, the 40-turn cap and
@@ -33,7 +33,7 @@ completed task against $0.099 for always Sonnet.
 ## Arms (added to exp06's)
 
 | Arm | What happens | Compared with |
-|---|---|---|
+| --- | --- | --- |
 | `explore_handoff_clean_jev` | as `explore_handoff_clean`, but the L3 trigger's verifier is visible tests, scope check and the Jev risk questions, with no generated test pass | `explore_handoff_clean` |
 | `C2_jev` | Jev picks the model from the brief alone; below `min_confidence` it falls back to the mid-tier default | `C2_trained`, `explore_handoff_clean` |
 | `random_matched` | as in exp06, at the Jev arm's observed handoff rate | computed from the static arms, not run |
@@ -54,7 +54,7 @@ bound is above 0.5, labels from the hidden grader run after the decision.
 Secondary, Holm-adjusted as one family:
 
 | # | Hypothesis | Comparison |
-|---|---|---|
+| --- | --- | --- |
 | J2 | The Jev verifier has a lower false-accept rate than exp06's verifier, at a handoff precision no more than 10 points worse. | `explore_handoff_clean_jev` vs `explore_handoff_clean` |
 | J3 | On the measured hard stratum the Jev arm's completion is non-inferior to exp06's handoff arm within 10 points, at a lower cost per completed task over the whole set. | same pair |
 | J4 | The Jev trigger beats handing off at random at the same rate. | Jev arm vs `random_matched` |
@@ -74,7 +74,7 @@ calibration claim.
 ## Frozen gate inputs
 
 | Field | Value at registration |
-|---|---|
+| --- | --- |
 | Gate model | `jev-1.13.0`, never an alias; the adapter rejects a response naming another model |
 | Question text and criteria | as in `src/model_routing/dispatch/jev_policies.py` at the registered harness commit |
 | State fields and limits | brief, change evidence (24,000 characters), last 4,000 characters of worker output and of the visible result |
@@ -117,7 +117,7 @@ reported descriptively with no verdict.
 ## Threats to validity
 
 | Threat | Handling |
-|---|---|
+| --- | --- |
 | Worker text steering the gate (the vendor states Jev does not treat state as hostile) | the instructions tell the gate to treat state as evidence; false accepts are inspected for completion claims in the worker output |
 | Accuracy falling with long state | evidence is bounded; truncation forces a handoff and its rate is reported |
 | Vendor claims on calibration and latency | not assumed; only measured values are reported |
@@ -139,7 +139,7 @@ reported descriptively with no verdict.
 ## Open decisions (operator)
 
 | Decision | Proposed | Alternative |
-|---|---|---|
+| --- | --- | --- |
 | Which strata may be sent to TypeSafe | fixture-repo strata only | also the harvested handoffs, after the operator reviews them for private content |
 | Build a Haiku verifier answering the same two questions | yes | no, and the claim stays narrower |
 | Run `C2_jev` | yes, it costs gate calls plus one worker session per cell | drop it first if the budget binds |

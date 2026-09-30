@@ -2,8 +2,8 @@
 # labels can be *measured* instead of guessed (see
 # src/model_routing/dispatch/calibration.py).  Not a hypothesis test.
 #
-#   make dispatch-estimate EXP=experiments/agentic/exp05_calibrate.toml
-#   make dispatch-run      EXP=experiments/agentic/exp05_calibrate.toml BUDGET=... TRIALS=1
+#   make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_calibrate.toml
+#   make dispatch-run      EXP=experiments/exp05-dispatch/exp05_calibrate.toml BUDGET=... TRIALS=1
 #   make dispatch-calibration RUNS="results/exp05_calibrate/<stamp> ..." WRITE=1
 #
 # Run it once per task-set batch with trials=1 for a cheap first look, then with

@@ -1,0 +1,19 @@
+{
+  "config": {
+    // Compact tables: one space around pipes, no column padding. Aligned style
+    // pads every row to the widest cell, which makes prose tables unreadable
+    // as source.
+    "MD060": { "style": "compact" },
+    // Prose, tables and URLs here routinely exceed 80 columns.
+    "MD013": false
+  },
+  "ignores": [
+    "archive/**", // historical; see CLAUDE.md
+    "tasks/agentic/**", // fixtures the agents run on; hashed into taskset_sha256
+    "tasks/llm/context/**", // prompt input for exp01-04; edits change what models see
+    "results/**",
+    ".claude/**",
+    ".venv/**",
+    "node_modules/**"
+  ]
+}

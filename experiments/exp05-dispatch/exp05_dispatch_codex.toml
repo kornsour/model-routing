@@ -1,12 +1,12 @@
 # Experiment 5 (ChatGPT/Codex track) - dispatch-time routing, same design as
 # exp05_dispatch.toml, run against the Codex CLI / OpenAI candidates instead.
 # A replication on a second model family, not part of H-D1.  See
-# docs/experiments/dispatch-routing.md ("Codex track caveats") for where this
+# docs/experiments/exp05-dispatch/design.md ("Codex track caveats") for where this
 # track cannot match the Claude one (no in-session spend cap, turn cap counted
 # in tool calls, no-tools = read-only sandbox), checked against codex-cli 0.154.0.
 #
-#   make dispatch-estimate EXP=experiments/agentic/exp05_dispatch_codex.toml
-#   (smoke first: experiments/agentic/exp05_smoke_paths_codex.toml)
+#   make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_dispatch_codex.toml
+#   (smoke first: experiments/exp05-dispatch/exp05_smoke_paths_codex.toml)
 
 [experiment]
 name = "exp05_dispatch_codex"

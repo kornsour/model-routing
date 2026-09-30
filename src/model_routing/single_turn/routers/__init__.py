@@ -1,5 +1,5 @@
-from model_routing.routers.base import Router, RouteResult
-from model_routing.routers.strategies import (
+from model_routing.single_turn.routers.base import Router, RouteResult
+from model_routing.single_turn.routers.strategies import (
     CascadeRouter,
     ClassifierRouter,
     HeuristicRouter,
