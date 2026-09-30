@@ -259,6 +259,7 @@ class DispatchConfig:
             "spawn_parent_pick_inline",
             "spawn_classifier",
             "spawn_cascade",
+            "spawn_ladder",
         }
         if self.order not in ("by_policy", "by_task", "randomized"):
             raise ValueError(f"order must be by_policy | by_task | randomized, got {self.order!r}")
@@ -275,6 +276,11 @@ class DispatchConfig:
             for c in p.get("chain", []):
                 if c not in self.candidates:
                     raise ValueError(f"policy {p['name']!r}: unknown chain member {c!r}")
+            for key in ("worker", "frontier"):
+                if key in p and p[key] not in self.candidates:
+                    raise ValueError(f"policy {p['name']!r}: unknown {key} {p[key]!r}")
+            if p.get("kind") == "spawn_ladder" and "worker" not in p:
+                raise ValueError(f"policy {p['name']!r}: spawn_ladder needs a worker")
             classifier = p.get("classifier")
             if classifier and classifier != "heuristic" and classifier not in self.candidates:
                 raise ValueError(f"policy {p['name']!r}: unknown classifier {classifier!r}")
@@ -621,6 +627,27 @@ def _policy_estimate(
         mid = sum(cost(c, 1.0, WORKER_USAGE) for c in half)
         high = sum(cost(c, 1.8, WORKER_USAGE) for c in chain)
         return low, mid, high, len(chain)
+    if kind == "spawn_ladder":
+        worker = spec["worker"]
+        frontier = spec.get("frontier")
+        has_advisor = bool(cfg.candidates[worker].extra.get("advisor"))
+        k = int(spec.get("k", 0))
+
+        def ladder_total(scale: float, handoff_share: float, resumes: int) -> float:
+            base = cost(worker, scale, WORKER_USAGE) * (1 + 0.3 * resumes)
+            # An advisor call re-reads the transcript at the frontier's input price.
+            if has_advisor and frontier:
+                base += cost(frontier, scale, WORKER_USAGE) * 0.25
+            if frontier and spec.get("handoff"):
+                base += handoff_share * cost(frontier, scale, WORKER_USAGE)
+            return base
+
+        return (
+            ladder_total(0.6, 0.0, 0),
+            ladder_total(1.0, 0.3, 1),
+            ladder_total(1.8, 1.0, k + 1),
+            2 + k + (1 if spec.get("forced_check") else 0),
+        )
     raise ValueError(f"unknown policy kind {kind!r}")
 
 
@@ -1088,6 +1115,7 @@ def run_dispatch(
             provider = provider_for(candidate)
             state["seq"] += 1
             started = time.time()
+            advisor = cand.extra.get("advisor")
             result: AgentResult = provider.run(
                 cand.model,
                 prompt,
@@ -1100,6 +1128,7 @@ def run_dispatch(
                 tools=tools,
                 max_budget_usd=cfg.max_budget_per_session_usd,
                 timeout_s=1200,
+                **({"advisor": advisor} if advisor else {}),
             )
             if (
                 result.error == "usage_limit"
@@ -1125,6 +1154,22 @@ def run_dispatch(
                     reported_cumulative[result.session_id] = reported
                 reported = max(0.0, reported - prior)
             cost = prices.cost(price_model, result.usage) if prices.get(price_model) else 0.0
+            # Other models the session called (the advisor): their tokens are not
+            # in ``usage``.  The advisor's read of the transcript is never cached.
+            other_cost = 0.0
+            for other_model, u in ((result.raw or {}).get("other_model_usage") or {}).items():
+                other_usage = Usage(
+                    input_tokens=u["input_tokens"],
+                    cache_read=u["cache_read"],
+                    cache_write=u["cache_write"],
+                    cache_write_1h=u["cache_write"],
+                    output_tokens=u["output_tokens"],
+                )
+                if prices.get(other_model):
+                    other_cost += prices.cost(other_model, other_usage)
+            if other_cost and result.raw is not None:
+                result.raw["other_model_cost_usd"] = other_cost
+            cost += other_cost
             if cost == 0.0 and reported:
                 # The Claude CLI zeroes ``usage`` on a budget-capped result while
                 # still reporting dollars; never price a paid session at $0.
@@ -1189,6 +1234,8 @@ def run_dispatch(
         from model_routing.dispatch import grading
         from model_routing.dispatch.sandbox import Sandbox
 
+        if mode == "verifier":
+            return _ladder_verifier(task, sandbox)
         if mode == "hidden":
             with tempfile.TemporaryDirectory() as tmp:
                 copy = Path(tmp) / "sandbox"
@@ -1313,6 +1360,45 @@ def run_dispatch(
 
     summarize(out_dir)
     return out_dir
+
+
+VERIFIER_DIR = ".verifier"
+
+
+def _ladder_verifier(task: AgentTask, sandbox: Any) -> tuple[bool, str]:
+    """exp06's deployable verifier for the ladder's handoff trigger: something
+    in scope changed, nothing out of scope changed, the visible suite passes,
+    and the tests the working model wrote for the brief (under ``.verifier/``)
+    exist and pass.  Hidden tests are never run or shown here."""
+    from model_routing.dispatch import grading
+
+    path = Path(sandbox.path)
+    try:
+        changed = grading.changed_files(path)
+    except (subprocess.CalledProcessError, OSError):
+        changed = None
+    if changed is not None:
+        if not changed:
+            return False, "No files were changed; the task is not done."
+        allowed = task.grader.get("allowed_paths") or ["*"]
+        if not grading.check_scope(changed, allowed):
+            return False, f"Files changed outside the allowed scope: {', '.join(changed)}"
+    cmd = task.grader.get("visible_cmd") or grading.default_visible_cmd()
+    ok, tail = grading.run_cmd(list(cmd), path, 300)
+    if not ok:
+        return False, f"The visible test suite fails:\n{tail}"
+    gen = sorted(
+        str(p.relative_to(path)) for p in (path / VERIFIER_DIR).glob("test_*.py") if p.is_file()
+    )
+    if not gen:
+        return False, (
+            f"No generated acceptance tests found: write tests for the brief's stated "
+            f"behaviour as {VERIFIER_DIR}/test_*.py."
+        )
+    ok, tail = grading.run_cmd([*grading.default_visible_cmd(), *gen], path, 300)
+    if not ok:
+        return False, f"Your acceptance tests in {VERIFIER_DIR}/ fail:\n{tail}"
+    return True, "all checks passed"
 
 
 def auth_status() -> dict[str, dict[str, Any]]:

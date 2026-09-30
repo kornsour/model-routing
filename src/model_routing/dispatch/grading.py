@@ -18,7 +18,16 @@ from pathlib import Path
 from model_routing.dispatch.sandbox import FAKE_SOLUTION_DIRNAME, Sandbox
 from model_routing.dispatch.types import AgentTask, GradeResult
 
-_IGNORED_DIR_NAMES = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", FAKE_SOLUTION_DIRNAME}
+# ``.verifier`` holds the acceptance tests an exp06 ladder worker writes for
+# itself; they are scaffolding, not part of the deliverable.
+_IGNORED_DIR_NAMES = {
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".verifier",
+    FAKE_SOLUTION_DIRNAME,
+}
 
 DEFAULT_TIMEOUT_S = 120
 
