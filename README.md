@@ -23,7 +23,7 @@ experiments, the `codex` CLI logged in (ChatGPT).
 ## Dispatch routing
 
 `docs/experiments/dispatch-routing.md` covers a second, agentic question: does
-it pay to choose the model *when work is handed off* (a spawned task chip, a
+it pay to choose the model _when work is handed off_ (a spawned task chip, a
 subagent), rather than always spawning on the parent's own model? Sessions run
 with tools inside a throwaway sandbox copy of a fixture repo and are graded
 deterministically (visible + hidden tests). Nothing spends without an estimate
@@ -81,17 +81,17 @@ results/          run output (git-ignored); promote findings to docs/experiments
 
 ## Experiments
 
-| Config               | Question                                                                                                 |
-| -------------------- | -------------------------------------------------------------------------------------------------------- |
-| `exp01_baselines`    | Cost per completed task for each single model, including the frontier model at low effort                |
-| `exp02_routing`      | Oracle, heuristic, classifier, and cascade routers vs. those baselines, with cache fragmentation visible |
-| `exp03_cache_order`  | Does interleaving requests across models change the cache picture?                                       |
-| `exp04_cross_vendor` | The Codex harness floor and a cross-vendor cascade                                                       |
-| `exp05_dispatch` (agentic) | Does dispatch-time routing (letting the parent pick the model when it spawns a task) lower cost per completed task? See `docs/experiments/dispatch-routing.md`. |
-| `exp05_dispatch_codex` (agentic) | Same design, ChatGPT/Codex candidates |
-| `exp05_pilot` (agentic) | Small, cheap pilot to size variance/cost before the confirmatory run |
-| `exp05_calibrate` (agentic) | Every task on every static candidate: measured difficulty labels and the routing-headroom gate |
-| `exp05_smoke_paths` (agentic) | Exercise A, A_switch, C1_inline and cascade escalation on real models before registering |
+| Config                           | Question                                                                                                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `exp01_baselines`                | Cost per completed task for each single model, including the frontier model at low effort                                                                       |
+| `exp02_routing`                  | Oracle, heuristic, classifier, and cascade routers vs. those baselines, with cache fragmentation visible                                                        |
+| `exp03_cache_order`              | Does interleaving requests across models change the cache picture?                                                                                              |
+| `exp04_cross_vendor`             | The Codex harness floor and a cross-vendor cascade                                                                                                              |
+| `exp05_dispatch` (agentic)       | Does dispatch-time routing (letting the parent pick the model when it spawns a task) lower cost per completed task? See `docs/experiments/dispatch-routing.md`. |
+| `exp05_dispatch_codex` (agentic) | Same design, ChatGPT/Codex candidates                                                                                                                           |
+| `exp05_pilot` (agentic)          | Small, cheap pilot to size variance/cost before the confirmatory run                                                                                            |
+| `exp05_calibrate` (agentic)      | Every task on every static candidate: measured difficulty labels and the routing-headroom gate                                                                  |
+| `exp05_smoke_paths` (agentic)    | Exercise A, A_switch, C1_inline and cascade escalation on real models before registering                                                                        |
 
 ## Data safety
 

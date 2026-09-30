@@ -1,13 +1,13 @@
 # Route on evidence, not on the prompt
 
-*Hypothesis paper and pre-registration draft. Governing AI model spend.*
+_Hypothesis paper and pre-registration draft. Governing AI model spend._
 
 A proposed design for keeping everyday AI work on cheaper models without
 blocking anyone from frontier intelligence, and a study protocol to test it
 against the right controls.
 
-| 81% | 0.8% | 0 / 24 | 0 |
-|---|---|---|---|
+| 81%                                                                             | 0.8%                                                                                             | 0 / 24                                                                                  | 0                                                                                                |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | lower cost per completed task on Sonnet than Opus in exp05, at equal completion | extra saving a perfect per-task router could have added on top of that (1.4% choosing per trial) | times Copilot Auto upgraded the model when told a task was complex, in Michelin's audit | tasks in exp05 that only the frontier model could solve. The number this study must first change |
 
 Andrew Kaiserauer. September 2026. **Version 0.3** (protocol revised; not yet
@@ -112,15 +112,15 @@ trial. The money is in the default, and it leaks because people override it.
 Anthropic's own cost documentation reaches the same diagnosis. Unexpectedly
 high Claude Code spend "usually traces back to long sessions that were never
 cleared or to Opus left as the default model"; "Sonnet handles most coding
-tasks well and costs less than Opus" [1].
+tasks well and costs less than Opus" [[1]][1].
 
 Three approaches are commonly tried. Each fails for a known reason.
 
-| Approach | What happens | Evidence |
-|---|---|---|
-| Set a cheaper default | Works for most people, most of the time, but the users who care most about quality (often engineers) switch back. A default a user can change is only a suggestion. | **ANALOGY** Defaults move behavior strongly: 76% of new hires stayed at a 401(k) default rate, against 8% before auto-enrollment [2]. But programmers changed 40% to 80% of settings, against under 5% of general users [3]. |
-| Block the expensive model | Saves money and fails the tasks that need it. People route around it with personal accounts, or lose trust in the platform. | **MEASURED** When ChatGPT hid its model picker behind an automatic router, the backlash forced OpenAI to restore the picker within days [4]. |
-| Show people the cost | Helps a little. People do not bear the cost, and the effect fades. | **ANALOGY** Price display cut test ordering by 8.6% in one hospital trial [5] and had no significant effect in another [6]. Home energy reports cut use by about 2% [7]. |
+| Approach                  | What happens                                                                                                                                                        | Evidence                                                                                                                                                                                                                               |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Set a cheaper default     | Works for most people, most of the time, but the users who care most about quality (often engineers) switch back. A default a user can change is only a suggestion. | **ANALOGY** Defaults move behavior strongly: 76% of new hires stayed at a 401(k) default rate, against 8% before auto-enrollment [[2]][2]. But programmers changed 40% to 80% of settings, against under 5% of general users [[3]][3]. |
+| Block the expensive model | Saves money and fails the tasks that need it. People route around it with personal accounts, or lose trust in the platform.                                         | **MEASURED** When ChatGPT hid its model picker behind an automatic router, the backlash forced OpenAI to restore the picker within days [[4]][4].                                                                                      |
+| Show people the cost      | Helps a little. People do not bear the cost, and the effect fades.                                                                                                  | **ANALOGY** Price display cut test ordering by 8.6% in one hospital trial [[5]][5] and had no significant effect in another [[6]][6]. Home energy reports cut use by about 2% [[7]][7].                                                |
 
 That leaves automation: something the user cannot override, that still gets
 them the stronger model when the task truly needs it.
@@ -133,33 +133,33 @@ answer, and the research is consistently discouraging about it for this job.
 - **Difficulty is invisible up front.** SWE-Router (2026) argues formally
   that prompt-only routing on software tasks has an error floor, because "a
   similar issue can hide either a localized typo or a multi-module refactor"
-  [8]. The companion study found the same: no task description predicted
+  [[8]][8]. The companion study found the same: no task description predicted
   which tasks the cheap model would fail.
 - **Routers route by topic, not difficulty.** A 2025 stress-test study found
   a standard BERT router sent every coding and math query to the strongest
-  model, even when a weaker one would do [9]. For a company whose heavy users
+  model, even when a weaker one would do [[9]][9]. For a company whose heavy users
   are engineers, that reproduces the "everyone on Opus" problem
   automatically.
 - **Routers collapse to the expensive model.** Under generous budgets,
   existing routers sent nearly all queries to the strongest model, while an
-  oracle needed it for about 20% [10]. Across 33 models and 10 routers,
+  oracle needed it for about 20% [[10]][10]. Across 33 models and 10 routers,
   several recent methods, including commercial ones, did not reliably beat a
-  simple baseline [11].
+  simple baseline [[11]][11].
 - **In production, the one independent audit found the router cost more.**
   **MEASURED** Michelin audited about 700 GitHub Copilot Auto requests over
   three days. On tasks a small model solved every time, Auto billed 6 to 18
   times more. Auto "routes your first sentence and rarely reconsiders": the
   same seven questions cost 0.78 or 13.71 credits depending on which came
   first. Telling it a task was complex produced zero upgrades in 24 attempts.
-  Michelin turned Auto off by default [12].
+  Michelin turned Auto off by default [[12]][12].
 - **Routers can be gamed.** Short appended text reliably pushes commercial
-  and open routers to the strongest model [13]. Internal users will find
+  and open routers to the strongest model [[13]][13]. Internal users will find
   "this is critical, think very hard" within a week.
 - **A vague prompt needs a question, not a bigger model.** On ambiguous
   coding tasks, asking clarifying questions raised GPT-4's pass rate from
-  70.96% to 80.80% [14]. A 2026 benchmark found ambiguity costs 7.8 to 19.8
+  70.96% to 80.80% [[14]][14]. A 2026 benchmark found ambiguity costs 7.8 to 19.8
   points of pass rate, and a stronger model with extended thinking did
-  slightly *worse* on ambiguous tasks [15].
+  slightly _worse_ on ambiguous tasks [[15]][15].
 
 A small classifier trained on a company's own outcomes still has a role, but
 as a light prior, not the gate. Section 4 describes where it fits.
@@ -175,16 +175,16 @@ prediction fixed. Lab hypotheses (L) are tested in exp06. Field hypotheses
 > **H0 (headroom exists).** On a task set drawn from real handoffs and
 > longer, multi-module work, the frontier model completes tasks that the
 > mid-tier model does not: at least 10 tasks (or 10% of the registered set,
-> whichever is larger) are *measured hard* in calibration (frontier passes at
+> whichever is larger) are _measured hard_ in calibration (frontier passes at
 > least 2 of 3 trials; mid-tier passes at most 1 of 3).
 
-*Stopping rule.* If H0 fails after the task set has been extended once, exp06
+_Stopping rule._ If H0 fails after the task set has been extended once, exp06
 does not proceed to the confirmatory run. The finding "no frontier-only work
 found in [description of the work sampled]" is published as the result,
 because it is the second time in a row and it means the mid-tier default is
 the whole answer for this class of work.
 
-*Reference values.* When H0 is evaluated, the calibration data also gives
+_Reference values._ When H0 is evaluated, the calibration data also gives
 what a perfect, free trigger would cost on this task set (Section 5). Those
 values are written into Appendix A before registration. They show how far a
 real ladder is from the best any ladder could do, and they have no role in
@@ -195,10 +195,10 @@ the H0 decision.
 > **L1 (the ladder earns its cost over the best fixed default).** Three
 > conditions, all required:
 >
-> 1. **It helps where help is needed.** On the *measured hard* stratum, the
+> 1. **It helps where help is needed.** On the _measured hard_ stratum, the
 >    full ladder (`ladder`) completes at least 10 percentage points more
 >    tasks than always-mid-tier (`static_sonnet`).
-> 2. **It wastes little where no help is needed.** On the *measured easy*
+> 2. **It wastes little where no help is needed.** On the _measured easy_
 >    stratum, its cost per completed task is no more than 1.5×
 >    always-mid-tier's.
 > 3. **It is not dominated by the ceiling.** Over the whole registered set,
@@ -229,7 +229,7 @@ gives the numbers. The pooled ratio is still reported, with no verdict role.
 > 15% of ladder sessions on the whole set reach a full frontier handoff (L3
 > or L4).
 
-*Paired with escalation quality, or it is meaningless:* on tasks that
+_Paired with escalation quality, or it is meaningless:_ on tasks that
 always-mid-tier fails, the ladder escalates (advisor call, handoff, or both)
 in at least 70% of trials (**recall**). Of all ladder escalations, at least
 50% are on tasks always-mid-tier fails in that trial or in the majority of
@@ -243,8 +243,8 @@ trigger firing at random would score.
 > (`explore_handoff_clean`) has a lower cost per completed task than a frozen
 > prompt classifier on the brief alone (`C2_trained`), and non-inferior
 > completion within 10 points. The classifier is trained on the tuning split
-> and frozen before registration. Secondary: AUC for predicting *measured
-> need* (mid-tier fails) from execution signals at turn K versus from the
+> and frozen before registration. Secondary: AUC for predicting _measured
+> need_ (mid-tier fails) from execution signals at turn K versus from the
 > brief alone.
 >
 > **L4 (a wrong start anchors the next model).** Handoff from a clean
@@ -253,7 +253,7 @@ trigger firing at random would score.
 > (`explore_handoff_carry`), at no more than 1.25× the cost. exp05 saw this
 > once, uncontrolled; here it is a registered arm.
 >
-> **L5 (clarifying reduces handoffs).** On the *ambiguous* stratum (tasks
+> **L5 (clarifying reduces handoffs).** On the _ambiguous_ stratum (tasks
 > with a deliberately underspecified brief and a scripted answer key for
 > clarifying questions), the ladder with L0 enabled hands off to frontier in
 > fewer sessions than the ladder with L0 disabled, at equal or better
@@ -298,19 +298,19 @@ trigger firing at random would score.
 ## 4. The design
 
 **Figure 1. The escalation ladder.** Every session starts at the top rung.
-Lower rungs cost more. Rungs marked *kept* keep the same model and its prompt
-cache; rungs marked *new* start a new frontier session with a written
+Lower rungs cost more. Rungs marked _kept_ keep the same model and its prompt
+cache; rungs marked _new_ start a new frontier session with a written
 handoff. The budget guard applies to every rung.
 
-| Rung | Mechanism | Trigger | Cache |
-|---|---|---|---|
-| **Start** | Mid-tier model, medium effort. Enforced; the user cannot change the starting model. | Every session | kept |
-| **L0 Clarify** | Ask one to three questions before starting | Request is ambiguous (the model judges, optionally helped by a small classifier) | kept |
-| **L1 Effort** | Same model, higher reasoning effort | Model's own judgment, or a classifier prior on the request | kept |
-| **L2 Advisor** | Frontier model reads the transcript and returns guidance; the working model continues | Model decides: before committing to an approach, on a recurring error, before declaring done. **Plus a forced check** before the model declares a task done (Section 4.2) | kept |
-| **L3 Handoff** | New frontier session, clean checkout, with a written brief of the work so far and the failure log | Verifier still failing after K attempts; no progress in N turns; user rephrases or says "that's wrong"; advisor recommends it | new |
-| **L4 Request** | User asks for the frontier model with a one-line reason; counted against a monthly allowance; logged | Explicit | new |
-| **Budget guard** | Past a per-person allowance, frontier requests downgrade to the default model with a notice instead of being blocked | Every rung | |
+| Rung             | Mechanism                                                                                                            | Trigger                                                                                                                                                                   | Cache |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----- |
+| **Start**        | Mid-tier model, medium effort. Enforced; the user cannot change the starting model.                                  | Every session                                                                                                                                                             | kept  |
+| **L0 Clarify**   | Ask one to three questions before starting                                                                           | Request is ambiguous (the model judges, optionally helped by a small classifier)                                                                                          | kept  |
+| **L1 Effort**    | Same model, higher reasoning effort                                                                                  | Model's own judgment, or a classifier prior on the request                                                                                                                | kept  |
+| **L2 Advisor**   | Frontier model reads the transcript and returns guidance; the working model continues                                | Model decides: before committing to an approach, on a recurring error, before declaring done. **Plus a forced check** before the model declares a task done (Section 4.2) | kept  |
+| **L3 Handoff**   | New frontier session, clean checkout, with a written brief of the work so far and the failure log                    | Verifier still failing after K attempts; no progress in N turns; user rephrases or says "that's wrong"; advisor recommends it                                             | new   |
+| **L4 Request**   | User asks for the frontier model with a one-line reason; counted against a monthly allowance; logged                 | Explicit                                                                                                                                                                  | new   |
+| **Budget guard** | Past a per-person allowance, frontier requests downgrade to the default model with a notice instead of being blocked | Every rung                                                                                                                                                                |       |
 
 ### 4.1 Enforcement point
 
@@ -318,12 +318,12 @@ Enforcement has to sit where the user cannot change it. In priority order:
 
 - **Managed client settings.** For example, Claude Code's managed `model`
   setting sets the starting model on every launch, overriding the user's
-  saved choice [16]. Gap: the advisor needs the frontier model on the
+  saved choice [[16]][16]. Gap: the advisor needs the frontier model on the
   allowlist, so `/model` still works. Closing that needs a gateway rule.
   **UNTESTED**
 - **An API gateway** in front of every API-based tool. The gateway pins each
   session to its starting model, using a session id header Claude Code sends
-  on every request [17], and rewrites direct requests for frontier models
+  on every request [[17]][17], and rewrites direct requests for frontier models
   into the escalation path instead of rejecting them.
 - **Admin console defaults** for chat products, which are weaker (Section 6).
 
@@ -335,13 +335,13 @@ empty regardless.
 
 ### 4.2 The rungs and their evidence
 
-| Rung | Evidence status |
-|---|---|
-| L0 Clarify | **MEASURED** in coding benchmarks [14][15], with simulated users. Untested inside an agent loop. |
-| L1 Effort | **VENDOR** Anthropic reports large token savings at lower effort [18]. No head-to-head against cross-model routing on an agentic benchmark (companion, §6.2). |
-| L2 Advisor | **VENDOR** Sonnet with an Opus advisor: +2.7 points on SWE-bench Multilingual and 11.9% lower cost per task [19]. The advisor does not invalidate the main model's prompt cache in Claude Code [20] and is a server-side tool in the Claude API [21]. |
-| L3 Handoff | **MEASURED** explore-then-escalate beat prompt-only routing in SWE-Router [8]. The clean-checkout rule and the user-signal triggers are **UNTESTED**; exp05 saw the anchoring failure once. |
-| L4 Request | **UNTESTED** |
+| Rung       | Evidence status                                                                                                                                                                                                                                                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L0 Clarify | **MEASURED** in coding benchmarks [[14]][14][[15]][15], with simulated users. Untested inside an agent loop.                                                                                                                                                            |
+| L1 Effort  | **VENDOR** Anthropic reports large token savings at lower effort [[18]][18]. No head-to-head against cross-model routing on an agentic benchmark (companion, §6.2).                                                                                                     |
+| L2 Advisor | **VENDOR** Sonnet with an Opus advisor: +2.7 points on SWE-bench Multilingual and 11.9% lower cost per task [[19]][19]. The advisor does not invalidate the main model's prompt cache in Claude Code [[20]][20] and is a server-side tool in the Claude API [[21]][21]. |
+| L3 Handoff | **MEASURED** explore-then-escalate beat prompt-only routing in SWE-Router [[8]][8]. The clean-checkout rule and the user-signal triggers are **UNTESTED**; exp05 saw the anchoring failure once.                                                                        |
+| L4 Request | **UNTESTED**                                                                                                                                                                                                                                                            |
 
 **The forced advisor check.** v0.1 named "the model may not escalate when it
 should" as the main risk and left it to the model's judgment. Since v0.2
@@ -377,10 +377,10 @@ It sets the **starting effort level**. It **pre-approves the frontier model
 for planning-type requests**, such as a request that opens with an
 architecture question: the planner/executor split, where a frontier model
 plans and a cheaper one executes, has shown quality gains in Aider and ships
-as `opusplan` in Claude Code [22]. It never blocks escalation, and it runs in
+as `opusplan` in Claude Code [[22]][22]. It never blocks escalation, and it runs in
 shadow mode first. Commercial tools already exist for training such a router
-on your own evaluation data [23], and research routers that use conversation
-history and user context outperform prompt-only ones [24].
+on your own evaluation data [[23]][23], and research routers that use conversation
+history and user context outperform prompt-only ones [[24]][24].
 
 In exp06 the classifier is the comparison arm for L3 (`C2_trained`), trained
 on the tuning split's briefs and measured labels, frozen, and hashed into the
@@ -392,15 +392,15 @@ Past a per-person allowance, requests for the frontier model are downgraded
 to the default model with a notice, rather than blocked. This behavior
 already exists in some gateways: LiteLLM's `budget_fallbacks` reroutes to a
 fallback model when a key's budget is exceeded "instead of returning a
-budget_exceeded error" [25], and Cloudflare AI Gateway can fall back to a
-cheaper model inside a dynamic route [26]. Every chat product surveyed blocks
+budget_exceeded error" [[25]][25], and Cloudflare AI Gateway can fall back to a
+cheaper model inside a dynamic route [[26]][26]. Every chat product surveyed blocks
 instead.
 
 ### 4.5 Transparency
 
 Every response shows a small routing receipt, for example "Sonnet · Opus
 consulted twice". The GPT-5 experience shows that silent routing destroys
-trust [4]. A receipt makes escalation visible as a feature: the user can see
+trust [[4]][4]. A receipt makes escalation visible as a feature: the user can see
 that the stronger model was brought in when it mattered. In the pilot, the
 receipt is also the data source for F2.
 
@@ -419,13 +419,13 @@ easy batch. Haiku's failures burned the whole 40-turn budget. Both inputs to
 the escalated-session cost are low, so the 79% break-even in v0.1 is an upper
 bound, not an estimate.
 
-**The model, to be filled from calibration.** Let *s* be the share of
-sessions that reach a handoff, *a* the advisor overhead per session
-(measured, not assumed at 10%), *c_m(hard)* and *c_f(hard)* the measured
-mid-tier and frontier costs on the hard stratum, and *c_m(easy)* the mid-tier
+**The model, to be filled from calibration.** Let _s_ be the share of
+sessions that reach a handoff, _a_ the advisor overhead per session
+(measured, not assumed at 10%), _c_m(hard)_ and _c_f(hard)_ the measured
+mid-tier and frontier costs on the hard stratum, and _c_m(easy)_ the mid-tier
 cost on the rest:
 
-```
+```text
 cost per session ≈ (1 − s) · (c_m(easy) + a) + s · (c_m(hard) + a + c_f(hard))
 ```
 
@@ -434,18 +434,18 @@ calibration data before registration, with the stratum costs stated. Figure 2
 of v0.1 (linear, break-even at 79%) is withdrawn until then.
 
 **What a perfect trigger would cost.** The table takes the model above with a
-trigger that is free and never wrong (*a* = 0; a handoff on every hard task
+trigger that is free and never wrong (_a_ = 0; a handoff on every hard task
 and on no other), at exp05's calibration prices: $0.07 for an easy task on
 Sonnet, $0.26 on Opus, $0.12 for a hard task on Sonnet and $0.76 on Opus. It
 assumes Sonnet completes no hard task and Opus completes all of them.
 
 | Hard share of the set | Always Sonnet, per completed task | Perfect ladder | Ladder ÷ Sonnet | Always Opus | Ladder ÷ Opus |
-|---:|---:|---:|---:|---:|---:|
-| 5% | $0.076 | $0.111 | 1.45 | $0.285 | 0.39 |
-| 5.6% | $0.077 | $0.115 | 1.50 | $0.288 | 0.40 |
-| 10% | $0.083 | $0.151 | 1.81 | $0.310 | 0.49 |
-| 20% | $0.100 | $0.232 | 2.32 | $0.360 | 0.64 |
-| 40% | $0.150 | $0.394 | 2.63 | $0.460 | 0.86 |
+| --------------------- | --------------------------------- | -------------- | --------------- | ----------- | ------------- |
+| 5%                    | $0.076                            | $0.111         | 1.45            | $0.285      | 0.39          |
+| 5.6%                  | $0.077                            | $0.115         | 1.50            | $0.288      | 0.40          |
+| 10%                   | $0.083                            | $0.151         | 1.81            | $0.310      | 0.49          |
+| 20%                   | $0.100                            | $0.232         | 2.32            | $0.360      | 0.64          |
+| 40%                   | $0.150                            | $0.394         | 2.63            | $0.460      | 0.86          |
 
 Three things follow.
 
@@ -471,13 +471,13 @@ registered next to L1.
 
 ## 6. What can be built today, and what is missing
 
-| Surface | Available now | Gap |
-|---|---|---|
-| Claude Code | Managed model (the starting model on every launch); availableModels allowlist; advisorModel for the L2 rung; CLAUDE_CODE_SUBAGENT_MODEL; opusplan; effort caps; gateway support with session-id and request-class headers [16][17][20] | The advisor needs the frontier model on the allowlist, so users can still switch to it with /model. Closing that requires a gateway rule that rewrites direct frontier requests at session start. **UNTESTED** |
-| Claude.ai Enterprise | Organization or role default model; a beta "always start with default" setting; model restrictions by role; per-member spend caps with a request-credits flow [27][28] | Users can still switch model within a chat. No advisor in chat, no soft downgrade |
-| ChatGPT Enterprise | Admin default model and reasoning level; role-based model access; spend limits with approval requests [29] | Same gaps; routing inside ChatGPT is not configurable by the customer |
-| GitHub Copilot | Per-model enable or disable policies; per-user budgets; Auto model selection [30] | No admin default model found; budgets block rather than downgrade; Auto audited poorly [12] |
-| API gateways (LiteLLM, Cloudflare, Portkey, Vercel) | Session pinning, model rewrite rules, per-user budgets; soft downgrade in LiteLLM and Cloudflare [25][26] | Escalation signals must be built by the operator |
+| Surface                                             | Available now                                                                                                                                                                                                                                           | Gap                                                                                                                                                                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code                                         | Managed model (the starting model on every launch); availableModels allowlist; advisorModel for the L2 rung; CLAUDE_CODE_SUBAGENT_MODEL; opusplan; effort caps; gateway support with session-id and request-class headers [[16]][16][[17]][17][20]][20] | The advisor needs the frontier model on the allowlist, so users can still switch to it with /model. Closing that requires a gateway rule that rewrites direct frontier requests at session start. **UNTESTED** |
+| Claude.ai Enterprise                                | Organization or role default model; a beta "always start with default" setting; model restrictions by role; per-member spend caps with a request-credits flow [[27]][27][[28]][28]                                                                      | Users can still switch model within a chat. No advisor in chat, no soft downgrade                                                                                                                              |
+| ChatGPT Enterprise                                  | Admin default model and reasoning level; role-based model access; spend limits with approval requests [[29]][29]                                                                                                                                        | Same gaps; routing inside ChatGPT is not configurable by the customer                                                                                                                                          |
+| GitHub Copilot                                      | Per-model enable or disable policies; per-user budgets; Auto model selection [[30]][30]                                                                                                                                                                 | No admin default model found; budgets block rather than downgrade; Auto audited poorly [[12]][12]                                                                                                              |
+| API gateways (LiteLLM, Cloudflare, Portkey, Vercel) | Session pinning, model rewrite rules, per-user budgets; soft downgrade in LiteLLM and Cloudflare [[25]][25][[26]][26]                                                                                                                                   | Escalation signals must be built by the operator                                                                                                                                                               |
 
 **What vendors would need to build** for this to work in chat products as
 well as coding tools:
@@ -524,7 +524,7 @@ what Section 9 says needs changing.
    where an answer key allows deterministic grading. Rubric grading by an LLM
    judge is not used; the companion study's "no LLM judge" rule stands.
 
-**What is not allowed.** Adding tasks *because* the mid-tier model failed
+**What is not allowed.** Adding tasks _because_ the mid-tier model failed
 them in a trial run. That selects on the outcome. Tasks are written or drawn
 first, then calibrated. If calibration shows too little headroom, the fix is
 to draw more tasks from the sources above (one extension allowed), not to
@@ -536,9 +536,9 @@ never part of the confirmatory split.
 
 **Calibration.** Every task on `static_haiku`, `static_sonnet`,
 `static_opus`, **3 trials** (exp05 ran 2 for budget; 3 is required here
-because the labels decide the stratum). Labels are measured: *easy* (mid-tier
-passes 3/3), *medium* (mid-tier 1 to 2 of 3), *hard* (mid-tier ≤ 1/3 and
-frontier ≥ 2/3), *unsolved* (frontier ≤ 1/3; excluded before registration
+because the labels decide the stratum). Labels are measured: _easy_ (mid-tier
+passes 3/3), _medium_ (mid-tier 1 to 2 of 3), _hard_ (mid-tier ≤ 1/3 and
+frontier ≥ 2/3), _unsolved_ (frontier ≤ 1/3; excluded before registration
 with the reason recorded).
 
 Calibration outcomes decide labels and strata and nothing else. They are not
@@ -548,14 +548,14 @@ will look a little easier on a fresh run, so the gain on the hard stratum is
 expected to be smaller than the calibration gap. Section 7.5 plans for that.
 
 **Split.** The calibrated set is divided by a seeded draw into a **tuning
-split (30%)** and a **confirmatory split (70%)**. The draw is over *groups*,
+split (30%)** and a **confirmatory split (70%)**. The draw is over _groups_,
 not tasks, and is stratified by each group's hardest label:
 
-| Task source | Group |
-|---|---|
-| Fixture tasks | the task template. A template reused across repos (as `inv-badge`, `notes-badge`, `log-badge` are in exp05) is one group |
-| Harvested handoffs | the parent session the handoff came from |
-| Ambiguous and non-coding strata | the template |
+| Task source                     | Group                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Fixture tasks                   | the task template. A template reused across repos (as `inv-badge`, `notes-badge`, `log-badge` are in exp05) is one group |
+| Harvested handoffs              | the parent session the handoff came from                                                                                 |
+| Ambiguous and non-coding strata | the template                                                                                                             |
 
 All tasks in a group go to the same split. K, N, the advisor and L0 prompts,
 and `C2_trained` are fitted on the tuning split only. The confirmatory
@@ -566,22 +566,22 @@ scored in the confirmatory report.
 
 ### 7.2 Arms
 
-| Arm | What happens | Role |
-|---|---|---|
-| `static_sonnet` | Fresh session on the mid-tier model, medium effort | **Primary control** (best fixed default) |
-| `static_opus` | Fresh session on the frontier model, default effort | Ceiling |
-| `ladder` | Full ladder, L0 to L3, with the forced advisor check before done. (L4 has no lab analogue.) | **Treatment** |
-| `ladder_noforce` | Full ladder without the forced advisor check | Prices the forced check |
-| `ladder_noL0` | Full ladder with clarifying disabled | L5 comparison (ambiguous stratum only) |
-| `sonnet_advisor` | Mid-tier with the L2 rung only; no handoff | L2 |
-| `sonnet_effort` | Mid-tier with the L1 rung only (effort raised on the model's own judgment) | L1 evidence |
-| `explore_handoff_clean` | Mid-tier for up to K verifier failures or N stalled turns, then frontier from a clean checkout with a brief and the failure log | L3, L4, L6 |
-| `explore_handoff_carry` | Same, but the frontier session inherits the working tree | L4 |
-| `C2_trained` | Frozen classifier on the brief alone picks the model; fresh session on the pick | L3 comparison |
-| `ladder_ideal` | Ladder with hidden tests as the verifier | Non-deployable upper bound |
-| `random_matched` | Computed: hand off a random share of cells equal to `explore_handoff_clean`'s observed handoff rate | L6 comparison |
-| `perfect_trigger` | Computed: hand off exactly the cells `static_sonnet` failed | Reference for the cost conditions |
-| `oracle` | Computed: cheapest static arm that passed, per task (majority of trials) | Bounds any router |
+| Arm                     | What happens                                                                                                                    | Role                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `static_sonnet`         | Fresh session on the mid-tier model, medium effort                                                                              | **Primary control** (best fixed default) |
+| `static_opus`           | Fresh session on the frontier model, default effort                                                                             | Ceiling                                  |
+| `ladder`                | Full ladder, L0 to L3, with the forced advisor check before done. (L4 has no lab analogue.)                                     | **Treatment**                            |
+| `ladder_noforce`        | Full ladder without the forced advisor check                                                                                    | Prices the forced check                  |
+| `ladder_noL0`           | Full ladder with clarifying disabled                                                                                            | L5 comparison (ambiguous stratum only)   |
+| `sonnet_advisor`        | Mid-tier with the L2 rung only; no handoff                                                                                      | L2                                       |
+| `sonnet_effort`         | Mid-tier with the L1 rung only (effort raised on the model's own judgment)                                                      | L1 evidence                              |
+| `explore_handoff_clean` | Mid-tier for up to K verifier failures or N stalled turns, then frontier from a clean checkout with a brief and the failure log | L3, L4, L6                               |
+| `explore_handoff_carry` | Same, but the frontier session inherits the working tree                                                                        | L4                                       |
+| `C2_trained`            | Frozen classifier on the brief alone picks the model; fresh session on the pick                                                 | L3 comparison                            |
+| `ladder_ideal`          | Ladder with hidden tests as the verifier                                                                                        | Non-deployable upper bound               |
+| `random_matched`        | Computed: hand off a random share of cells equal to `explore_handoff_clean`'s observed handoff rate                             | L6 comparison                            |
+| `perfect_trigger`       | Computed: hand off exactly the cells `static_sonnet` failed                                                                     | Reference for the cost conditions        |
+| `oracle`                | Computed: cheapest static arm that passed, per task (majority of trials)                                                        | Bounds any router                        |
 
 **Computed arms.** `random_matched` and `perfect_trigger` are built from the
 static arms' cells in the same run. A cell that is handed off costs the
@@ -695,11 +695,11 @@ comparisons.
 **Power.** Paired McNemar approximation, α = 0.05 two-sided, power 0.80,
 with two corrections to v0.2.
 
-*The margin.* To put the interval's lower bound above a margin *m*, the
-study must resolve the distance between the true gain Δ and *m*, not Δ
+_The margin._ To put the interval's lower bound above a margin _m_, the
+study must resolve the distance between the true gain Δ and _m_, not Δ
 itself:
 
-```
+```text
 n ≈ (z_α + z_β)² · p_disc / (Δ − m)²
 ```
 
@@ -707,23 +707,23 @@ where `p_disc` is the share of paired task-trials on which the two arms
 disagree. On the hard stratum `p_disc` is at least Δ; the table assumes
 Δ + 0.10.
 
-*Repeated trials.* `n` counts independent pairs. Three trials of one task
+_Repeated trials._ `n` counts independent pairs. Three trials of one task
 are correlated, so the number of tasks is `n × design effect ÷ 3`, with
 design effect `1 + 2ρ`. In exp05 the within-task correlation of
 `static_haiku`'s outcome was ρ = 0.51, a design effect of 2.0. That is one
 arm on one task set, and it is a correlation of outcomes, not of paired
 differences. It is recomputed from calibration before registration.
 
-| Claim | Assumed truth | Margin | Paired task-trials | Tasks, v0.2 method | Tasks, design effect 2.0 |
-|---|---|---:|---:|---:|---:|
-| L1 condition 1 | gain 20 points | +10 | 236 | 79 | 157 |
-| L1 condition 1 | gain 25 points | +10 | 122 | 41 | 82 |
-| L1 condition 1 | **gain 30 points** | +10 | 79 | 27 | **53** |
-| L1 condition 1 | gain 40 points | +10 | 44 | 15 | 30 |
-| L1 condition 1 | gain 50 points | +10 | 30 | 10 | 20 |
-| Non-inferiority (L1-ceiling, L3) | no difference, 17% discordance | 10 | 134 | 45 | 89 |
-| Non-inferiority | no difference, 25% discordance | 10 | 196 | 66 | 131 |
-| Non-inferiority | no difference, 33% discordance | 10 | 259 | 87 | 173 |
+| Claim                            | Assumed truth                  | Margin | Paired task-trials | Tasks, v0.2 method | Tasks, design effect 2.0 |
+| -------------------------------- | ------------------------------ | ------ | ------------------ | ------------------ | ------------------------ |
+| L1 condition 1                   | gain 20 points                 | +10    | 236                | 79                 | 157                      |
+| L1 condition 1                   | gain 25 points                 | +10    | 122                | 41                 | 82                       |
+| L1 condition 1                   | **gain 30 points**             | +10    | 79                 | 27                 | **53**                   |
+| L1 condition 1                   | gain 40 points                 | +10    | 44                 | 15                 | 30                       |
+| L1 condition 1                   | gain 50 points                 | +10    | 30                 | 10                 | 20                       |
+| Non-inferiority (L1-ceiling, L3) | no difference, 17% discordance | 10     | 134                | 45                 | 89                       |
+| Non-inferiority                  | no difference, 25% discordance | 10     | 196                | 66                 | 131                      |
+| Non-inferiority                  | no difference, 33% discordance | 10     | 259                | 87                 | 173                      |
 
 The task counts for condition 1 are **hard tasks in the confirmatory split**.
 The non-inferiority counts are tasks in the whole confirmatory split.
@@ -800,7 +800,7 @@ interpreted.
   routing receipt); help-desk tickets tagged model-access; a two-question
   satisfaction pulse. Personal-account workarounds cannot be observed
   directly and are not claimed; a question on the pulse asks about them.
-- **Detectable effects, stated before the pilot.** With *T* teams and a
+- **Detectable effects, stated before the pilot.** With _T_ teams and a
   stepped wedge, the report states the minimum detectable spend change and
   satisfaction change at the observed between-team variance. A 0.3-point
   satisfaction difference on a 5-point scale is not resolvable with fewer
@@ -819,7 +819,7 @@ interpreted.
   the forced check, the ladder's premise (the working model can see that it
   needs help) is wrong.
 - **Advisor costs may add up.** Each advisor call rereads the full
-  transcript at frontier prices, uncached [20]. On long sessions, frequent
+  transcript at frontier prices, uncached [[20]][20]. On long sessions, frequent
   consultations could cost more than a handoff. On short, easy sessions one
   forced call could cost more than the session it checks. `ladder_noforce`,
   L1 condition 2 and the 5-minute-cache sensitivity analysis size this.
@@ -852,8 +852,7 @@ interpreted.
 - **The power figures rest on one correlation.** The design effect comes
   from one model on exp05's tasks. If the calibration value is higher, the
   hard-task target rises with it.
-- **Vendor products move fast.** Several controls cited here shipped in
-  2026. Plan names, defaults and prices will change; the design should
+- **Vendor products move fast.** Several controls cited here shipped in 2026. Plan names, defaults and prices will change; the design should
   depend on the pattern, not a specific setting.
 
 ## 9. Where the exp05 setup falls short of best practice, and what exp06 changes
@@ -863,22 +862,22 @@ with its exploratory results labelled. These are the places where its process
 would not survive a careful reviewer, recorded here so exp06 does not repeat
 them.
 
-| exp05 practice | Problem | exp06 rule |
-|---|---|---|
-| The headroom gate ("cheapest model passes 50 to 70%") was not met (83%) and the run was registered anyway, with a subgroup analysis as the remedy | A gate that can be waived is not a gate. The registration also chose the most favorable option of three after seeing calibration data | H0 is a stopping rule with one allowed extension, evaluated on the confirmatory split, before any arm other than the static baselines is run |
-| The headroom gate was stated as a pass rate | A set can meet it and still leave nothing to save. On exp05's set a perfect, free Haiku-then-Sonnet gate cost $0.221 per completed task against $0.099 for always Sonnet | Perfect-trigger reference values are computed from calibration and recorded before registration |
-| Calibration at 2 trials, planned at 3, for budget | Labels that decide strata were measured with less precision than the outcomes they stratify | 3 calibration trials are a registration requirement |
-| Thresholds, prompts and the cascade rule (escalate_on_error) were decided after smoke runs on the same task set used for the confirmatory run | Tuning and testing on the same tasks | Tuning split (30%) and confirmatory split (70%), drawn by group and hashed separately; exp05's tasks stay out of the confirmatory split |
-| One task template was reused across the three repos (10 templates, 31 of 65 tasks) | Tasks that look independent are not, which matters once the set is split | The split is by template and by parent session |
-| The comparison that decided the paper (always-Sonnet vs the router) was exploratory | The registered primary was the easy comparison against the most expensive model | The primary control is the best fixed default |
-| The cascade's checker was known to be weak, and the escalation path had never fired on a real failure when the run was registered | An arm that cannot escalate does not test escalation | Verifier defined and its false-accept rate measured before registration; every escalation path must fire in a smoke run on a real failure |
-| A mid-run deviation (redo outages) changed the inclusion rule, with a sound reason, during stage 1 | Reasonable, but a deviation is a deviation | Outage handling is registered up front |
-| "Secondary policies may be dropped for budget; not a deviation" with no order stated | Which arms survive a budget squeeze should not be a choice made after seeing early results | Budget priority list fixed before the run |
-| The 40-turn cap produced 36 errored cells, all on one model, and the cap's effect on that model's cost is not separated | The cap is part of the treatment for the model it binds on | Capped-cell count per arm reported; sensitivity analysis excluding them is pre-specified |
-| The oracle is per task and trial | The most generous bound; a deployable policy cannot match it | Per-task majority oracle as the headline; per-trial alongside |
-| Synthetic tasks written by the author, with briefs a quarter to half the length of real ones | Author bias toward tasks the policies handle; briefs unlike production | Real-handoff stratum drawn at random from the harvested handoffs; long-brief stratum; sources fixed before calibration |
-| One power calculation, based on the pilot's discordance, with a 10-point margin chosen to fit the budget, counting trials as independent | The margin should be stated as a limitation of resolution, and three trials of a task are not three observations | Power table states the assumed gain, the margin and the design effect; smaller effects are explicitly out of scope |
-| Analyst reads per-cell outcomes as they land | Ordinary for a single-author study, but it invites looking | The report tool computes registered statistics before the per-task matrix is read |
+| exp05 practice                                                                                                                                    | Problem                                                                                                                                                                  | exp06 rule                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| The headroom gate ("cheapest model passes 50 to 70%") was not met (83%) and the run was registered anyway, with a subgroup analysis as the remedy | A gate that can be waived is not a gate. The registration also chose the most favorable option of three after seeing calibration data                                    | H0 is a stopping rule with one allowed extension, evaluated on the confirmatory split, before any arm other than the static baselines is run |
+| The headroom gate was stated as a pass rate                                                                                                       | A set can meet it and still leave nothing to save. On exp05's set a perfect, free Haiku-then-Sonnet gate cost $0.221 per completed task against $0.099 for always Sonnet | Perfect-trigger reference values are computed from calibration and recorded before registration                                              |
+| Calibration at 2 trials, planned at 3, for budget                                                                                                 | Labels that decide strata were measured with less precision than the outcomes they stratify                                                                              | 3 calibration trials are a registration requirement                                                                                          |
+| Thresholds, prompts and the cascade rule (escalate_on_error) were decided after smoke runs on the same task set used for the confirmatory run     | Tuning and testing on the same tasks                                                                                                                                     | Tuning split (30%) and confirmatory split (70%), drawn by group and hashed separately; exp05's tasks stay out of the confirmatory split      |
+| One task template was reused across the three repos (10 templates, 31 of 65 tasks)                                                                | Tasks that look independent are not, which matters once the set is split                                                                                                 | The split is by template and by parent session                                                                                               |
+| The comparison that decided the paper (always-Sonnet vs the router) was exploratory                                                               | The registered primary was the easy comparison against the most expensive model                                                                                          | The primary control is the best fixed default                                                                                                |
+| The cascade's checker was known to be weak, and the escalation path had never fired on a real failure when the run was registered                 | An arm that cannot escalate does not test escalation                                                                                                                     | Verifier defined and its false-accept rate measured before registration; every escalation path must fire in a smoke run on a real failure    |
+| A mid-run deviation (redo outages) changed the inclusion rule, with a sound reason, during stage 1                                                | Reasonable, but a deviation is a deviation                                                                                                                               | Outage handling is registered up front                                                                                                       |
+| "Secondary policies may be dropped for budget; not a deviation" with no order stated                                                              | Which arms survive a budget squeeze should not be a choice made after seeing early results                                                                               | Budget priority list fixed before the run                                                                                                    |
+| The 40-turn cap produced 36 errored cells, all on one model, and the cap's effect on that model's cost is not separated                           | The cap is part of the treatment for the model it binds on                                                                                                               | Capped-cell count per arm reported; sensitivity analysis excluding them is pre-specified                                                     |
+| The oracle is per task and trial                                                                                                                  | The most generous bound; a deployable policy cannot match it                                                                                                             | Per-task majority oracle as the headline; per-trial alongside                                                                                |
+| Synthetic tasks written by the author, with briefs a quarter to half the length of real ones                                                      | Author bias toward tasks the policies handle; briefs unlike production                                                                                                   | Real-handoff stratum drawn at random from the harvested handoffs; long-brief stratum; sources fixed before calibration                       |
+| One power calculation, based on the pilot's discordance, with a 10-point margin chosen to fit the budget, counting trials as independent          | The margin should be stated as a limitation of resolution, and three trials of a task are not three observations                                                         | Power table states the assumed gain, the margin and the design effect; smaller effects are explicitly out of scope                           |
+| Analyst reads per-cell outcomes as they land                                                                                                      | Ordinary for a single-author study, but it invites looking                                                                                                               | The report tool computes registered statistics before the per-task matrix is read                                                            |
 
 None of this changes the companion study's conclusions, which rest on a 5×
 cost gap and 100% pass rates that no reasonable reanalysis moves. It changes
@@ -891,59 +890,59 @@ possible; vendor claims are tagged. Several 2026 papers were read from
 abstracts or HTML summaries. Figures quoted from exp05 were recomputed from
 its run data on 29 September 2026.
 
-1. Anthropic. Claude Code: manage costs effectively. code.claude.com/docs/en/costs
-2. Madrian and Shea. The Power of Suggestion: Inertia in 401(k) Participation. NBER w7682; slides eml.berkeley.edu/symposia/sage02/slides/madrian.pdf
-3. Spool. Do users change their settings? UIE, 2011. archive.uie.com/brainsparks/2011/09/14/do-users-change-their-settings
-4. TechCrunch. ChatGPT's model picker is back, and it's complicated. 12 August 2025. techcrunch.com/2025/08/12/chatgpts-model-picker-is-back-and-its-complicated; Altman on reasoning usage via simonwillison.net/2025/Aug/10/sam-altman
-5. Feldman et al. Impact of providing fee data on laboratory test ordering. JAMA Internal Medicine, 2013. jamanetwork.com/journals/jamainternalmedicine/fullarticle/1678807
-6. Sedrak et al. Effect of a price transparency intervention (PRICE trial). JAMA Internal Medicine, 2017. jamanetwork.com/journals/jamainternalmedicine/fullarticle/2619519
-7. Allcott. Opower home energy reports evaluation. povertyactionlab.org/evaluation/opower-evaluating-impact-home-energy-reports-energy-conservation-united-states
-8. Son et al. SWE-Router: Routing in Multi-turn Agentic Software Engineering Tasks. June 2026. arxiv.org/abs/2607.00053
-9. How Robust Are Router-LLMs? 2025. arxiv.org/abs/2504.07113
-10. When Routing Collapses. 2026. arxiv.org/abs/2602.03478
-11. LLMRouterBench. 2026. arxiv.org/abs/2601.07206
-12. Masseboeuf. Why we turned off Copilot Auto mode by default. Michelin, 18 September 2026. blogit.michelin.io/copilot-auto-mode-off-by-default
-13. Shafran et al. Rerouting LLM Routers. 2025. arxiv.org/abs/2501.01818
-14. Mu et al. ClarifyGPT. 2023. arxiv.org/abs/2310.10996
-15. ClarifyCodeBench. 2026. arxiv.org/abs/2607.00711
-16. Anthropic. Claude Code settings and managed settings. code.claude.com/docs/en/settings; code.claude.com/docs/en/managed-settings
-17. Anthropic. Claude Code LLM gateway and gateway protocol. code.claude.com/docs/en/llm-gateway; code.claude.com/docs/en/llm-gateway-protocol
-18. Anthropic. Introducing Claude Opus 4.5 (effort results). anthropic.com/news/claude-opus-4-5
-19. Anthropic. The advisor strategy. 9 April 2026. claude.com/blog/the-advisor-strategy
-20. Anthropic. Escalate hard decisions with the advisor tool. code.claude.com/docs/en/advisor
-21. Anthropic. Advisor tool (Claude API). platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool
-22. Aider. Separating code reasoning and editing. aider.chat/2024/09/26/architect.html; Anthropic model configuration (opusplan). code.claude.com/docs/en/model-config
-23. Not Diamond. Router training quickstart. docs.notdiamond.ai/docs/router-training-quickstart
-24. GMTRouter. 2025. arxiv.org/abs/2511.08590
-25. LiteLLM. Budget fallbacks. docs.litellm.ai/docs/proxy/budget_fallbacks
-26. Cloudflare. AI Gateway spend limits and dynamic routing. developers.cloudflare.com/ai-gateway/features/spend-limits; developers.cloudflare.com/ai-gateway/features/dynamic-routing
-27. Anthropic. Set a default model for your organization. support.claude.com/en/articles/15330088
-28. Anthropic. Manage model access for your organization; manage usage credits. support.claude.com/en/articles/15694740; support.claude.com/en/articles/12005970
-29. OpenAI. Managing workspace settings and usage limits in ChatGPT Enterprise. help.openai.com/en/articles/8411955; help.openai.com/en/articles/20001001
-30. GitHub. Manage availability of models; budgets for usage-based billing; auto model selection. docs.github.com/en/copilot
-31. Kaiserauer. Cheapest per token is not cheapest per task. exp05, v1.0, September 2026. github.com/kornsour/model-routing, `docs/experiments/preregistration-exp05.md`, `docs/experiments/findings/2026-09-23-exp05-calibration.md`, `docs/experiments/findings/2026-09-23-chip-harvest.md`
+1. Anthropic. Claude Code: manage costs effectively. [code.claude.com/docs/en/costs](https://code.claude.com/docs/en/costs)
+2. Madrian and Shea. The Power of Suggestion: Inertia in 401(k) Participation. NBER w7682; slides [eml.berkeley.edu/symposia/sage02/slides/madrian.pdf](https://eml.berkeley.edu/symposia/sage02/slides/madrian.pdf)
+3. Spool. Do users change their settings? UIE, 2011. [archive.uie.com/brainsparks/2011/09/14/do-users-change-their-settings](https://archive.uie.com/brainsparks/2011/09/14/do-users-change-their-settings)
+4. TechCrunch. ChatGPT's model picker is back, and it's complicated. 12 August 2025. [techcrunch.com/2025/08/12/chatgpts-model-picker-is-back-and-its-complicated](https://techcrunch.com/2025/08/12/chatgpts-model-picker-is-back-and-its-complicated); Altman on reasoning usage via [simonwillison.net/2025/Aug/10/sam-altman](https://simonwillison.net/2025/Aug/10/sam-altman)
+5. Feldman et al. Impact of providing fee data on laboratory test ordering. JAMA Internal Medicine, 2013. [jamanetwork.com/journals/jamainternalmedicine/fullarticle/1678807](https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/1678807)
+6. Sedrak et al. Effect of a price transparency intervention (PRICE trial). JAMA Internal Medicine, 2017. [jamanetwork.com/journals/jamainternalmedicine/fullarticle/2619519](https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/2619519)
+7. Allcott. Opower home energy reports evaluation. [povertyactionlab.org/evaluation/opower-evaluating-impact-home-energy-reports-energy-conservation-united-states](https://povertyactionlab.org/evaluation/opower-evaluating-impact-home-energy-reports-energy-conservation-united-states)
+8. Son et al. SWE-Router: Routing in Multi-turn Agentic Software Engineering Tasks. June 2026. [arxiv.org/abs/2607.00053](https://arxiv.org/abs/2607.00053)
+9. How Robust Are Router-LLMs? 2025. [arxiv.org/abs/2504.07113](https://arxiv.org/abs/2504.07113)
+10. When Routing Collapses. 2026. [arxiv.org/abs/2602.03478](https://arxiv.org/abs/2602.03478)
+11. LLMRouterBench. 2026. [arxiv.org/abs/2601.07206](https://arxiv.org/abs/2601.07206)
+12. Masseboeuf. Why we turned off Copilot Auto mode by default. Michelin, 18 September 2026. [blogit.michelin.io/copilot-auto-mode-off-by-default](https://blogit.michelin.io/copilot-auto-mode-off-by-default)
+13. Shafran et al. Rerouting LLM Routers. 2025. [arxiv.org/abs/2501.01818](https://arxiv.org/abs/2501.01818)
+14. Mu et al. ClarifyGPT. 2023. [arxiv.org/abs/2310.10996](https://arxiv.org/abs/2310.10996)
+15. ClarifyCodeBench. 2026. [arxiv.org/abs/2607.00711](https://arxiv.org/abs/2607.00711)
+16. Anthropic. Claude Code settings and managed settings. [code.claude.com/docs/en/settings](https://code.claude.com/docs/en/settings); [code.claude.com/docs/en/managed-settings](https://code.claude.com/docs/en/managed-settings)
+17. Anthropic. Claude Code LLM gateway and gateway protocol. [code.claude.com/docs/en/llm-gateway](https://code.claude.com/docs/en/llm-gateway); [code.claude.com/docs/en/llm-gateway-protocol](https://code.claude.com/docs/en/llm-gateway-protocol)
+18. Anthropic. Introducing Claude Opus 4.5 (effort results). [anthropic.com/news/claude-opus-4-5](https://anthropic.com/news/claude-opus-4-5)
+19. Anthropic. The advisor strategy. 9 April 2026. [claude.com/blog/the-advisor-strategy](https://claude.com/blog/the-advisor-strategy)
+20. Anthropic. Escalate hard decisions with the advisor tool. [code.claude.com/docs/en/advisor](https://code.claude.com/docs/en/advisor)
+21. Anthropic. Advisor tool (Claude API). [platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool)
+22. Aider. Separating code reasoning and editing. [aider.chat/2024/09/26/architect.html](https://aider.chat/2024/09/26/architect.html); Anthropic model configuration (opusplan). [code.claude.com/docs/en/model-config](https://code.claude.com/docs/en/model-config)
+23. Not Diamond. Router training quickstart. [docs.notdiamond.ai/docs/router-training-quickstart](https://docs.notdiamond.ai/docs/router-training-quickstart)
+24. GMTRouter. 2025. [arxiv.org/abs/2511.08590](https://arxiv.org/abs/2511.08590)
+25. LiteLLM. Budget fallbacks. [docs.litellm.ai/docs/proxy/budget_fallbacks](https://docs.litellm.ai/docs/proxy/budget_fallbacks)
+26. Cloudflare. AI Gateway spend limits and dynamic routing. [developers.cloudflare.com/ai-gateway/features/spend-limits](https://developers.cloudflare.com/ai-gateway/features/spend-limits); [developers.cloudflare.com/ai-gateway/features/dynamic-routing](https://developers.cloudflare.com/ai-gateway/features/dynamic-routing)
+27. Anthropic. Set a default model for your organization. [support.claude.com/en/articles/15330088](https://support.claude.com/en/articles/15330088)
+28. Anthropic. Manage model access for your organization; manage usage credits. [support.claude.com/en/articles/15694740](https://support.claude.com/en/articles/15694740); [support.claude.com/en/articles/12005970](https://support.claude.com/en/articles/12005970)
+29. OpenAI. Managing workspace settings and usage limits in ChatGPT Enterprise. [help.openai.com/en/articles/8411955](https://help.openai.com/en/articles/8411955); [help.openai.com/en/articles/20001001](https://help.openai.com/en/articles/20001001)
+30. GitHub. Manage availability of models; budgets for usage-based billing; auto model selection. [docs.github.com/en/copilot](https://docs.github.com/en/copilot)
+31. Kaiserauer. Cheapest per token is not cheapest per task. exp05, v1.0, September 2026. [github.com/kornsour/model-routing](https://github.com/kornsour/model-routing), `docs/experiments/preregistration-exp05.md`, `docs/experiments/findings/2026-09-23-exp05-calibration.md`, `docs/experiments/findings/2026-09-23-chip-harvest.md`
 
 ## Appendix A. Frozen parameters (to be filled at registration)
 
-| Parameter | Value | Chosen on | Hash or commit |
-|---|---|---|---|
-| K (verifier failures before handoff) | | tuning split | |
-| N (turns without progress before handoff) | | tuning split | |
-| Advisor system prompt | | tuning split | |
-| L0 ambiguity prompt and question cap | | tuning split | |
-| C2_trained weights | | tuning split | |
-| Verifier definition and measured false-accept rate | | tuning split | |
-| Planning value: assumed gain on the hard stratum | 30 points | this document | |
-| Design effect for 3 trials | | calibration | |
-| Observed discordance | | calibration | |
-| Hard share of the confirmatory split | | calibration | |
-| Perfect-trigger cost ratio to `static_sonnet`, pooled and easy stratum | | calibration | |
-| Perfect-trigger cost ratio to `static_opus`, whole set | | calibration | |
-| Split seed and group assignment | | | |
-| Confirmatory split task hash | | | |
-| Tuning split task hash | | | |
-| Harness commit | | | |
-| Registration commit and timestamp | | | |
+| Parameter                                                              | Value     | Chosen on     | Hash or commit |
+| ---------------------------------------------------------------------- | --------- | ------------- | -------------- |
+| K (verifier failures before handoff)                                   |           | tuning split  |                |
+| N (turns without progress before handoff)                              |           | tuning split  |                |
+| Advisor system prompt                                                  |           | tuning split  |                |
+| L0 ambiguity prompt and question cap                                   |           | tuning split  |                |
+| C2_trained weights                                                     |           | tuning split  |                |
+| Verifier definition and measured false-accept rate                     |           | tuning split  |                |
+| Planning value: assumed gain on the hard stratum                       | 30 points | this document |                |
+| Design effect for 3 trials                                             |           | calibration   |                |
+| Observed discordance                                                   |           | calibration   |                |
+| Hard share of the confirmatory split                                   |           | calibration   |                |
+| Perfect-trigger cost ratio to `static_sonnet`, pooled and easy stratum |           | calibration   |                |
+| Perfect-trigger cost ratio to `static_opus`, whole set                 |           | calibration   |                |
+| Split seed and group assignment                                        |           |               |                |
+| Confirmatory split task hash                                           |           |               |                |
+| Tuning split task hash                                                 |           |               |                |
+| Harness commit                                                         |           |               |                |
+| Registration commit and timestamp                                      |           |               |                |
 
 ## Appendix B. Deviations
 
@@ -955,12 +954,12 @@ and the reason, and the affected run is reported as exploratory.
 v0.3 had to choose values that v0.2 did not contain. Each is a judgment about
 what result would matter, so each is the author's to confirm or change.
 
-| Decision | Value in v0.3 | Why it is open |
-|---|---|---|
-| L1 condition 2 applies to the easy stratum at 1.5× | 1.5×, carried from v0.2's pooled bound | One forced advisor call may cost more than a short Sonnet session. If calibration shows that, 1.5× fails for every ladder with the forced check, and the choice is between the bound and the check |
-| L1 condition 3, cost below always-frontier on the whole set | ratio below 1.0 | New in v0.3. A stricter figure (for example 0.8) is a stronger claim and harder to reach at a high hard share |
-| Planning value for the gain on the hard stratum | 30 points | Sets the hard-task target. A smaller assumed gain needs more tasks: 82 hard tasks at 25 points, 157 at 20 |
-| Minimum gain worth claiming | +10 points, from v0.2 | Unchanged, listed because the power table now depends on it directly |
+| Decision                                                    | Value in v0.3                          | Why it is open                                                                                                                                                                                     |
+| ----------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L1 condition 2 applies to the easy stratum at 1.5×          | 1.5×, carried from v0.2's pooled bound | One forced advisor call may cost more than a short Sonnet session. If calibration shows that, 1.5× fails for every ladder with the forced check, and the choice is between the bound and the check |
+| L1 condition 3, cost below always-frontier on the whole set | ratio below 1.0                        | New in v0.3. A stricter figure (for example 0.8) is a stronger claim and harder to reach at a high hard share                                                                                      |
+| Planning value for the gain on the hard stratum             | 30 points                              | Sets the hard-task target. A smaller assumed gain needs more tasks: 82 hard tasks at 25 points, 157 at 20                                                                                          |
+| Minimum gain worth claiming                                 | +10 points, from v0.2                  | Unchanged, listed because the power table now depends on it directly                                                                                                                               |
 
 ## Appendix D. Version history
 
@@ -993,3 +992,34 @@ doing anything. v0.2 made these changes:
    are tied to a measured baseline.
 8. A section on where the exp05 harness and process fall short of best
    practice, and what exp06 changes.
+
+[1]: https://code.claude.com/docs/en/costs
+[2]: https://eml.berkeley.edu/symposia/sage02/slides/madrian.pdf
+[3]: https://archive.uie.com/brainsparks/2011/09/14/do-users-change-their-settings
+[4]: https://techcrunch.com/2025/08/12/chatgpts-model-picker-is-back-and-its-complicated
+[5]: https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/1678807
+[6]: https://jamanetwork.com/journals/jamainternalmedicine/fullarticle/2619519
+[7]: https://povertyactionlab.org/evaluation/opower-evaluating-impact-home-energy-reports-energy-conservation-united-states
+[8]: https://arxiv.org/abs/2607.00053
+[9]: https://arxiv.org/abs/2504.07113
+[10]: https://arxiv.org/abs/2602.03478
+[11]: https://arxiv.org/abs/2601.07206
+[12]: https://blogit.michelin.io/copilot-auto-mode-off-by-default
+[13]: https://arxiv.org/abs/2501.01818
+[14]: https://arxiv.org/abs/2310.10996
+[15]: https://arxiv.org/abs/2607.00711
+[16]: https://code.claude.com/docs/en/settings
+[17]: https://code.claude.com/docs/en/llm-gateway
+[18]: https://anthropic.com/news/claude-opus-4-5
+[19]: https://claude.com/blog/the-advisor-strategy
+[20]: https://code.claude.com/docs/en/advisor
+[21]: https://platform.claude.com/docs/en/agents-and-tools/tool-use/advisor-tool
+[22]: https://aider.chat/2024/09/26/architect.html
+[23]: https://docs.notdiamond.ai/docs/router-training-quickstart
+[24]: https://arxiv.org/abs/2511.08590
+[25]: https://docs.litellm.ai/docs/proxy/budget_fallbacks
+[26]: https://developers.cloudflare.com/ai-gateway/features/spend-limits
+[27]: https://support.claude.com/en/articles/15330088
+[28]: https://support.claude.com/en/articles/15694740
+[29]: https://help.openai.com/en/articles/8411955
+[30]: https://docs.github.com/en/copilot
