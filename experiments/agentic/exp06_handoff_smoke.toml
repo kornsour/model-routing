@@ -1,0 +1,40 @@
+# SMOKE (section 7.6 item 7): make the L3 handoff fire on a real failure.
+# Haiku starts (0/3 on tb-patch-05 in calibration) and hands off to Sonnet.
+# Not analysed; it only proves the handoff path works end to end.
+
+[experiment]
+name = "exp06_handoff_smoke"
+kind = "dispatch"
+tasks = "tasks/exp06/tasks.jsonl"
+trials = 1
+order = "randomized"
+seed = 20260930
+max_turns = 40
+task_ids = ["tb-patch-05"]
+hypothesis = "Smoke: the ladder's verifier-triggered handoff fires on a real failure."
+primary = { treatment = "ladder_haiku", control = "ladder_haiku" }
+margin_pp = 10
+max_budget_per_session_usd = 5.0
+parent = "sonnet"
+menu = ["haiku", "sonnet"]
+
+[auth]
+mode = "subscription"
+
+[candidates.haiku]
+provider = "claude_cli"
+model = "claude-haiku-4-5"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "claude-sonnet-5-5"
+
+[[policies]]
+name = "ladder_haiku"
+kind = "spawn_ladder"
+worker = "haiku"
+frontier = "sonnet"
+verifier = "verifier"
+k = 2
+handoff = "clean"
+escalate = true
