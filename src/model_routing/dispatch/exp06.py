@@ -423,8 +423,17 @@ def verifier_accuracy(arm: dict[tuple[str, int], Cell]) -> dict[str, Any]:
 
 
 def analyze(calibration: list[str | Path], ladder: list[str | Path]) -> dict[str, Any]:
-    cells = load_cells([*calibration, *ladder])
-    table = task_table(cells)
+    """Labels and H0 come from the calibration run(s) only.  An arm that both
+    runs contain (a fresh ``static_sonnet`` control in the ladder run) is taken
+    from the ladder run for every comparison; its calibration cells are kept as
+    ``<arm>_calibration`` so the two can be compared."""
+    cal = load_cells(calibration)
+    table = task_table(cal)
+    cells = dict(cal)
+    for arm, arm_cells in load_cells(ladder).items():
+        if arm in cells:
+            cells[f"{arm}_calibration"] = cells[arm]
+        cells[arm] = arm_cells
     gate = h0(table)
     strata: dict[str, list[str]] = {}
     for t, r in table.items():

@@ -199,3 +199,14 @@ def test_verdicts():
     assert exp06._verdict_below([0.5, 0.9], 1.0) == "supported"
     assert exp06._verdict_below([1.1, 2.0], 1.0) == "not supported"
     assert exp06._verdict_below(None, 1.0) == "inconclusive"
+
+
+def test_labels_come_from_calibration_even_when_the_ladder_reruns_a_static_arm(tmp_path: Path):
+    cal = [outcome("t", "static_sonnet", i, i != 1, 0.2) for i in range(3)]
+    cal += [outcome("t", "static_opus", i, True, 1.0) for i in range(3)]
+    lad = [outcome("t", "static_sonnet", i, True, 0.3) for i in range(3)]
+    result = exp06.analyze([write_run(tmp_path / "c", cal)], [write_run(tmp_path / "l", lad)])
+    assert result["tasks"]["t"]["label"] == "medium"
+    reg = result["stats"]["registered"]
+    assert reg["static_sonnet"]["mean_cost"] == pytest.approx(0.3)
+    assert reg["static_sonnet_calibration"]["mean_cost"] == pytest.approx(0.2)
