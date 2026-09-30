@@ -817,3 +817,115 @@ def test_task_ids_filter_rejects_unknown_id(tmp_path: Path):
     cfg_path.write_text(text)
     with pytest.raises(ValueError, match="nope"):
         _run(tmp_path, cfg_path, RecordingProvider(), [make_task("t1")])
+
+
+# -- budget pause ---------------------------------------------------------------
+
+
+def _budget_cfg(tmp_path: Path) -> Path:
+    return _write_cfg(
+        tmp_path,
+        '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+        treatment="B",
+        control="B",
+    )
+
+
+def _run_budget(tmp_path: Path, tasks, budget_usd: float, **kw: Any) -> Path:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    cfg = load_dispatch_config(_budget_cfg(tmp_path))
+    out = tmp_path / "run"
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=budget_usd,
+        task_loader=lambda path, sample=None, seed=0: tasks,
+        sandbox_factory=fake_sandbox_factory,
+        grader=always_pass_grader,
+        agent_provider_factory=lambda name, env=None: RecordingProvider(),
+        verbose=False,
+        **kw,
+    )
+    return out
+
+
+def _one_cell_cost(tmp_path: Path) -> float:
+    out = _run_budget(tmp_path / "probe", [make_task("p")], 100.0)
+    return _outcomes(out)[0]["cost_usd"]
+
+
+def test_budget_pauses_between_cells_and_never_cuts_a_cell(tmp_path: Path):
+    cost = _one_cell_cost(tmp_path)
+    tasks = [make_task(f"t{i}") for i in range(6)]
+    progress: list[Any] = []
+    out = _run_budget(tmp_path, tasks, cost * 2.5, progress=progress.append)
+    outcomes = _outcomes(out)
+    # cells 1-3 start below the budget; the 4th would start above it
+    assert len(outcomes) == 3
+    assert len(_sessions(out)) == 3  # no half-done cell
+    assert progress[-1].state == "paused"
+    pauses = [json.loads(line) for line in (out / "pauses.jsonl").read_text().splitlines()]
+    assert pauses[-1]["reason"] == "budget"
+
+
+def test_budget_raised_while_paused_continues_in_the_same_process(tmp_path: Path):
+    from model_routing.dispatch.runner import set_run_budget
+
+    cost = _one_cell_cost(tmp_path)
+    tasks = [make_task(f"t{i}") for i in range(5)]
+    out_dir = tmp_path / "run"
+    slept: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        slept.append(seconds)
+        set_run_budget(out_dir, 100.0)
+
+    progress: list[Any] = []
+    _run_budget(
+        tmp_path,
+        tasks,
+        cost * 1.5,
+        sleep=fake_sleep,
+        budget_wait_s=3600,
+        progress=progress.append,
+    )
+    assert len(_outcomes(out_dir)) == 5
+    assert len(slept) == 1
+    assert progress[-1].state == "done"
+    meta = json.loads((out_dir / "meta.json").read_text())
+    assert meta["budget_usd"] == 100.0
+    assert meta["budget_changes"][0]["to"] == 100.0
+
+
+def test_budget_resume_with_a_higher_budget_finishes_the_plan(tmp_path: Path):
+    cost = _one_cell_cost(tmp_path)
+    tasks = [make_task(f"t{i}") for i in range(4)]
+    out = _run_budget(tmp_path, tasks, cost * 1.5)
+    assert len(_outcomes(out)) == 2
+    cfg = load_dispatch_config(_budget_cfg(tmp_path))
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=100.0,
+        resume=True,
+        task_loader=lambda path, sample=None, seed=0: tasks,
+        sandbox_factory=fake_sandbox_factory,
+        grader=always_pass_grader,
+        agent_provider_factory=lambda name, env=None: RecordingProvider(),
+        verbose=False,
+    )
+    assert sorted(o["task_id"] for o in _outcomes(out)) == [f"t{i}" for i in range(4)]
+
+
+def test_set_run_budget_validates(tmp_path: Path):
+    from model_routing.dispatch.runner import read_budget_override, set_run_budget
+
+    with pytest.raises(ValueError):
+        set_run_budget(tmp_path, 10.0)  # not a run directory
+    (tmp_path / "meta.json").write_text("{}")
+    with pytest.raises(ValueError):
+        set_run_budget(tmp_path, 0)
+    set_run_budget(tmp_path, 42.5)
+    assert read_budget_override(tmp_path) == 42.5
+    (tmp_path / "budget.json").write_text("not json")
+    assert read_budget_override(tmp_path) is None

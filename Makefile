@@ -67,6 +67,9 @@ dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE
 		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES)) \
 		$(if $(RESUME),--resume $(RESUME))
 
+dispatch-budget: ## Raise a running/paused dispatch run's budget without restarting (RUN=results/<exp>/<stamp>, BUDGET=usd)
+	$(PY) model-routing dispatch-budget $(RUN) --usd $(BUDGET)
+
 dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
 	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
 		--fake --budget-usd 1000 $(if $(SAMPLE),--sample $(SAMPLE))

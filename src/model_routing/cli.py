@@ -209,6 +209,7 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
         fake=args.fake,
         keep_sandboxes=args.keep_sandboxes,
         resume=bool(args.resume),
+        budget_wait_s=max(0.0, args.budget_wait_hours) * 3600,
     )
     from model_routing.dispatch.report import summarize
 
@@ -218,6 +219,17 @@ def cmd_dispatch_run(args: argparse.Namespace) -> int:
     from model_routing.backup import auto_backup
 
     auto_backup(out)
+    return 0
+
+
+def cmd_dispatch_budget(args: argparse.Namespace) -> int:
+    from model_routing.dispatch.runner import set_run_budget
+
+    path = set_run_budget(args.run_dir, args.usd)
+    print(
+        f"budget for {args.run_dir} set to ${args.usd:.2f} ({path}); the run picks it up "
+        "before its next cell, or on --resume"
+    )
     return 0
 
 
@@ -466,7 +478,21 @@ def main(argv: list[str] | None = None) -> int:
         help="continue an existing run directory (same config, sample, trials, policies); "
         "completed cells are skipped",
     )
+    dr.add_argument(
+        "--budget-wait-hours",
+        type=float,
+        default=8.0,
+        help="when the budget is reached, wait this long for it to be raised with "
+        "dispatch-budget before stopping in state 'paused' (default 8)",
+    )
     dr.set_defaults(fn=cmd_dispatch_run)
+
+    db = sub.add_parser(
+        "dispatch-budget", help="raise a running or paused dispatch run's budget (budget.json)"
+    )
+    db.add_argument("run_dir")
+    db.add_argument("--usd", type=float, required=True)
+    db.set_defaults(fn=cmd_dispatch_budget)
 
     drp = sub.add_parser(
         "dispatch-report", help="(re)build summary.json/md for a dispatch run directory"
