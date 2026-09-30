@@ -1,7 +1,7 @@
 import pytest
 
 from model_routing.auth import AuthConfig, parse_auth
-from model_routing.config import load_config
+from model_routing.single_turn.config import load_config
 
 BASE = {"PATH": "/bin", "ANTHROPIC_API_KEY": "sk-a", "OPENAI_API_KEY": "sk-o"}
 

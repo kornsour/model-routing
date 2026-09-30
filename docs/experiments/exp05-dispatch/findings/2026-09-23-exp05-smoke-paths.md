@@ -7,7 +7,7 @@ trial, $3.21 list price. Not a hypothesis test; it checks that the paths the
 the confirmatory run.
 
 | path | what was checked | result |
-|---|---|---|
+| --- | --- | --- |
 | `A` (resume the seeded parent, no fork) | worker session id equals the setup session id; worker edited files | as designed, 2/2 passed |
 | `A_switch` (resume, switch Opus → Sonnet mid-session) | resolved model of the worker is `claude-sonnet-5` on the parent's session id | as designed, 2/2 passed |
 | `C1_inline` (brief + pick in one forked turn) | router got a new session id (fork), `cost_usd_billed` is the marginal pick ($0.0006-$0.002) while the full turn cost $0.09-$0.13; worker ran on the canned brief | as designed, 2/2 passed |
@@ -47,7 +47,7 @@ Calibration data puts numbers on the one other signal a deployed
 orchestrator has, the worker hitting its turn cap. Of 132 Haiku cells:
 
 | | turn cap hit | finished |
-|---|---:|---:|
+| --- | ---: | ---: |
 | passed hidden tests | 15 | 94 |
 | failed hidden tests | 8 | 15 |
 

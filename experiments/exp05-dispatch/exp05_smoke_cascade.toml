@@ -5,8 +5,8 @@
 # sonnet and record it.  Two tasks, one trial, about $1-2.  Not a hypothesis
 # test.
 #
-#   make dispatch-estimate EXP=experiments/agentic/exp05_smoke_cascade.toml
-#   make dispatch-run      EXP=experiments/agentic/exp05_smoke_cascade.toml BUDGET=4.00
+#   make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_smoke_cascade.toml
+#   make dispatch-run      EXP=experiments/exp05-dispatch/exp05_smoke_cascade.toml BUDGET=4.00
 
 [experiment]
 name = "exp05_smoke_cascade"

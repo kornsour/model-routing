@@ -32,8 +32,8 @@ from model_routing.dispatch.report import summarize
 
 TODO = "[TODO: author]"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-DESIGN_DOC = REPO_ROOT / "docs" / "experiments" / "dispatch-routing.md"
-PREREG_DOC = REPO_ROOT / "docs" / "experiments" / "preregistration-exp05.md"
+DESIGN_DOC = REPO_ROOT / "docs" / "experiments" / "exp05-dispatch" / "design.md"
+PREREG_DOC = REPO_ROOT / "docs" / "experiments" / "exp05-dispatch" / "preregistration.md"
 
 DIFFICULTY_ORDER = ["easy", "medium", "hard", "unsolved", "unknown"]
 ROUTING_KINDS = {
@@ -398,7 +398,7 @@ def _render(
         f"**Primary hypothesis (H-D1).** {meta.get('hypothesis', '')}"
     )
     L += [
-        "Primary hypothesis, quoted from `docs/experiments/dispatch-routing.md`:",
+        "Primary hypothesis, quoted from `docs/experiments/exp05-dispatch/design.md`:",
         "",
         f"> {hyp}",
         "",
@@ -1014,6 +1014,14 @@ def _threats(
     ]
 
 
+def _config_rel(meta: dict[str, Any]) -> str:
+    """Repo-relative path of the config a run was made from (``experiments/<exp>/<name>.toml``)."""
+    name = meta.get("experiment", "exp05_dispatch")
+    for path in sorted((REPO_ROOT / "experiments").glob(f"*/{name}.toml")):
+        return str(path.relative_to(REPO_ROOT))
+    return f"experiments/exp05-dispatch/{name}.toml"
+
+
 def _reproducibility(runs: list[dict[str, Any]], labels: list[str]) -> list[str]:
     out: list[str] = []
     for label, r in zip(labels, runs, strict=True):
@@ -1021,7 +1029,7 @@ def _reproducibility(runs: list[dict[str, Any]], labels: list[str]) -> list[str]
         names = [p.get("name") for p in m.get("policies", []) if p.get("name")]
         cmd = [
             "uv run model-routing dispatch-run",
-            f"experiments/agentic/{m.get('experiment', 'exp05_dispatch')}.toml",
+            _config_rel(m),
             f"--budget-usd {m.get('budget_usd', '<usd>')}",
         ]
         if m.get("sample"):
@@ -1038,8 +1046,7 @@ def _reproducibility(runs: list[dict[str, Any]], labels: list[str]) -> list[str]
             "```bash",
             f"git checkout {m.get('git_sha', '<git_sha>')}",
             "make setup",
-            "uv run model-routing dispatch-estimate "
-            f"experiments/agentic/{m.get('experiment', 'exp05_dispatch')}.toml",
+            f"uv run model-routing dispatch-estimate {_config_rel(m)}",
             " \\\n  ".join(cmd),
             "```",
             "",

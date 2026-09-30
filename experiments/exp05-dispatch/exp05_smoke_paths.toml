@@ -4,8 +4,8 @@
 # trial, about $1-3.  Record anything surprising in the findings doc before the
 # confirmatory run.  Not a hypothesis test.
 #
-#   make dispatch-estimate EXP=experiments/agentic/exp05_smoke_paths.toml SAMPLE=2
-#   make dispatch-run      EXP=experiments/agentic/exp05_smoke_paths.toml SAMPLE=2 BUDGET=4.00
+#   make dispatch-estimate EXP=experiments/exp05-dispatch/exp05_smoke_paths.toml SAMPLE=2
+#   make dispatch-run      EXP=experiments/exp05-dispatch/exp05_smoke_paths.toml SAMPLE=2 BUDGET=4.00
 
 [experiment]
 name = "exp05_smoke_paths"

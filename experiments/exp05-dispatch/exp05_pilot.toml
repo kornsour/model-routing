@@ -1,6 +1,6 @@
 # Pilot for exp05_dispatch: small, cheap, trials=1, a subset of policies.  Sizes
 # variance and cost before the confirmatory run; does NOT test H-D1 (see
-# docs/experiments/dispatch-routing.md - "Pilot runs size variance and cost;
+# docs/experiments/exp05-dispatch/design.md - "Pilot runs size variance and cost;
 # they do not test H-D1.").
 
 [experiment]

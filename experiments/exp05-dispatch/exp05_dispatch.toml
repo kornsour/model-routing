@@ -1,6 +1,6 @@
 # Experiment 5 - dispatch-time routing (agentic, multi-turn, sandboxed).
-# See docs/experiments/dispatch-routing.md and the analysis plan in
-# docs/experiments/preregistration-exp05.md.  Pre-registered fields are
+# See docs/experiments/exp05-dispatch/design.md and the analysis plan in
+# docs/experiments/exp05-dispatch/preregistration.md.  Pre-registered fields are
 # marked; change them only before the confirmatory run, and record why in the
 # preregistration doc.  `make dispatch-preregister EXP=... WRITE=1` appends the
 # [preregistration] table that freezes this design against the task set; the
@@ -25,7 +25,7 @@ primary = { treatment = "C1_inline", control = "B" }
 # margin needs ~1,000 paired task-trials (~330 tasks x 3), a 10-pt margin ~260
 # (~90 tasks x 3).  10 pts still answers "does it save real money without a
 # noticeable quality drop?" at a cost worth paying.  Decided 2026-09-23, before
-# any confirmatory data (see docs/experiments/preregistration-exp05.md).
+# any confirmatory data (see docs/experiments/exp05-dispatch/preregistration.md).
 margin_pp = 10
 max_budget_per_session_usd = 2.0
 parent = "opus"                 # the model the user's main session runs on
@@ -117,8 +117,8 @@ candidate = "opus_low"
 
 [preregistration]
 registered_at = "2026-09-24T16:52:46+00:00"
-doc = "docs/experiments/preregistration-exp05.md"
-taskset_sha256 = "5b99585211dedaaf8271bf9520d9de8ff2d240cd5e802a0c7c43026847634804"
+doc = "docs/experiments/exp05-dispatch/preregistration.md"
+taskset_sha256 = "1d5f80870a7bb5def1b3fbe1e198a1e638699e0b9f3c4e228f34179fcf049f64"
 n_tasks = 65
 trials = 3
 margin_pp = 10

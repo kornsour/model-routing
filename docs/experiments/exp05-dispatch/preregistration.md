@@ -1,8 +1,8 @@
 # Pre-registration and analysis plan: exp05 dispatch-time routing
 
 Status: **draft, not yet registered.** The `[preregistration]` table is
-appended to `experiments/agentic/exp05_dispatch.toml` by
-`make dispatch-preregister EXP=experiments/agentic/exp05_dispatch.toml WRITE=1`
+appended to `experiments/exp05-dispatch/exp05_dispatch.toml` by
+`make dispatch-preregister EXP=experiments/exp05-dispatch/exp05_dispatch.toml WRITE=1`
 only after the gates in "Before registering" are met. Until then every run
 is exploratory and the report says so.
 
@@ -74,7 +74,7 @@ Paired non-inferiority (McNemar approximation, true difference 0):
 `n ≈ (z_α + z_β)² · p_disc / δ²` with `z_α = 1.96`, `z_β = 0.84`, `δ = 0.10`.
 
 | discordance | paired task-trials | tasks at 3 trials |
-|---:|---:|---:|
+| ---: | ---: | ---: |
 | 17% (fake sim) | 131 | 44 |
 | 25% | 196 | 66 |
 | 33% (pilot) | 260 | 87 |
@@ -88,7 +88,7 @@ power note recomputes this from the observed discordance.
 Estimated spend (`make dispatch-estimate`, profiles from observed sessions):
 
 | policies | 60 tasks × 3 | 90 tasks × 3 |
-|---|---:|---:|
+| --- | ---: | ---: |
 | `B`, `C1_inline` (primary only) | about $70 | about $105 |
 | + `static_haiku`, `static_sonnet` (oracle, H-D7) | about $105 | about $160 |
 | + `C1`, `D` (H-D4, pessimistic C1) | about $185 | about $280 |
@@ -109,7 +109,7 @@ rests on H-D1 over the whole registered set.
 
 ## Secondary hypotheses (exploratory)
 
-H-D2 to H-D7 as listed in `docs/experiments/dispatch-routing.md`. They are
+H-D2 to H-D7 as listed in `docs/experiments/exp05-dispatch/design.md`. They are
 reported with Holm-adjusted p-values across the family and are hypothesis
 generating, not confirmatory. `C1` (forked router that re-reads the parent
 context) is kept as the pessimistic routing variant.
@@ -121,7 +121,7 @@ context) is kept as the pessimistic routing variant.
   `taskset_sha256`; the report refuses to call a run confirmatory if the
   hash differs from the registered one.
 - Difficulty labels are **measured**, not guessed: a calibration run of every
-  task on every static candidate (`experiments/agentic/exp05_calibrate.toml`;
+  task on every static candidate (`experiments/exp05-dispatch/exp05_calibrate.toml`;
   2 trials were run on 2026-09-23 for budget, 3 were planned) is folded by `make dispatch-calibration ... WRITE=1` into
   `difficulty` (easy = the cheapest model passed every trial, medium = it
   passed some, hard = only the strongest passed, unsolved = nothing passed).
@@ -157,7 +157,7 @@ context) is kept as the pessimistic routing variant.
 
 - Three trials per cell within the run; the report clusters them by task.
 - A second vendor track with the same design
-  (`experiments/agentic/exp05_dispatch_codex.toml`) is a replication of the
+  (`experiments/exp05-dispatch/exp05_dispatch_codex.toml`) is a replication of the
   question on a different model family, not part of H-D1.
 - `meta.json` records the harness git SHA, config hash, task-set hash, seed,
   CLI versions, and every session's resolved model id, so the run can be
@@ -180,9 +180,9 @@ context) is kept as the pessimistic routing variant.
    cheapest model to fail, and the subgroup answers the headroom question
    where routing has room by construction.
 2. Smoke run of the untested paths on real models
-   (`experiments/agentic/exp05_smoke_paths.toml`): `A`, `A_switch`,
+   (`experiments/exp05-dispatch/exp05_smoke_paths.toml`): `A`, `A_switch`,
    `C1_inline`, and `D` escalating at least once. Surprises recorded in
-   `docs/experiments/findings/`. Status 2026-09-23: `A`, `A_switch` and
+   `docs/experiments/exp05-dispatch/findings/`. Status 2026-09-23: `A`, `A_switch` and
    `C1_inline` verified (`findings/2026-09-23-exp05-smoke-paths.md`); `D`
    escalation still to be exercised on a task the cheapest model fails.
    Status 2026-09-24: the cascade re-smoke on two tasks Haiku fails showed
@@ -212,3 +212,18 @@ context) is kept as the pessimistic routing variant.
    once (`--resume` sets aside any outage-graded cell and redoes it). The
    report states the outage count and the spend it wasted per policy. No
    registered field (task set, trials, margin, order, primary) changes.
+
+2. **2026-09-29, before any confirmatory run: the task-set hash no longer
+   covers `tasks/agentic/README.md`, and the registered `doc` path moves.**
+   `taskset_sha256` hashed every file under `tasks/agentic/`, including the
+   top-level README, so editing documentation invalidated the registration.
+   The hash now skips that one file (fixture READMEs below it are task inputs
+   and stay hashed). Nothing the agents see or are graded on changed: the
+   recomputed hash differs only because the README is excluded. Registered
+   fields changed as a result: `taskset_sha256` `5b995852…` to `1d5f8087…`, and
+   `doc` from `docs/experiments/preregistration-exp05.md` to
+   `docs/experiments/exp05-dispatch/preregistration.md` (docs were reorganized
+   by experiment). `registered_at`, `n_tasks`, `trials`, `margin_pp`, `order`
+   and `primary` are unchanged. Runs recorded under the old hash (pilot,
+   calibration, smoke) will show a task-set mismatch and are reported as
+   exploratory. Authorized by the author.

@@ -24,7 +24,7 @@ survives scrutiny.
 ## Hypotheses
 
 | # | Hypothesis | Where it shows up |
-|---|---|---|
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
 | H1 | Per-token prices do not predict cost per completed task. | exp01: rank by `cost/pass`, not `cost/task`. |
 | H2 | The frontier model at low effort is on the accuracy/cost Pareto frontier, often beating the mid tier. | exp01/exp02: `all_opus_low` row. |
 | H3 | An oracle router (perfect difficulty labels) saves less than the price gap suggests. | exp02: `oracle` vs `all_sonnet`. |
@@ -84,11 +84,11 @@ second call. Codex reports no dollars, so its cost is list price only.
 make setup
 make smoke                                  # one Haiku call; prints usage + cost
 make smoke PROVIDER=codex_cli               # one gpt-5.6-luna call
-make estimate EXP=experiments/llm/exp01_baselines.toml
-make run EXP=experiments/llm/exp01_baselines.toml LIMIT=5 BUDGET=0.50
-make run EXP=experiments/llm/exp02_routing.toml BUDGET=5
-make run EXP=experiments/llm/exp02_routing.toml BUDGET=5 COOLDOWN=300   # cold cache per router
-make run EXP=experiments/llm/exp02_routing.toml SAMPLE=8 ROUTERS=oracle,cascade_checker BUDGET=1
+make estimate EXP=experiments/exp01-04-llm-routing/exp01_baselines.toml
+make run EXP=experiments/exp01-04-llm-routing/exp01_baselines.toml LIMIT=5 BUDGET=0.50
+make run EXP=experiments/exp01-04-llm-routing/exp02_routing.toml BUDGET=5
+make run EXP=experiments/exp01-04-llm-routing/exp02_routing.toml BUDGET=5 COOLDOWN=300   # cold cache per router
+make run EXP=experiments/exp01-04-llm-routing/exp02_routing.toml SAMPLE=8 ROUTERS=oracle,cascade_checker BUDGET=1
 make report RUN=results/exp02_routing/<stamp>
 ```
 
@@ -163,7 +163,7 @@ sqlite3 results/index.sqlite "select router, avg(passed), sum(cost_usd) from out
 ## Promoting findings
 
 `results/` is git-ignored. When a run says something, copy its `summary.md`
-into `docs/experiments/findings/<date>-<experiment>.md` with two or three
+into `docs/experiments/exp01-04-llm-routing/findings/<date>-<experiment>.md` with two or three
 sentences of interpretation and the run's `meta.json` provider versions.
 
 ## Auth: subscription or API key

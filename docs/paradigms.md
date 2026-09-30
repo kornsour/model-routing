@@ -4,7 +4,7 @@ The harness's core types are paradigm-agnostic on purpose. A routing
 experiment in any paradigm has the same skeleton:
 
 | Concept | LLM (implemented) | Tabular | Computer vision | Search / retrieval |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **Task** | prompt + grader | a row (or batch) + label | an image + label/boxes | a query + relevance judgments |
 | **Candidate** | provider + model + effort | GBDT vs. small NN vs. large NN; feature set size | tiny/medium/large backbone; input resolution | BM25 vs. dense vs. hybrid; rerank depth |
 | **Cost** | tokens × list price (+ harness floor) | inference ms × instance price; feature-fetch cost | GPU ms × price; preprocessing | index bytes, QPS capacity, rerank calls |

@@ -16,7 +16,7 @@ from typing import Any
 
 from model_routing.findings import compute_findings, stats_for_dashboard
 from model_routing.quality import compare
-from model_routing.report import aggregate, candidate_table, pareto
+from model_routing.single_turn.report import aggregate, candidate_table, pareto
 from model_routing.store import connect, list_runs, run_outcomes
 
 

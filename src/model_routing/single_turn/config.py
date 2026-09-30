@@ -1,4 +1,4 @@
-"""Experiment config (TOML) -> typed objects.  See experiments/llm/*.toml."""
+"""Experiment config (TOML) -> typed objects.  See experiments/exp01-04-llm-routing/*.toml."""
 
 from __future__ import annotations
 
