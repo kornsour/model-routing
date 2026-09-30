@@ -1,3 +1,5 @@
+# SMOKE for the exp06 ladder arms (section 7.6 item 7): every path on real
+# models before the main run; results are not analysed.
 # exp06 ladder arms (docs/paper/exp06-route-on-evidence.md, section 7.2),
 # exploratory: nothing here is registered (Appendix C sign-off is pending),
 # and the static arms are taken from the Stage 0 calibration run
@@ -22,10 +24,11 @@
 # cannot change mid-session in headless mode), C2_trained (no tuning split).
 
 [experiment]
-name = "exp06_ladder"
+name = "exp06_ladder_smoke"
 kind = "dispatch"
 tasks = "tasks/exp06/tasks.jsonl"
-trials = 3
+trials = 1
+task_ids = ["tb-cron-03", "or-perf-04"]
 order = "randomized"
 seed = 20260930
 max_turns = 40
