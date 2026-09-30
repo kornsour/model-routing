@@ -6,8 +6,10 @@
 #   make dispatch-estimate EXP=experiments/agentic/exp06_calibrate.toml
 #   make dispatch-run      EXP=experiments/agentic/exp06_calibrate.toml BUDGET=...
 #
-# Haiku is not calibrated: H0 and every exp06 hypothesis compare the mid-tier
-# and frontier models only (recorded as a deviation from section 7.1).
+# Models are pinned to exact ids (Claude Code >= 2.1.285 knows the 5.5 models;
+# the `sonnet`/`opus` aliases resolved to the 5.0 models on 2.1.278).  A first
+# attempt on Sonnet 5 / Opus 5 was stopped after 14 cells when the study moved
+# to the current models (results/exp06_calibrate/20260929-201525-v5.0-aborted).
 
 [experiment]
 name = "exp06_calibrate"
@@ -17,23 +19,32 @@ trials = 3
 order = "randomized"
 seed = 20260929
 max_turns = 40
-hypothesis = "Stage 0 / H0: measured pass rate per task on Sonnet and Opus."
+hypothesis = "Stage 0 / H0: measured pass rate per task on Haiku 4.5, Sonnet 5.5 and Opus 5.5."
 primary = { treatment = "static_sonnet", control = "static_opus" }
 margin_pp = 10
 max_budget_per_session_usd = 5.0
 parent = "sonnet"
-menu = ["sonnet", "opus"]
+menu = ["haiku", "sonnet", "opus"]
 
 [auth]
 mode = "subscription"
 
+[candidates.haiku]
+provider = "claude_cli"
+model = "claude-haiku-4-5"
+
 [candidates.sonnet]
 provider = "claude_cli"
-model = "sonnet"
+model = "claude-sonnet-5-5"
 
 [candidates.opus]
 provider = "claude_cli"
-model = "opus"
+model = "claude-opus-5-5"
+
+[[policies]]
+name = "static_haiku"
+kind = "spawn_static"
+candidate = "haiku"
 
 [[policies]]
 name = "static_sonnet"

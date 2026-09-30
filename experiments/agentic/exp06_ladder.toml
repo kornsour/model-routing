@@ -35,16 +35,16 @@ mode = "subscription"
 
 [candidates.sonnet]
 provider = "claude_cli"
-model = "sonnet"
+model = "claude-sonnet-5-5"
 
 [candidates.sonnet_adv]
 provider = "claude_cli"
-model = "sonnet"
-advisor = "opus"
+model = "claude-sonnet-5-5"
+advisor = "claude-opus-5-5"
 
 [candidates.opus]
 provider = "claude_cli"
-model = "opus"
+model = "claude-opus-5-5"
 
 [[policies]]
 name = "ladder"
