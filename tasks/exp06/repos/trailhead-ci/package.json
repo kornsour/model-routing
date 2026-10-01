@@ -1,0 +1,18 @@
+{
+  "name": "pathwise",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:verify": "tsx scripts/db-verify.ts",
+    "hooks:install": "git config core.hooksPath scripts/hooks"
+  }
+}

@@ -1,0 +1,25 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: Copperline/.github/.github/workflows/ci.yml@main
+    with:
+      migration-check: true
+      security-scan: true
+  migration-sequence:
+    name: Migration sequence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: node scripts/check-migration-sequence.mjs
+  lockfile:
+    name: integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: scripts/check-lockfile.sh

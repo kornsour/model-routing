@@ -1,0 +1,55 @@
+name: ci
+on:
+  workflow_call:
+    inputs:
+      migration-check: { type: boolean, default: false }
+      security-scan: { type: boolean, default: false }
+jobs:
+  lint:
+    name: Lint & format (Biome)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: pnpm install --frozen-lockfile && pnpm check
+  typecheck:
+    name: Type check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: pnpm install --frozen-lockfile && pnpm exec tsc --noEmit
+  test:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: pnpm install --frozen-lockfile && pnpm test
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: pnpm install --frozen-lockfile && pnpm build
+  migrations:
+    name: DB migration check
+    if: inputs.migration-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with: { fetch-depth: 0 }
+      - name: schema.ts changed without a migration
+        shell: bash
+        run: |
+          base="origin/${{ github.base_ref || 'main' }}"
+          changed="$(git diff --name-only "$base"...HEAD)"
+          if grep -qx 'src/db/schema.ts' <<<"$changed" && ! grep -q '^drizzle/' <<<"$changed"; then
+            echo "::error::src/db/schema.ts changed but no new file under drizzle/ — run pnpm db:generate"
+            exit 1
+          fi
+          echo "migration check ok"
+  semgrep:
+    name: Security scan (Semgrep)
+    if: inputs.security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: pipx run semgrep==1.172.0 scan --config p/default --error
