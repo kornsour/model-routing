@@ -22,7 +22,7 @@ Monday's ops review covers last week (1-7 September). The runner's logs are in `
 <UTC timestamp> run=<run id> pipeline=<name> event=run_end status=<success|failed>
 ```
 
-`warehouse_in_use` on a `start` line counts the units held right after that job started. A run can span midnight, so one run's lines can be in two files. You may write throwaway scripts outside the repo or run Python one-liners; just don't leave files in the repo.
+`warehouse_in_use` on a `start` line counts the units held right after that job started. A run can span midnight, so one run's lines can be in two files. You may run Python (`python -c ...`, or a throwaway script you delete before you finish); only `ANSWER.json` may remain.
 
 Answer in `ANSWER.json`, exactly this shape:
 
