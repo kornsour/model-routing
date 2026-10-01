@@ -26,7 +26,17 @@ what exp06 already uses in those two places?
 ## Order of work
 
 exp07 runs only after exp06's Stage 0 has passed H0. If exp06 stops at H0,
-exp07 stops too: a gate cannot earn anything on work with no headroom. On
+exp07 stops too: a gate cannot earn anything on work with no headroom.
+
+*Status 2026-10-01.* exp06's first Stage 0 batch did not meet H0 (0 hard
+tasks of 15). The one allowed extension is planned
+(`../exp06-route-on-evidence/extension-plan.md`). exp07 waits for its
+result. Two exp06 findings bear on this design and are to be resolved
+before registration: the free verifier's false-accept rate was about 1.5%
+(2 of 135), so J1 cannot reach its sample on a Sonnet working model; and
+the working model over-consulted the advisor on 42% to 76% of easy tasks,
+which suggests a gate on unjustified escalation requests as the live
+question. On
 exp05's task set a perfect, free Haiku-then-Sonnet gate costs $0.221 per
 completed task against $0.099 for always Sonnet.
 
