@@ -73,7 +73,8 @@ range for stratum B.
 
 Config: `experiments/exp06-route-on-evidence/exp06_calibrate_ext.toml`,
 copied from `exp06_calibrate.toml` with the new task file, a new seed,
-per-stratum `max_turns`, and the `static_haiku` policy removed. Models pinned by exact id; Claude Code version
+per-stratum `max_turns` (`per_task_max_turns = true`, the caps live in the
+task file), and the `static_haiku` policy removed. Models pinned by exact id; Claude Code version
 recorded. Randomized block order, sequential, one run at a time, one hour
 after any other paid run.
 

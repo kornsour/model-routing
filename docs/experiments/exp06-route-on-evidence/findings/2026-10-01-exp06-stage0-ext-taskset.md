@@ -163,7 +163,7 @@ Against the plan's targets:
 | Reference solutions and hidden tests re-derived by a different model family where practical | All fixtures, hidden tests and reference solutions were written by Claude Opus 5.5, the family under test. Each task's `authorship` field records this. | Step 1 was to cost nothing, and `codex exec` re-derivation is paid. The first batch's main validity threat is therefore still present for strata B to D. An independent re-derivation pass before registration would close it. |
 | Stratum A briefs kept at their real wording | Kept, plus renames and an offline note; prose reports converted to a JSON answer block | Needed for offline grading; likely makes those tasks easier |
 | Stratum C: one missing requirement, answer key for L5 | Each missing requirement can be recovered from a repo artefact (legacy log samples, a docstring, a protocol doc, a runbook). Hidden tests pin the keyed reading. | Under static arms with no simulated user, an unrecoverable gap would only measure luck. This tests careful reading instead. |
-| 80-turn cap for stratum B | Set per task (`max_turns: 80`) | **The runner ignores per-task `max_turns`** (`DispatchConfig.max_turns` applies to every session, by design from the 2026-09-22 pilot). Step 2 needs a config switch or two passes before the 80-turn cap takes effect. |
+| 80-turn cap for stratum B | Set per task (`max_turns: 80`) | The runner used one cap for every session (by design since the 2026-09-22 pilot). It now has an opt-in `per_task_max_turns` config flag, set in `exp06_calibrate_ext.toml`; `meta.json` records each task's cap. |
 | Harvested draw skips "only when no deterministic grader can be written or the content is private" | Followed. "No grader" includes needing live systems or networked installs, because the sandbox is offline. | See the skip table; stratum A is a filtered sample |
 
 ## What this changes for step 2
@@ -171,8 +171,8 @@ Against the plan's targets:
 The calibration config can point at `tasks/exp06/tasks_ext.jsonl` as planned.
 Before the run:
 
-1. Give the runner a way to honour per-task `max_turns` (or run stratum B in a
-   separate pass with `max_turns = 80`).
+1. Done: `experiments/exp06-route-on-evidence/exp06_calibrate_ext.toml` sets
+   `per_task_max_turns = true` (stratum B 80, the rest 40).
 2. Make sure the grading host has Go 1.22+ and Node 22.18+ on `PATH`; the
    validator run above is the check.
 3. Run `make dispatch-estimate` as usual. The new tasks' briefs are longer

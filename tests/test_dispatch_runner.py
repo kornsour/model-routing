@@ -113,6 +113,7 @@ class RecordingProvider:
                 "resume": resume_session,
                 "fork": fork,
                 "prompt": prompt,
+                "max_turns": max_turns,
             }
         )
         session_id = resume_session if (resume_session and not fork) else f"sess-{len(self.calls)}"
@@ -932,3 +933,36 @@ def test_set_run_budget_validates(tmp_path: Path):
     assert read_budget_override(tmp_path) == 42.5
     (tmp_path / "budget.json").write_text("not json")
     assert read_budget_override(tmp_path) is None
+
+
+STATIC_SONNET = """
+[[policies]]
+name = "S"
+kind = "spawn_static"
+candidate = "sonnet"
+"""
+
+
+def test_per_task_max_turns_opt_in(tmp_path):
+    tasks = [make_task("short", max_turns=40), make_task("long", max_turns=80)]
+    cfg_path = _write_cfg(tmp_path, STATIC_SONNET, treatment="S", control="S")
+    cfg_path.write_text(
+        cfg_path.read_text().replace(
+            "margin_pp = 5", "margin_pp = 5\nmax_turns = 40\nper_task_max_turns = true"
+        )
+    )
+    provider = RecordingProvider()
+    out = _run(tmp_path, cfg_path, provider, tasks)
+    assert sorted(c["max_turns"] for c in provider.calls) == [40, 80]
+    meta = json.loads((out / "meta.json").read_text())
+    assert meta["per_task_max_turns"] is True
+    assert meta["task_max_turns"] == {"short": 40, "long": 80}
+
+
+def test_per_task_max_turns_off_by_default(tmp_path):
+    tasks = [make_task("short", max_turns=40), make_task("long", max_turns=80)]
+    cfg_path = _write_cfg(tmp_path, STATIC_SONNET, treatment="S", control="S")
+    provider = RecordingProvider()
+    out = _run(tmp_path, cfg_path, provider, tasks)
+    assert {c["max_turns"] for c in provider.calls} == {30}
+    assert json.loads((out / "meta.json").read_text())["task_max_turns"] is None
