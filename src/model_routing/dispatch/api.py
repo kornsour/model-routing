@@ -5,7 +5,7 @@ signatures so the web app and CLI can be built in parallel with the runner.
 Contract (do not change signatures without updating every caller):
 
 ``load_dispatch_config(path) -> DispatchConfig``
-    Parse ``experiments/agentic/*.toml`` (see exp05_dispatch.toml).
+    Parse ``experiments/exp05-dispatch/*.toml`` (see exp05_dispatch.toml).
 
 ``estimate_dispatch(cfg, *, sample=None, trials=None, policies=None) -> dict``
     No spend.  Returns ``{"cells": int, "sessions": int, "usd_low": float,

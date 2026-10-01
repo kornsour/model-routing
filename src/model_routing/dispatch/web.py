@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+import tomllib
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -43,6 +44,15 @@ def _opt_policy_list(value: Any) -> list[str] | None:
     if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
         raise ValueError("policies must be a list of strings")
     return list(value) or None
+
+
+def _is_dispatch_config(path: Path) -> bool:
+    """True for experiment TOMLs that declare ``kind = "dispatch"`` (not single-shot ones)."""
+    try:
+        with path.open("rb") as fh:
+            return tomllib.load(fh).get("experiment", {}).get("kind") == "dispatch"
+    except (OSError, tomllib.TOMLDecodeError):
+        return False
 
 
 def _track_for(cfg: Any) -> str:
@@ -129,10 +139,9 @@ class DispatchLab:
 
     def configs(self) -> list[dict[str, Any]]:
         out: list[dict[str, Any]] = []
-        config_dir = self.root / "experiments" / "agentic"
-        if not config_dir.is_dir():
-            return out
-        for path in sorted(config_dir.glob("*.toml")):
+        for path in sorted((self.root / "experiments").glob("*/*.toml")):
+            if not _is_dispatch_config(path):
+                continue
             entry: dict[str, Any] = {"path": str(path.relative_to(self.root)), "name": path.stem}
             try:
                 cfg = api.load_dispatch_config(path)
@@ -210,11 +219,15 @@ class DispatchLab:
     def _resolve_config(self, config: str) -> Path:
         if not config:
             raise ValueError("Missing config")
-        base = (self.root / "experiments" / "agentic").resolve()
+        base = (self.root / "experiments").resolve()
         candidate = (self.root / config).resolve()
         if base not in candidate.parents:
-            raise ValueError("Config path must be under experiments/agentic")
-        if candidate.suffix != ".toml" or not candidate.is_file():
+            raise ValueError("Config path must be under experiments/")
+        if (
+            candidate.suffix != ".toml"
+            or not candidate.is_file()
+            or not _is_dispatch_config(candidate)
+        ):
             raise ValueError("Unknown config")
         return candidate
 

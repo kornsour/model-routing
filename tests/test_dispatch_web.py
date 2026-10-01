@@ -18,7 +18,7 @@ from model_routing.server import serve
 from model_routing.types import Candidate
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_REL = "experiments/agentic/exp05_dispatch.toml"
+CONFIG_REL = "experiments/exp05-dispatch/exp05_dispatch.toml"
 TOKEN = "test-token"
 
 

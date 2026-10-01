@@ -454,7 +454,7 @@ def _policy_d(
 
 
 # --------------------------------------------------------------------------- #
-# exp06: the escalation ladder (docs/paper/exp06-route-on-evidence.md, sec. 4)
+# exp06: the escalation ladder (docs/experiments/exp06-route-on-evidence/paper.md, sec. 4)
 # --------------------------------------------------------------------------- #
 
 VERIFIER_CONFTEST = (

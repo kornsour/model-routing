@@ -1,11 +1,11 @@
 """``model-routing`` command line.
 
 model-routing smoke  [--provider claude_cli|codex_cli] [--model M]
-model-routing estimate experiments/llm/exp01_baselines.toml
-model-routing run      experiments/llm/exp01_baselines.toml [--limit N] [--budget-usd X]
+model-routing estimate experiments/exp01-04-llm-routing/exp01_baselines.toml
+model-routing run      experiments/exp01-04-llm-routing/exp01_baselines.toml [--limit N]
 model-routing report   results/<experiment>/<run>
-model-routing dispatch-estimate experiments/agentic/exp05_dispatch.toml
-model-routing dispatch-run      experiments/agentic/exp05_dispatch.toml --budget-usd X
+model-routing dispatch-estimate experiments/exp05-dispatch/exp05_dispatch.toml
+model-routing dispatch-run      experiments/exp05-dispatch/exp05_dispatch.toml --budget-usd X
 model-routing dispatch-report   results/<experiment>/<run>
 model-routing dispatch-paper    results/<experiment>/<run> [more runs] [--out draft.md]
 model-routing harvest-chips
@@ -19,12 +19,12 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from model_routing.config import load_config
 from model_routing.pricing import PriceTable
 from model_routing.providers import FakeProvider, make_provider
 from model_routing.providers.base import Provider
-from model_routing.report import aggregate, write_report
-from model_routing.runner import Runner
+from model_routing.single_turn.config import load_config
+from model_routing.single_turn.report import aggregate, write_report
+from model_routing.single_turn.runner import Runner
 
 
 def _providers_for(cfg, fake: bool) -> dict[str, Provider]:
@@ -247,7 +247,9 @@ def cmd_dispatch_paper(args: argparse.Namespace) -> int:
 
     from model_routing.dispatch.paper import render_paper
 
-    default = f"docs/experiments/findings/{date.today().isoformat()}-exp05-paper-draft.md"
+    default = (
+        f"docs/experiments/exp05-dispatch/findings/{date.today().isoformat()}-exp05-paper-draft.md"
+    )
     out = args.out or default
     path = render_paper([Path(d) for d in args.run_dirs], out=Path(out))
     print(f"paper draft: {path}")
@@ -506,7 +508,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     dpp.add_argument("run_dirs", nargs="+", help="one or more results/<exp>/<stamp> directories")
     dpp.add_argument(
-        "--out", help="output .md (default: docs/experiments/findings/<date>-exp05-paper-draft.md)"
+        "--out",
+        help=(
+            "output .md (default: "
+            "docs/experiments/exp05-dispatch/findings/<date>-exp05-paper-draft.md)"
+        ),
     )
     dpp.set_defaults(fn=cmd_dispatch_paper)
 

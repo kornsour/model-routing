@@ -1,6 +1,6 @@
 """Dispatch runner: config loading, no-spend estimates, and the sequential executor.
 
-See ``docs/experiments/dispatch-routing.md``.  This module owns ``DispatchConfig``,
+See ``docs/experiments/exp05-dispatch/design.md``.  This module owns ``DispatchConfig``,
 ``load_dispatch_config``, ``estimate_dispatch``, ``run_dispatch`` and ``auth_status``;
 the actual policy logic (what sessions a policy issues, in what order) lives in
 ``model_routing.dispatch.policies`` and is invoked here per (task, trial, policy) cell.
@@ -382,13 +382,16 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
 
 
 _TASKSET_IGNORED_DIRS = {"private", "__pycache__", ".pytest_cache", ".ruff_cache", ".git"}
+# Documentation about the task set, not part of it: editing it must not change the hash.
+_TASKSET_IGNORED_FILES = {"README.md"}
 
 
 def taskset_sha256(tasks_path: str | Path) -> str:
     """One hash over the whole task set: the JSONL plus every fixture, hidden test,
-    setup/mutant/solution overlay under its directory (``private/`` and caches
-    excluded).  Pre-registration freezes this value; the report refuses to call a
-    run confirmatory if the task set changed after registration."""
+    setup/mutant/solution overlay under its directory (``private/``, caches and
+    the top-level ``README.md`` excluded; fixture READMEs below it are inputs).
+    Pre-registration freezes this value; the report refuses to call a run
+    confirmatory if the task set changed after registration."""
     tasks_path = Path(tasks_path)
     root = tasks_path.parent
     h = hashlib.sha256()
@@ -401,6 +404,8 @@ def taskset_sha256(tasks_path: str | Path) -> str:
             continue
         rel = f.relative_to(root)
         if any(part in _TASKSET_IGNORED_DIRS for part in rel.parts):
+            continue
+        if len(rel.parts) == 1 and rel.name in _TASKSET_IGNORED_FILES:
             continue
         h.update(str(rel).encode())
         h.update(b"\0")

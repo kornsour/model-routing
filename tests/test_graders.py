@@ -1,4 +1,4 @@
-from model_routing.graders import grade
+from model_routing.single_turn.graders import grade
 
 
 def test_exact_is_normalized():

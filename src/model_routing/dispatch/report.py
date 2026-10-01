@@ -1,7 +1,7 @@
 """Dispatch report: ``summarize(run_dir)`` -> ``summary.json`` + ``summary.md``.
 
 Paired, task-clustered bootstrap comparisons for the pre-registered hypotheses
-(see ``docs/experiments/dispatch-routing.md``).  Verdicts are one of
+(see ``docs/experiments/exp05-dispatch/design.md``).  Verdicts are one of
 ``supported`` / ``not supported`` / ``inconclusive``:
 
 * non-inferior on pass rate  <=>  lower bound of the paired pass-rate delta
@@ -571,7 +571,7 @@ def summarize(run_dir: str | Path) -> dict[str, Any]:
     specs = [
         ("H-D1", primary.get("treatment", "C1"), primary.get("control", "B")),
         # Each pair is (expected winner, other), so "supported" always means the
-        # hypothesis in docs/experiments/dispatch-routing.md held.
+        # hypothesis in docs/experiments/exp05-dispatch/design.md held.
         ("H-D2", "B", "A"),
         ("H-D3", "A", "A_switch"),
         ("H-D4", "D", "C1"),

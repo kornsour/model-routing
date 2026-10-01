@@ -176,7 +176,7 @@ def preregistration_block(
     cfg: DispatchConfig,
     *,
     n_tasks: int | None = None,
-    doc: str = "docs/experiments/preregistration-exp05.md",
+    doc: str = "docs/experiments/exp05-dispatch/preregistration.md",
     now: datetime | None = None,
 ) -> str:
     """The ``[preregistration]`` TOML table freezing this config's design against

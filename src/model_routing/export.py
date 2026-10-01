@@ -1,15 +1,18 @@
 """Export Markdown documents (papers, findings) to Word and PDF.
 
-    make docs-export                                   # every docs/paper/*.md
-    make docs-export DOCS="docs/paper/exp06-results.md" FORMATS=docx
+    make docs-export                       # every experiment's paper.md and results.md
+    make docs-export DOCS="docs/experiments/exp06-route-on-evidence/results.md" FORMATS=docx
 
 Markdown -> .docx goes through pandoc: a ``pandoc`` on the PATH if there is
 one, else the copy bundled with the ``pypandoc-binary`` wheel (``uv sync
 --extra export``).  .docx -> .pdf goes through LibreOffice in headless mode,
 so the PDF is exactly the Word document; no LaTeX is needed.
 
-Output lands in ``exports/`` at the repository root (git-ignored), mirroring
-the source path below ``docs/``: ``docs/paper/x.md`` -> ``exports/paper/x.docx``.
+Output lands in ``exports/docs/`` at the repository root (``exports/`` is
+git-ignored), mirroring the source path below ``docs/experiments/`` (or
+``docs/`` for other docs):
+``docs/experiments/exp06-route-on-evidence/results.md`` ->
+``exports/docs/exp06-route-on-evidence/results.docx``.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from collections.abc import Iterable
 from pathlib import Path
 
 FORMATS = ("docx", "pdf")
-DEFAULT_GLOB = "docs/paper/*.md"
+DEFAULT_GLOBS = ("docs/experiments/*/paper.md", "docs/experiments/*/results.md")
 # Pipe tables, fenced code, strikeout and autolinks as written in this repo.
 PANDOC_FROM = "gfm"
 
@@ -73,13 +76,13 @@ def soffice_binary() -> str:
 
 def output_path(source: Path, root: Path, out_dir: Path, fmt: str) -> Path:
     source = source.resolve()
-    try:
-        rel = source.relative_to(root / "docs")
-    except ValueError:
+    rel = Path(source.name)
+    for base in (root / "docs" / "experiments", root / "docs", root):
         try:
-            rel = source.relative_to(root)
+            rel = source.relative_to(base)
+            break
         except ValueError:
-            rel = Path(source.name)
+            continue
     return out_dir / rel.with_suffix(f".{fmt}")
 
 
@@ -135,7 +138,7 @@ def export(
     if unknown:
         raise ExportError(f"unknown format(s) {unknown}; choose from {list(FORMATS)}")
     root = repo_root()
-    out_dir = out_dir or root / "exports"
+    out_dir = out_dir or root / "exports" / "docs"
     written: list[Path] = []
     pandoc = pandoc_binary()
     soffice = soffice_binary() if "pdf" in formats else None
@@ -156,14 +159,18 @@ def export(
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Export Markdown docs to Word and PDF.")
-    ap.add_argument("docs", nargs="*", help=f"Markdown files (default: {DEFAULT_GLOB})")
+    ap.add_argument(
+        "docs", nargs="*", help=f"Markdown files (default: {' and '.join(DEFAULT_GLOBS)})"
+    )
     ap.add_argument("--formats", default=",".join(FORMATS), help="comma-separated: docx,pdf")
-    ap.add_argument("--out", type=Path, help="output directory (default: exports/)")
+    ap.add_argument("--out", type=Path, help="output directory (default: exports/docs/)")
     args = ap.parse_args(argv)
     root = repo_root()
-    sources = [Path(d) for d in args.docs] or sorted(root.glob(DEFAULT_GLOB))
+    sources = [Path(d) for d in args.docs] or sorted(
+        p for pattern in DEFAULT_GLOBS for p in root.glob(pattern)
+    )
     if not sources:
-        print(f"nothing to export (no files match {DEFAULT_GLOB})", file=sys.stderr)
+        print(f"nothing to export (no files match {DEFAULT_GLOBS})", file=sys.stderr)
         return 1
     formats = [f.strip() for f in args.formats.split(",") if f.strip()]
     try:

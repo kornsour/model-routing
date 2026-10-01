@@ -29,10 +29,14 @@ def _has_soffice() -> bool:
 
 def test_output_path_mirrors_docs(tmp_path: Path):
     root = tmp_path
-    (root / "docs" / "paper").mkdir(parents=True)
-    src = root / "docs" / "paper" / "x.md"
+    (root / "docs" / "experiments" / "exp9").mkdir(parents=True)
+    src = root / "docs" / "experiments" / "exp9" / "paper.md"
     src.write_text("# x\n")
-    assert export.output_path(src, root, root / "exports", "docx") == root / "exports/paper/x.docx"
+    out = root / "exports"
+    assert export.output_path(src, root, out, "docx") == out / "exp9/paper.docx"
+    plat = root / "docs" / "platform.md"
+    plat.write_text("# p\n")
+    assert export.output_path(plat, root, out, "pdf") == out / "platform.pdf"
     other = root / "README.md"
     other.write_text("# r\n")
     assert export.output_path(other, root, root / "exports", "pdf") == root / "exports/README.pdf"

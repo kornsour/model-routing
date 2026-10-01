@@ -35,11 +35,11 @@ check: lint fmt-check typecheck test ## Run everything CI runs, locally
 smoke: ## One trivial headless call per CLI; prints usage + cost (PROVIDER=claude_cli|codex_cli)
 	$(PY) model-routing smoke --provider $(or $(PROVIDER),claude_cli)
 
-estimate: ## Dry-run list-price estimate for an experiment (EXP=experiments/llm/exp01_baselines.toml)
-	$(PY) model-routing estimate $(or $(EXP),experiments/llm/exp01_baselines.toml)
+estimate: ## Dry-run list-price estimate for an experiment (EXP=experiments/exp01-04-llm-routing/exp01_baselines.toml)
+	$(PY) model-routing estimate $(or $(EXP),experiments/exp01-04-llm-routing/exp01_baselines.toml)
 
 run: ## Run an experiment (EXP=..., LIMIT=n | SAMPLE=n, BUDGET=usd, TRIALS=n, ROUTERS=a,b, COOLDOWN=secs)
-	$(PY) model-routing run $(or $(EXP),experiments/llm/exp01_baselines.toml) \
+	$(PY) model-routing run $(or $(EXP),experiments/exp01-04-llm-routing/exp01_baselines.toml) \
 		$(if $(LIMIT),--limit $(LIMIT)) $(if $(SAMPLE),--sample $(SAMPLE)) \
 		$(if $(BUDGET),--budget-usd $(BUDGET)) $(if $(TRIALS),--trials $(TRIALS)) \
 		$(if $(ROUTERS),--routers $(ROUTERS)) $(if $(COOLDOWN),--cooldown-s $(COOLDOWN))
@@ -57,24 +57,24 @@ clean: ## Remove caches
 lab: ## Serve the local experiment platform at http://127.0.0.1:8765
 	$(PY) model-routing serve
 
-dispatch-estimate: ## Dry-run list-price estimate for a dispatch experiment (EXP=experiments/agentic/exp05_dispatch.toml)
-	$(PY) model-routing dispatch-estimate $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
+dispatch-estimate: ## Dry-run list-price estimate for a dispatch experiment (EXP=experiments/exp05-dispatch/exp05_dispatch.toml)
+	$(PY) model-routing dispatch-estimate $(or $(EXP),experiments/exp05-dispatch/exp05_dispatch.toml) \
 		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES))
 
 dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE=n, TRIALS=n, POLICIES=A,B,C1, RESUME=results/<exp>/<stamp>)
-	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
+	$(PY) model-routing dispatch-run $(or $(EXP),experiments/exp05-dispatch/exp05_dispatch.toml) \
 		--budget-usd $(or $(BUDGET),1.00) \
 		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES)) \
 		$(if $(RESUME),--resume $(RESUME))
 
-docs-export: ## Markdown -> Word/PDF into exports/ (DOCS="docs/paper/x.md ..." default docs/paper/*.md, FORMATS=docx,pdf)
+docs-export: ## Markdown -> Word/PDF into exports/docs/ (DOCS="a.md b.md", default every experiment's paper.md/results.md; FORMATS=docx,pdf)
 	uv run --extra export python -m model_routing.export $(DOCS) $(if $(FORMATS),--formats $(FORMATS))
 
 dispatch-budget: ## Raise a running/paused dispatch run's budget without restarting (RUN=results/<exp>/<stamp>, BUDGET=usd)
 	$(PY) model-routing dispatch-budget $(RUN) --usd $(BUDGET)
 
 dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
-	$(PY) model-routing dispatch-run $(or $(EXP),experiments/agentic/exp05_dispatch.toml) \
+	$(PY) model-routing dispatch-run $(or $(EXP),experiments/exp05-dispatch/exp05_dispatch.toml) \
 		--fake --budget-usd 1000 $(if $(SAMPLE),--sample $(SAMPLE))
 
 dispatch-report: ## Rebuild summary.json/md for a dispatch run dir (RUN=results/<exp>/<stamp>)
@@ -87,7 +87,7 @@ dispatch-calibration: ## Measured per-task pass rates by model from calibration 
 	$(PY) model-routing dispatch-calibration $(RUNS) $(if $(WRITE),--write)
 
 dispatch-preregister: ## Print (WRITE=1: append) the [preregistration] table for a config (EXP=...)
-	$(PY) model-routing dispatch-preregister $(or $(EXP),experiments/agentic/exp05_dispatch.toml) $(if $(WRITE),--write)
+	$(PY) model-routing dispatch-preregister $(or $(EXP),experiments/exp05-dispatch/exp05_dispatch.toml) $(if $(WRITE),--write)
 
 harvest-chips: ## Scan local Claude Code transcripts for spawned task chips -> tasks/agentic/private/harvested.jsonl
 	$(PY) model-routing harvest-chips

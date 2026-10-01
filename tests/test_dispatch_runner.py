@@ -223,9 +223,12 @@ def _outcomes(out: Path) -> list[dict[str, Any]]:
 
 def test_real_experiment_configs_validate():
     for name in ("exp05_dispatch.toml", "exp05_dispatch_codex.toml", "exp05_pilot.toml"):
-        cfg = load_dispatch_config(ROOT / "experiments" / "agentic" / name)
+        cfg = load_dispatch_config(ROOT / "experiments" / "exp05-dispatch" / name)
         assert cfg.parent in cfg.candidates
         assert all(m in cfg.candidates for m in cfg.menu)
+    for path in sorted((ROOT / "experiments" / "exp06-route-on-evidence").glob("*.toml")):
+        cfg = load_dispatch_config(path)
+        assert cfg.parent in cfg.candidates
 
 
 def test_config_rejects_unknown_candidate(tmp_path: Path):

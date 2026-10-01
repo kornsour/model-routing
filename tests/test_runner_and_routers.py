@@ -2,13 +2,13 @@ import json
 from pathlib import Path
 
 from model_routing.cli import main
-from model_routing.config import load_config
 from model_routing.pricing import PriceTable
 from model_routing.providers.fake import FakeProvider
-from model_routing.report import aggregate, load_outcomes, pareto, write_report
-from model_routing.routers import make_router
-from model_routing.runner import Runner
-from model_routing.tasks import load_tasks
+from model_routing.single_turn.config import load_config
+from model_routing.single_turn.report import aggregate, load_outcomes, pareto, write_report
+from model_routing.single_turn.routers import make_router
+from model_routing.single_turn.runner import Runner
+from model_routing.single_turn.tasks import load_tasks
 from model_routing.types import Task
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +38,7 @@ def test_sample_and_tags_selection():
 
 def test_every_experiment_config_validates():
     prices = PriceTable.load()
-    for path in sorted((ROOT / "experiments" / "llm").glob("*.toml")):
+    for path in sorted((ROOT / "experiments" / "exp01-04-llm-routing").glob("*.toml")):
         cfg = load_config(path)
         assert cfg.tasks.exists(), path
         for c in cfg.candidates.values():
@@ -167,7 +167,7 @@ def test_budget_stops_the_run(tmp_path: Path):
 
 
 def test_confidence_cascade_strips_suffix_before_grading():
-    from model_routing.routers.strategies import strip_confidence
+    from model_routing.single_turn.routers.strategies import strip_confidence
 
     assert strip_confidence("negative\n\nCONFIDENCE: high") == "negative"
     assert strip_confidence("**13488.50**\nCONFIDENCE: low") == "**13488.50**"

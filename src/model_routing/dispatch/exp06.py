@@ -5,7 +5,7 @@ static arms by stratum, computed arms, and escalation quality.
         --calibration results/exp06_calibrate/<stamp> \\
         --ladder results/exp06_ladder/<stamp> --out results/exp06_analysis.md
 
-Definitions follow ``docs/paper/exp06-route-on-evidence.md`` (sections 3, 7.1,
+Definitions follow ``docs/experiments/exp06-route-on-evidence/paper.md`` (sections 3, 7.1,
 7.2, 7.4, 7.5).  The static arms come from the calibration run(s); every
 number is recomputed from ``outcomes.jsonl``.  Intervals are 95% task-clustered
 bootstrap intervals (all trials of a task resampled together, 2,000 draws,
