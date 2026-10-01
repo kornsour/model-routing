@@ -1,0 +1,69 @@
+{
+  "id": 22285519,
+  "name": "Required checks: TypeScript apps (by property)",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "repository_property": {
+      "include": [
+        {
+          "name": "stack",
+          "property_values": [
+            "typescript"
+          ]
+        },
+        {
+          "name": "ci-managed",
+          "property_values": [
+            "true"
+          ]
+        }
+      ]
+    },
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          {
+            "context": "ci / Build"
+          },
+          {
+            "context": "ci / Lint & format (Biome)"
+          },
+          {
+            "context": "ci / Security scan (Semgrep)"
+          },
+          {
+            "context": "ci / Type check"
+          },
+          {
+            "context": "ci / Unit tests (Vitest)"
+          },
+          {
+            "context": "lockfile / integrity"
+          }
+        ]
+      }
+    }
+  ]
+}

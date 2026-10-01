@@ -1,0 +1,26 @@
+[
+  {
+    "id": 21612243,
+    "name": "crossfade main",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "Copperline/crossfade",
+    "enforcement": "active"
+  },
+  {
+    "id": 21612244,
+    "name": "smallco main",
+    "target": "branch",
+    "source_type": "Repository",
+    "source": "Copperline/smallco",
+    "enforcement": "active"
+  },
+  {
+    "id": 22285519,
+    "name": "Required checks: TypeScript apps (by property)",
+    "target": "branch",
+    "source_type": "Organization",
+    "source": "Copperline",
+    "enforcement": "active"
+  }
+]

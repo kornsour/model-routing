@@ -1,0 +1,4 @@
+[package]
+name = "crossfade"
+version = "0.6.0"
+edition = "2021"

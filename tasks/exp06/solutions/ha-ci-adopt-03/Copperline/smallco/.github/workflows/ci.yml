@@ -1,0 +1,15 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: Copperline/.github-private/.github/workflows/ci.yml@9b2e4c71d0a3f5e8c6b1a2d4e7f90c3b5a8d1e26 # main
+    with:
+      node-version: "22"
+      # No lint step in this repo.
+      run-lint: false
+      typecheck-command: pnpm typecheck

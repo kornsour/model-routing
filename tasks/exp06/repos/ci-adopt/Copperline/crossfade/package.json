@@ -1,0 +1,11 @@
+{
+  "name": "crossfade",
+  "private": true,
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "dev": "tauri dev",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "vite build"
+  }
+}
