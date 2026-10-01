@@ -93,7 +93,9 @@ def parse(path: Path) -> dict:
         row["agent_bash"] = meta["agent_bash"]
     row["stratum"] = meta["stratum"]
     row["provenance"] = {
-        k: meta[k] for k in ("harvest_id", "draw_position", "adaptations", "authorship") if k in meta
+        k: meta[k]
+        for k in ("harvest_id", "draw_position", "harvest_shape", "adaptations", "authorship")
+        if k in meta
     }
     return row
 
