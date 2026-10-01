@@ -1,0 +1,32 @@
+[
+  {
+    "property_name": "stack",
+    "value_type": "single_select",
+    "required": false
+  },
+  {
+    "property_name": "database",
+    "value_type": "single_select",
+    "required": false
+  },
+  {
+    "property_name": "deploys",
+    "value_type": "single_select",
+    "required": false
+  },
+  {
+    "property_name": "tier",
+    "value_type": "single_select",
+    "required": false
+  },
+  {
+    "property_name": "ci-managed",
+    "value_type": "true_false",
+    "required": false
+  },
+  {
+    "property_name": "orm",
+    "value_type": "single_select",
+    "required": false
+  }
+]

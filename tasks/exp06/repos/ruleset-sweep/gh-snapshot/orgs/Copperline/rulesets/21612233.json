@@ -1,0 +1,53 @@
+{
+  "id": 21612233,
+  "name": "Required checks: databases (by property)",
+  "target": "branch",
+  "source_type": "Organization",
+  "source": "Copperline",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    },
+    "repository_property": {
+      "include": [
+        {
+          "name": "database",
+          "property_values": [
+            "postgres"
+          ]
+        }
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          {
+            "context": "ci / DB migration check"
+          }
+        ]
+      }
+    }
+  ]
+}

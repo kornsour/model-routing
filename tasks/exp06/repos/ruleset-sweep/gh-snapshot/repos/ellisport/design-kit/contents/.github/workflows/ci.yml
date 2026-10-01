@@ -1,0 +1,13 @@
+name: checks
+on: [pull_request, push]
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+  visual:
+    name: visual regression
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

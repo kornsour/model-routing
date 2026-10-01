@@ -1,0 +1,43 @@
+{
+  "id": 21612231,
+  "name": "Default branch protection (tiered repos)",
+  "target": "branch",
+  "source_type": "Organization",
+  "source": "Copperline",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ],
+      "exclude": []
+    },
+    "repository_property": {
+      "include": [
+        {
+          "name": "tier",
+          "property_values": [
+            "prod",
+            "internal"
+          ]
+        }
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false
+      }
+    }
+  ]
+}

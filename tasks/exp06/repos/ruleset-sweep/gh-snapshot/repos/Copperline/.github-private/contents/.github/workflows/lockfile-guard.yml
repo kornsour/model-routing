@@ -1,0 +1,5 @@
+name: lockfile-guard
+on:
+  workflow_call:
+jobs:
+  integrity: { name: integrity, runs-on: ubuntu-latest, steps: [{ run: ./check-lockfile.sh }] }

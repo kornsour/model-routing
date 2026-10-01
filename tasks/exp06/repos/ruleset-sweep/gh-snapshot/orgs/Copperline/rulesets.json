@@ -1,0 +1,34 @@
+[
+  {
+    "id": 21612230,
+    "name": "Required checks: TypeScript apps (by property)",
+    "target": "branch",
+    "source_type": "Organization",
+    "source": "Copperline",
+    "enforcement": "active"
+  },
+  {
+    "id": 21612231,
+    "name": "Default branch protection (tiered repos)",
+    "target": "branch",
+    "source_type": "Organization",
+    "source": "Copperline",
+    "enforcement": "active"
+  },
+  {
+    "id": 21612232,
+    "name": "Required checks: Python services (by property)",
+    "target": "branch",
+    "source_type": "Organization",
+    "source": "Copperline",
+    "enforcement": "active"
+  },
+  {
+    "id": 21612233,
+    "name": "Required checks: databases (by property)",
+    "target": "branch",
+    "source_type": "Organization",
+    "source": "Copperline",
+    "enforcement": "active"
+  }
+]
