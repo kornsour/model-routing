@@ -1,0 +1,3 @@
+# binwise
+
+Storage-bin inventory.
