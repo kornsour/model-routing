@@ -19,6 +19,9 @@ dev = [
     "pyright>=1.1.414",
     "pre-commit>=4.6.2",
 ]
+export = [
+    "pypandoc-binary>=1.17",
+]
 
 [project.scripts]
 model-routing = "model_routing.cli:main"

@@ -24,6 +24,9 @@ build/
 .vscode/
 *.log
 
+# Word/PDF exports of docs/ (make docs-export); regenerate any time.
+exports/
+
 # Experiment output (raw model outputs, per-call records). Promote findings to docs/experiments/.
 results/*
 !results/.gitkeep

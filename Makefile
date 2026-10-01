@@ -67,6 +67,9 @@ dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE
 		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES)) \
 		$(if $(RESUME),--resume $(RESUME))
 
+docs-export: ## Markdown -> Word/PDF into exports/ (DOCS="docs/paper/x.md ..." default docs/paper/*.md, FORMATS=docx,pdf)
+	uv run --extra export python -m model_routing.export $(DOCS) $(if $(FORMATS),--formats $(FORMATS))
+
 dispatch-budget: ## Raise a running/paused dispatch run's budget without restarting (RUN=results/<exp>/<stamp>, BUDGET=usd)
 	$(PY) model-routing dispatch-budget $(RUN) --usd $(BUDGET)
 
