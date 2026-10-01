@@ -1,0 +1,19 @@
+name: SST deploy
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  deploy:
+    # Defense in depth: dispatch-only, this repository, main only; the
+    # self-hosted branch is the ephemeral pool, gated on DEPLOY_RUNNER_CLASS.
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_CLASS == 'ephemeral' && vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event_name == 'workflow_dispatch' && github.repository == 'Copperline/gatefit' && github.event.repository.private && github.ref == 'refs/heads/main' && '["self-hosted","Linux","container"]' || '["ubuntu-latest"]') }}
+    environment: production
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - run: pnpm sst deploy --stage production

@@ -1,0 +1,24 @@
+name: Ingredient storage sync
+on:
+  schedule:
+    - cron: '45 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: ingredient-storage-production-sync.yml-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # Routed by DEPLOY_RUNNER_CLASS: with the org set to `ephemeral` this job may
+    # run on the ephemeral pool, whose runners are destroyed after one job, so it
+    # gets the same isolation as a GitHub-hosted runner; otherwise GitHub-hosted.
+    # This job assumes the production storage sync role via OIDC; a persistent
+    # self-hosted runner could keep that token around between jobs.
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_CLASS == 'ephemeral' && vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux","container"]' || vars.DEPLOY_RUNNER_CLASS == 'self-hosted' && vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux"]' || '["ubuntu-latest"]') }}
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: node scripts/storage-sync.mjs --env production

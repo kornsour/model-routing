@@ -1,0 +1,14 @@
+{
+  "name": "pathwise",
+  "version": "0.42.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "test": "node --test",
+    "e2e": "playwright test"
+  }
+}

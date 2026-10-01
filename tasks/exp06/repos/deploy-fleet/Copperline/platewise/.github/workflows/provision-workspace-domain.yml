@@ -1,0 +1,24 @@
+name: Provision workspace domain
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type the repository name to confirm
+        required: true
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  provision:
+    # Defense in depth: only a manual dispatch of this exact repository's main
+    # branch may reach the self-hosted pool; anything else runs GitHub-hosted.
+    runs-on: ${{ fromJSON(vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event_name == 'workflow_dispatch' && github.repository == 'Copperline/platewise' && github.event.repository.private && github.ref == 'refs/heads/main' && '["self-hosted","Linux","X64","wsl"]' || '["ubuntu-latest"]') }}
+    environment: production
+    if: inputs.confirm == github.event.repository.name
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: google-github-actions/auth@ba79af03959ebeac9769e648f473a284504d9193 # v2.1.10
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.WORKSPACE_SA_EMAIL }}
+      - run: node scripts/provision-domain.mjs

@@ -1,0 +1,16 @@
+name: neon-preview
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  branch:
+    # Holds a Neon API key: routed by DEPLOY_RUNNER_CLASS so it lands on the
+    # ephemeral pool (runner destroyed after one job) or GitHub-hosted, never
+    # on the persistent pool.
+    runs-on: ${{ fromJSON(vars.DEPLOY_RUNNER_CLASS == 'ephemeral' && vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux","container"]' || vars.DEPLOY_RUNNER_CLASS == 'self-hosted' && vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: ./tools/neon-branch.sh "${{ github.event.pull_request.number }}"
