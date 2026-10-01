@@ -1,0 +1,372 @@
+{
+ "seed": 20261001,
+ "population": 562,
+ "rule": "sort harvested handoffs by id, shuffle with random.Random(seed), review in order until 16 are accepted; skip only when the content is private or no deterministic offline grader can be written",
+ "reviewed": 42,
+ "accepted": 16,
+ "skipped": 26,
+ "draw": [
+  {
+   "position": 0,
+   "harvest_id": "9e4750efe3b1e1ad",
+   "kind": "subagent",
+   "words": 865,
+   "decision": "skipped",
+   "reason": "private-security",
+   "note": "real runner-fleet security posture (hosts, isolation gaps, token paths); also needs the live org"
+  },
+  {
+   "position": 1,
+   "harvest_id": "44dd121fdcaf66d9",
+   "kind": "subagent",
+   "words": 1263,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "Electron app build with pnpm install, live Postgres and packaging"
+  },
+  {
+   "position": 2,
+   "harvest_id": "88004d74e98d4696",
+   "kind": "subagent",
+   "words": 606,
+   "decision": "accepted",
+   "task": "ha-runner-class-01"
+  },
+  {
+   "position": 3,
+   "harvest_id": "f3c6cad9d0714503",
+   "kind": "subagent",
+   "words": 614,
+   "decision": "accepted",
+   "task": "ha-branch-triage-02"
+  },
+  {
+   "position": 4,
+   "harvest_id": "5d653634f6dfa8c8",
+   "kind": "subagent",
+   "words": 695,
+   "decision": "accepted",
+   "task": "ha-ci-adopt-03"
+  },
+  {
+   "position": 5,
+   "harvest_id": "25bd6fc974835859",
+   "kind": "subagent",
+   "words": 379,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "reviews open PRs in three live repos; production identity routing"
+  },
+  {
+   "position": 6,
+   "harvest_id": "88143cf4c205a1bf",
+   "kind": "subagent",
+   "words": 486,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "live AWS Identity Center changes; real account profiles"
+  },
+  {
+   "position": 7,
+   "harvest_id": "db23a1ff18c2d7c3",
+   "kind": "subagent",
+   "words": 479,
+   "decision": "accepted",
+   "task": "ha-claims-audit-04"
+  },
+  {
+   "position": 8,
+   "harvest_id": "0a4de274bfb2707c",
+   "kind": "subagent",
+   "words": 714,
+   "decision": "accepted",
+   "task": "ha-archive-birchwood-05"
+  },
+  {
+   "position": 9,
+   "harvest_id": "ff427f1bbc4ffc80",
+   "kind": "subagent",
+   "words": 323,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "dependency upgrades need pnpm install and the live Dependabot API"
+  },
+  {
+   "position": 10,
+   "harvest_id": "ccebd9ea089baaf1",
+   "kind": "subagent",
+   "words": 440,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "job-search screening of named employers for a named person; web research"
+  },
+  {
+   "position": 11,
+   "harvest_id": "e576cc94c65bda59",
+   "kind": "subagent",
+   "words": 646,
+   "decision": "accepted",
+   "task": "ha-archive-tsstarter-06"
+  },
+  {
+   "position": 12,
+   "harvest_id": "d74684b66e2ff4e5",
+   "kind": "subagent",
+   "words": 592,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "operator's job-alert email and database contents"
+  },
+  {
+   "position": 13,
+   "harvest_id": "5d09c174c9413fc4",
+   "kind": "subagent",
+   "words": 682,
+   "decision": "accepted",
+   "task": "ha-branch-triage-08"
+  },
+  {
+   "position": 14,
+   "harvest_id": "d33a62e0561d2471",
+   "kind": "subagent",
+   "words": 821,
+   "decision": "accepted",
+   "task": "ha-headline-09"
+  },
+  {
+   "position": 15,
+   "harvest_id": "5e67dee720edcd0e",
+   "kind": "subagent",
+   "words": 744,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "OpenTofu apply against live AWS accounts"
+  },
+  {
+   "position": 16,
+   "harvest_id": "93be6cbc4d53a105",
+   "kind": "subagent",
+   "words": 515,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "job-search screening; web research"
+  },
+  {
+   "position": 17,
+   "harvest_id": "ab845499cec98356",
+   "kind": "subagent",
+   "words": 460,
+   "decision": "accepted",
+   "task": "ha-ruleset-sweep-10"
+  },
+  {
+   "position": 18,
+   "harvest_id": "620c6e87b8565e29",
+   "kind": "subagent",
+   "words": 569,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "failing CI check whose root cause is only in live run logs"
+  },
+  {
+   "position": 19,
+   "harvest_id": "33dc6d74a8bcbc95",
+   "kind": "subagent",
+   "words": 570,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "job-search screening; web research"
+  },
+  {
+   "position": 20,
+   "harvest_id": "a16088784ca13bfe",
+   "kind": "subagent",
+   "words": 235,
+   "decision": "skipped",
+   "reason": "open-ended-output",
+   "note": "free-form UI survey with no fixed answer format"
+  },
+  {
+   "position": 21,
+   "harvest_id": "441c483c9bd34012",
+   "kind": "subagent",
+   "words": 1000,
+   "decision": "skipped",
+   "reason": "open-ended-output",
+   "note": "information-architecture judgement argued in a PR; pnpm install"
+  },
+  {
+   "position": 22,
+   "harvest_id": "2a81f103b015ae7d",
+   "kind": "subagent",
+   "words": 649,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "live GCP IAM inventory and audit logs; real project identifiers"
+  },
+  {
+   "position": 23,
+   "harvest_id": "db30375730ca1b5d",
+   "kind": "subagent",
+   "words": 597,
+   "decision": "accepted",
+   "task": "ha-branch-verdict-11"
+  },
+  {
+   "position": 24,
+   "harvest_id": "ddca79e5f909293a",
+   "kind": "subagent",
+   "words": 521,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "OpenNext/Cloudflare build needs network installs"
+  },
+  {
+   "position": 25,
+   "harvest_id": "962c64b6d1ed2bd3",
+   "kind": "subagent",
+   "words": 1361,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "pnpm install, a Neon database branch and drizzle migration generation"
+  },
+  {
+   "position": 26,
+   "harvest_id": "13329373820e90b7",
+   "kind": "subagent",
+   "words": 708,
+   "decision": "accepted",
+   "task": "ha-archive-narrator-07"
+  },
+  {
+   "position": 27,
+   "harvest_id": "8216cd3ff9145a4b",
+   "kind": "subagent",
+   "words": 541,
+   "decision": "accepted",
+   "task": "ha-claims-audit-13"
+  },
+  {
+   "position": 28,
+   "harvest_id": "e2c5778d06eeb39c",
+   "kind": "subagent",
+   "words": 651,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "job boards for the operator's tracked employers; live database and web"
+  },
+  {
+   "position": 29,
+   "harvest_id": "a3a19095e37d2d2c",
+   "kind": "subagent",
+   "words": 1352,
+   "decision": "accepted",
+   "task": "ha-endedat-14"
+  },
+  {
+   "position": 30,
+   "harvest_id": "ceda5b078b0d5032",
+   "kind": "subagent",
+   "words": 328,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "compensation research for the operator's job search; web"
+  },
+  {
+   "position": 31,
+   "harvest_id": "430facd49c71485d",
+   "kind": "subagent",
+   "words": 690,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "pnpm workspace with cloud SDKs; provisioning against live APIs"
+  },
+  {
+   "position": 32,
+   "harvest_id": "b23f7982bf05f1d3",
+   "kind": "subagent",
+   "words": 1236,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "pnpm install, Neon branch and drizzle migrations"
+  },
+  {
+   "position": 33,
+   "harvest_id": "fb718d248158f73f",
+   "kind": "subagent",
+   "words": 595,
+   "decision": "accepted",
+   "task": "ha-cron-auth-15"
+  },
+  {
+   "position": 34,
+   "harvest_id": "e1e04896a1335347",
+   "kind": "subagent",
+   "words": 687,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "creates rulesets through the live GitHub API; exposes an unprotected supply-chain path in public repos"
+  },
+  {
+   "position": 35,
+   "harvest_id": "3f900a90bc62e92c",
+   "kind": "subagent",
+   "words": 977,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "sudo, macOS accounts and a live runner registration"
+  },
+  {
+   "position": 36,
+   "harvest_id": "ded3f3fa460f3c24",
+   "kind": "chip",
+   "words": 341,
+   "decision": "skipped",
+   "reason": "private-security",
+   "note": "a real leaked credential identifier and live IAM checks"
+  },
+  {
+   "position": 37,
+   "harvest_id": "c98929f51bed0bb4",
+   "kind": "subagent",
+   "words": 603,
+   "decision": "skipped",
+   "reason": "needs-install",
+   "note": "Electron and Playwright with pnpm install"
+  },
+  {
+   "position": 38,
+   "harvest_id": "7792fc6a72a2ec8d",
+   "kind": "subagent",
+   "words": 734,
+   "decision": "accepted",
+   "task": "ha-branch-verdict-12"
+  },
+  {
+   "position": 39,
+   "harvest_id": "b0f6f9a39ca594b5",
+   "kind": "subagent",
+   "words": 717,
+   "decision": "skipped",
+   "reason": "needs-live-system",
+   "note": "live AWS IAM with real account identifiers"
+  },
+  {
+   "position": 40,
+   "harvest_id": "d4af71770e9eaae4",
+   "kind": "subagent",
+   "words": 544,
+   "decision": "skipped",
+   "reason": "private-personal",
+   "note": "recruiter outreach naming a third party; job search"
+  },
+  {
+   "position": 41,
+   "harvest_id": "611bfa17fe10029d",
+   "kind": "subagent",
+   "words": 1026,
+   "decision": "accepted",
+   "task": "ha-verify-suite-16"
+  }
+ ]
+}

@@ -1,6 +1,7 @@
 # exp06 Stage 0 extension: one more draw for frontier-only work
 
-Status: **draft plan, not yet run.** Exploratory until the v0.3 protocol is
+Status: **task set built and validated (2026-10-01,
+`findings/2026-10-01-exp06-stage0-ext-taskset.md`); not yet run.** Exploratory until the v0.3 protocol is
 registered. Written 2026-10-01 after the first Stage 0 batch
 (`findings/2026-09-30-exp06-stage0.md`) and the results paper
 (`results.md`, v1.1) found no measured-hard task.
