@@ -1,0 +1,21 @@
+{
+  "id": "m-c47a",
+  "prev_id": "m-91d0",
+  "version": 4,
+  "description": "runner status words and job_costs key",
+  "ops": [
+    {
+      "op": "map_values",
+      "field": "status",
+      "mapping": {
+        "ok": "success",
+        "error": "failed"
+      }
+    },
+    {
+      "op": "rename_field",
+      "from": "jobs",
+      "to": "job_costs"
+    }
+  ]
+}
