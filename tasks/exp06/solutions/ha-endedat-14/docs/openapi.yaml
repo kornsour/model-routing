@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: trackbook
+  version: 0.4.0
+paths:
+  /runs:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunInput" }
+      responses:
+        "201": { content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+  /runs/{id}:
+    get:
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+    patch:
+      responses:
+        "200": { content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+components:
+  schemas:
+    RunInput:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        started_at: { type: string, format: date-time, description: Defaults to the time the server receives the request. }
+        ended_at: { type: string, format: date-time, description: When the run ended. }
+        config_hash: { type: string }
+        dataset_version: { type: string }
+        model_version: { type: string }
+        host: { type: string }
+        device: { type: string }
+        framework_version: { type: string }
+    Run:
+      allOf:
+        - $ref: "#/components/schemas/RunInput"
+        - type: object
+          properties:
+            status: { type: string, enum: [running, succeeded, failed, cancelled] }
+            ended_at: { type: string, format: date-time, description: When the run ended. Absent until the run ends. }
