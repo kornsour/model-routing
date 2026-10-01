@@ -91,6 +91,11 @@ def parse(path: Path) -> dict:
             row["grader"][key] = meta[key]
     if "agent_bash" in meta:
         row["agent_bash"] = meta["agent_bash"]
+    if "answer_key" in meta:
+        row["clarification"] = {
+            "missing_requirement": meta.get("missing_requirement", ""),
+            "answer_key": meta["answer_key"],
+        }
     row["stratum"] = meta["stratum"]
     row["provenance"] = {
         k: meta[k]
