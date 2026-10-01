@@ -1,0 +1,11 @@
+{
+  "extract_orders_first_start": 8,
+  "extract_inventory_attempts": 3,
+  "extract_inventory_retry_times": [8, 17],
+  "upstream_failed_jobs": ["customer_report", "notify"],
+  "notify_reason": "upstream customer_report upstream_failed",
+  "makespan": 53,
+  "load_inventory_ready_at": 23,
+  "load_inventory_wait": 17,
+  "makespan_with_4_warehouse": 44
+}

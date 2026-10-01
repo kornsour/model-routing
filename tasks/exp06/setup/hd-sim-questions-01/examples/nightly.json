@@ -1,0 +1,118 @@
+{
+  "jobs": [
+    {
+      "name": "extract_orders",
+      "duration": 12,
+      "priority": 5,
+      "resources": {
+        "api": 2
+      }
+    },
+    {
+      "name": "extract_customers",
+      "duration": 8,
+      "priority": 5,
+      "resources": {
+        "api": 2
+      }
+    },
+    {
+      "name": "extract_inventory",
+      "duration": 6,
+      "priority": 1,
+      "resources": {
+        "api": 1
+      },
+      "outcomes": [
+        "fail",
+        "fail",
+        "ok"
+      ],
+      "max_attempts": 3,
+      "backoff": 2,
+      "max_backoff": 3
+    },
+    {
+      "name": "load_orders",
+      "deps": [
+        "extract_orders"
+      ],
+      "duration": 20,
+      "priority": 3,
+      "resources": {
+        "warehouse": 2
+      }
+    },
+    {
+      "name": "load_customers",
+      "deps": [
+        "extract_customers"
+      ],
+      "duration": 10,
+      "priority": 3,
+      "resources": {
+        "warehouse": 1
+      }
+    },
+    {
+      "name": "load_inventory",
+      "deps": [
+        "extract_inventory"
+      ],
+      "duration": 9,
+      "priority": 4,
+      "resources": {
+        "warehouse": 2
+      }
+    },
+    {
+      "name": "dedupe_customers",
+      "deps": [
+        "load_customers"
+      ],
+      "duration": 5,
+      "outcomes": [
+        "fail"
+      ],
+      "max_attempts": 2,
+      "backoff": 1,
+      "resources": {
+        "warehouse": 1
+      }
+    },
+    {
+      "name": "customer_report",
+      "deps": [
+        "dedupe_customers",
+        "load_orders"
+      ],
+      "duration": 4,
+      "resources": {
+        "warehouse": 1
+      }
+    },
+    {
+      "name": "inventory_report",
+      "deps": [
+        "load_inventory",
+        "load_orders"
+      ],
+      "duration": 4,
+      "resources": {
+        "warehouse": 1
+      }
+    },
+    {
+      "name": "notify",
+      "deps": [
+        "customer_report",
+        "inventory_report"
+      ],
+      "duration": 0
+    }
+  ],
+  "capacities": {
+    "api": 3,
+    "warehouse": 3
+  }
+}
