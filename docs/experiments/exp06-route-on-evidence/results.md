@@ -10,8 +10,8 @@ on the same fifteen tasks.
 |---|---|---|---|
 | tasks the frontier model could do and the mid-tier model could not (the study needed 10) | cost per completed task of the full escalation ladder against plain Sonnet, for the same completion | average cost of one consultation of the frontier advisor, about what Sonnet charges to do the whole task | cost of Sonnet 5.5 and Opus 5.5 against their 5.0 predecessors on the same tasks |
 
-Andrew Kaiserauer. 30 September 2026. **Version 1.0 (exploratory; not
-registered).** Companion to "Route on evidence, not on the prompt" (exp06
+Andrew Kaiserauer. 30 September 2026, revised 1 October 2026. **Version 1.1
+(exploratory; not registered).** Companion to "Route on evidence, not on the prompt" (exp06
 hypothesis paper, v0.3) and "Cheapest per token is not cheapest per task"
 (exp05, v1.0). Harness: github.com/kornsour/model-routing. Study id: **exp06**.
 
@@ -344,7 +344,7 @@ this study adds four things.
    running the frontier model outright. If an advisor rung is used, it
    should be triggered by the same evidence as the handoff (a failing check,
    a recurring error), not by a standing instruction. That is a change to the
-   ladder's design, not only its parameters (Section 8).
+   ladder's design, not only its parameters (Section 9).
 4. **Before building routing, move to the current models.** The generation
    change cut cost by about 70% with no routing at all.
 
@@ -354,7 +354,37 @@ current mid-tier model cannot do, and that the ladder as specified is
 expensive when it has nothing to do. Anyone deploying it should expect most
 of their traffic to look like this study's, and price the idle cost first.
 
-## 7. Threats to validity
+## 7. What was answered and what was not
+
+The run settled the questions that depend on easy work and left open every
+question that depends on hard work. The split is by task source, not by
+chance: the first batch could not produce hard tasks, so nothing that needs
+them was tested.
+
+| hypothesis | status | what the run showed |
+|---|---|---|
+| **H0** headroom exists | **not met, once** | 0 of 15 measured hard against a bar of 10. The stopping rule allows one extension of the task set before the finding stands (`extension-plan.md`). |
+| **L1 c1** ladder helps on hard tasks | **open** | no hard stratum to test on |
+| **L1 c2** ladder costs at most 1.5× plain Sonnet on easy tasks | **answered: not supported** for every arm with an advisor (1.85× to 2.63×); **supported** for the handoff-only arm (1.00×) |
+| **L1 c3** ladder costs less than plain Opus over the set | **answered: not supported** for the full ladder (1.47×) and the advisor arm (1.35×); **supported** for the handoff-only arm (0.56×) |
+| **L2** advisor rung does most of the work, escalations land where needed | **half answered** | precision measured at 0% on easy work (every consultation unnecessary); recall open, needs hard tasks |
+| **L3** evidence beats a prompt classifier on cost | **open** | `C2_trained` not run (no tuning split) |
+| **L4** clean checkout beats carrying the failed attempt | **open** | no handoff fired |
+| **L5** clarifying reduces handoffs | **open** | no ambiguous stratum |
+| **L6** the trigger carries information | **open** | handoff rate 0%, so the random-matched baseline equals plain Sonnet |
+| Appendix C: forced check vs the 1.5× bound | **answered** | the forced check alone adds about $0.46 per session; it cannot coexist with the bound. Drop the check. |
+| Side finding: generation change | **measured** | about 0.30× cost per task from 5.0 to 5.5, same completion |
+
+Two things the design did not cloud: the idle-cost numbers are measured on
+the stratum they apply to, with tight task-clustered intervals, and would not
+change under any other task set. Two things it did: whether frontier-only
+work exists at all is a statement about tasks written by the model family
+under test and shaped to fit one session, and the strata most likely to carry
+headroom (real handoffs, long-horizon and multi-repository work, ambiguous
+briefs, non-coding work) were never built. The extension plan addresses the
+second without re-running the first.
+
+## 8. Threats to validity
 
 - **Exploratory, not registered.** Parameters (K = 2, the prompts, the
   forced-check rule) were chosen before the run but not on a tuning split,
@@ -391,13 +421,16 @@ of their traffic to look like this study's, and price the idle cost first.
   models over time; exact model ids are pinned and recorded for every
   session.
 
-## 8. Next steps
+## 9. Next steps
 
 1. **Extend the task set once, as the stopping rule allows, with work drawn
    rather than written:** harvested real handoffs converted to fixtures with
-   deterministic graders, and multi-repository or long-horizon tasks that
-   exceed a single session. If the extension also finds no hard tasks, H0
-   has failed twice and the finding stands for this class of work.
+   deterministic graders, multi-repository or long-horizon tasks that
+   exceed a single session, an ambiguous stratum and a read-only
+   investigation stratum. The plan is `extension-plan.md`: a Stage 0 only
+   run of 40 new tasks, H0 evaluated on the pooled 55. If the extension also
+   finds no hard tasks, H0 has failed twice and the finding stands for this
+   class of work.
 2. **Revise the ladder (v0.4) before any registration.** Drop the forced
    check. Gate the advisor on evidence (first verifier failure, a recurring
    error) instead of a standing "before you finish" instruction, and test
@@ -465,3 +498,11 @@ note is `docs/experiments/exp06-route-on-evidence/findings/2026-09-30-exp06-stag
 | Handoff after N turns without progress | The 40-turn cap stands in for N | Never triggered in the ladder run |
 | Forced advisor check "before the model declares done" | Harness resumes the session once if it made no advisor call at all | A session that consulted early but not at the end was not forced; the forced check still ran on 26/45 ladder cells |
 | One hour between paid runs | Kept between calibration, smoke and ladder runs; calibration itself was stopped and resumed once at a cell boundary to take a harness change (budget pauses) | None on outcomes |
+
+## Appendix D. Version history
+
+**v1.1 (1 October 2026).** Added Section 7, the ledger of answered and open
+hypotheses, and pointed the next steps at `extension-plan.md`. No numbers
+changed.
+
+**v1.0 (30 September 2026).** First results.
