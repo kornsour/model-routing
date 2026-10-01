@@ -112,7 +112,7 @@ def _build_task(raw: dict, jsonl_dir: Path) -> AgentTask:
     history = grader.get("history_script") or f"{task_id}.sh"
     history_path = Path(history) if Path(history).is_absolute() else jsonl_dir / "history" / history
     if history_path.is_file():
-        grader["history_script"] = str(history_path)
+        grader["history_script"] = str(history_path.resolve())
     elif "history_script" in grader:
         raise ValueError(f"{task_id}: history script not found: {history_path}")
     solution = jsonl_dir / "solutions" / task_id
