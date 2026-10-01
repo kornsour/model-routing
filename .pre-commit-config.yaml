@@ -1,4 +1,6 @@
 # See https://pre-commit.com for hook docs.
+# Task content is hashed into experiment provenance; never rewrite it.
+exclude: ^tasks/exp06/
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.4

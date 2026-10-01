@@ -10,6 +10,7 @@
   "ignores": [
     "archive/**", // historical; see CLAUDE.md
     "tasks/agentic/**", // fixtures the agents run on; hashed into taskset_sha256
+    "tasks/exp06/**", // same, for exp06
     "tasks/llm/context/**", // prompt input for exp01-04; edits change what models see
     "results/**",
     ".claude/**",

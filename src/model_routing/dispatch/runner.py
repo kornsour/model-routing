@@ -82,6 +82,43 @@ PAUSE_POLL_S = 300
 PAUSE_MAX_S = 8 * 3600
 """Give up waiting (state ``paused``) after this long; ``--resume`` continues later."""
 
+BUDGET_FILE = "budget.json"
+"""A run's live budget override: ``{"budget_usd": N}`` in the run directory.  The
+runner re-reads it before every cell, so a paused (or running) run can be given
+more budget without restarting; see ``set_run_budget``."""
+
+BUDGET_GRACE_SESSIONS = 4
+"""The budget is enforced between cells: a cell that has started always finishes,
+so no cell is ever abandoned half-done for money.  Only a runaway cell is cut
+short, when spend passes the budget by this many per-session caps."""
+
+
+def read_budget_override(run_dir: str | Path) -> float | None:
+    path = Path(run_dir) / BUDGET_FILE
+    if not path.exists():
+        return None
+    try:
+        value = json.loads(path.read_text()).get("budget_usd")
+    except (json.JSONDecodeError, OSError, AttributeError):
+        return None
+    return float(value) if isinstance(value, int | float) and value > 0 else None
+
+
+def set_run_budget(run_dir: str | Path, budget_usd: float) -> Path:
+    """Raise (or set) a run's budget while it runs or waits in a budget pause."""
+    if budget_usd <= 0:
+        raise ValueError("budget must be positive")
+    run_dir = Path(run_dir)
+    if not (run_dir / "meta.json").exists():
+        raise ValueError(f"{run_dir} is not a dispatch run directory")
+    path = run_dir / BUDGET_FILE
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(
+        json.dumps({"budget_usd": budget_usd, "at": datetime.now(UTC).isoformat()}) + "\n"
+    )
+    tmp.replace(path)
+    return path
+
 
 def completed_cells(run_dir: Path) -> set[tuple[str, str, int]]:
     """``(policy, task_id, trial)`` keys already in ``outcomes.jsonl``.  A trailing
@@ -259,6 +296,7 @@ class DispatchConfig:
             "spawn_parent_pick_inline",
             "spawn_classifier",
             "spawn_cascade",
+            "spawn_ladder",
         }
         if self.order not in ("by_policy", "by_task", "randomized"):
             raise ValueError(f"order must be by_policy | by_task | randomized, got {self.order!r}")
@@ -275,6 +313,11 @@ class DispatchConfig:
             for c in p.get("chain", []):
                 if c not in self.candidates:
                     raise ValueError(f"policy {p['name']!r}: unknown chain member {c!r}")
+            for key in ("worker", "frontier"):
+                if key in p and p[key] not in self.candidates:
+                    raise ValueError(f"policy {p['name']!r}: unknown {key} {p[key]!r}")
+            if p.get("kind") == "spawn_ladder" and "worker" not in p:
+                raise ValueError(f"policy {p['name']!r}: spawn_ladder needs a worker")
             classifier = p.get("classifier")
             if classifier and classifier != "heuristic" and classifier not in self.candidates:
                 raise ValueError(f"policy {p['name']!r}: unknown classifier {classifier!r}")
@@ -626,6 +669,27 @@ def _policy_estimate(
         mid = sum(cost(c, 1.0, WORKER_USAGE) for c in half)
         high = sum(cost(c, 1.8, WORKER_USAGE) for c in chain)
         return low, mid, high, len(chain)
+    if kind == "spawn_ladder":
+        worker = spec["worker"]
+        frontier = spec.get("frontier")
+        has_advisor = bool(cfg.candidates[worker].extra.get("advisor"))
+        k = int(spec.get("k", 0))
+
+        def ladder_total(scale: float, handoff_share: float, resumes: int) -> float:
+            base = cost(worker, scale, WORKER_USAGE) * (1 + 0.3 * resumes)
+            # An advisor call re-reads the transcript at the frontier's input price.
+            if has_advisor and frontier:
+                base += cost(frontier, scale, WORKER_USAGE) * 0.25
+            if frontier and spec.get("handoff"):
+                base += handoff_share * cost(frontier, scale, WORKER_USAGE)
+            return base
+
+        return (
+            ladder_total(0.6, 0.0, 0),
+            ladder_total(1.0, 0.3, 1),
+            ladder_total(1.8, 1.0, k + 1),
+            2 + k + (1 if spec.get("forced_check") else 0),
+        )
     raise ValueError(f"unknown policy kind {kind!r}")
 
 
@@ -929,6 +993,7 @@ def run_dispatch(
     verbose: bool = True,
     resume: bool = False,
     sleep: Callable[[float], None] = time.sleep,
+    budget_wait_s: float = 0.0,
 ) -> Path:
     """Run every (policy, task, trial) cell sequentially.  ``resume=True``
     continues an existing ``out_dir``: cells already in its ``outcomes.jsonl``
@@ -936,7 +1001,16 @@ def run_dispatch(
     gains a ``resumes`` entry (the config hash must match the original).  A
     provider usage-limit error pauses the run (state ``paused``) and retries
     the same cell once the limit resets - up to ``PAUSE_MAX_S``, after which the
-    run stops cleanly in state ``paused`` for a later ``--resume``."""
+    run stops cleanly in state ``paused`` for a later ``--resume``.
+
+    The budget works the same way.  It is checked before each cell (a started
+    cell always finishes), and when spend has reached it the run pauses: it
+    polls the run's ``budget.json`` (``set_run_budget``) for up to
+    ``budget_wait_s`` and carries on in the same process if the budget is
+    raised, else stops in state ``paused``.  The cell order is the seeded plan
+    either way, so a pause changes when cells run, not which or how.  Only a
+    runaway cell that passes the budget by ``BUDGET_GRACE_SESSIONS`` session
+    caps is cut short (state ``over_budget``)."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "sandboxes").mkdir(parents=True, exist_ok=True)
@@ -1038,6 +1112,23 @@ def run_dispatch(
     outcomes_fh = (out_dir / "outcomes.jsonl").open("a")
 
     state = {"spent_usd": _spent_so_far(out_dir) if resume else 0.0, "seq": 0}
+    override = read_budget_override(out_dir) if resume else None
+    budget = {"usd": max(budget_usd, override or 0.0)}
+    grace = BUDGET_GRACE_SESSIONS * cfg.max_budget_per_session_usd
+
+    def adopt_budget_override() -> None:
+        new = read_budget_override(out_dir)
+        if new is None or new == budget["usd"]:
+            return
+        meta_path = out_dir / "meta.json"
+        meta = json.loads(meta_path.read_text())
+        meta.setdefault("budget_changes", []).append(
+            {"at": datetime.now(UTC).isoformat(), "from": budget["usd"], "to": new}
+        )
+        meta["budget_usd"] = new
+        meta_path.write_text(json.dumps(meta, indent=2, default=str))
+        budget["usd"] = new
+
     # The Claude CLI's ``total_cost_usd`` is cumulative across a resumed (even
     # forked) session: a router call resumed from a $0.086 setup reports
     # $0.169 for its own $0.083.  Track each session id's cumulative figure so
@@ -1058,7 +1149,7 @@ def run_dispatch(
                 total=total_cells,
                 done=done_cells,
                 spent_usd=state["spent_usd"],
-                budget_usd=budget_usd,
+                budget_usd=budget["usd"],
                 current=current,
                 message=message,
             )
@@ -1085,14 +1176,16 @@ def run_dispatch(
             task (inline router: only the marginal pick tokens); the full usage and
             list cost are always recorded alongside it."""
             # Simulated spend is list price of made-up tokens; a budget cannot bind it.
-            if not fake and state["spent_usd"] >= budget_usd:
+            if not fake and state["spent_usd"] >= budget["usd"] + grace:
                 raise BudgetExceeded(
-                    f"budget exhausted (${state['spent_usd']:.4f} >= ${budget_usd:.2f})"
+                    f"runaway cell: spent ${state['spent_usd']:.4f} >= budget "
+                    f"${budget['usd']:.2f} + ${grace:.2f} grace"
                 )
             cand = cfg.candidates[candidate]
             provider = provider_for(candidate)
             state["seq"] += 1
             started = time.time()
+            advisor = cand.extra.get("advisor")
             result: AgentResult = provider.run(
                 cand.model,
                 prompt,
@@ -1105,6 +1198,7 @@ def run_dispatch(
                 tools=tools,
                 max_budget_usd=cfg.max_budget_per_session_usd,
                 timeout_s=1200,
+                **({"advisor": advisor} if advisor else {}),
             )
             if (
                 result.error == "usage_limit"
@@ -1130,6 +1224,22 @@ def run_dispatch(
                     reported_cumulative[result.session_id] = reported
                 reported = max(0.0, reported - prior)
             cost = prices.cost(price_model, result.usage) if prices.get(price_model) else 0.0
+            # Other models the session called (the advisor): their tokens are not
+            # in ``usage``.  The advisor's read of the transcript is never cached.
+            other_cost = 0.0
+            for other_model, u in ((result.raw or {}).get("other_model_usage") or {}).items():
+                other_usage = Usage(
+                    input_tokens=u["input_tokens"],
+                    cache_read=u["cache_read"],
+                    cache_write=u["cache_write"],
+                    cache_write_1h=u["cache_write"],
+                    output_tokens=u["output_tokens"],
+                )
+                if prices.get(other_model):
+                    other_cost += prices.cost(other_model, other_usage)
+            if other_cost and result.raw is not None:
+                result.raw["other_model_cost_usd"] = other_cost
+            cost += other_cost
             if cost == 0.0 and reported:
                 # The Claude CLI zeroes ``usage`` on a budget-capped result while
                 # still reporting dollars; never price a paid session at $0.
@@ -1174,8 +1284,11 @@ def run_dispatch(
                     + (f" ERROR: {rec.error[:60]}" if rec.error else "")
                 )
             emit_progress(f"{task_id} · {policy_name} · trial {trial} · {role}({candidate})")
-            if not fake and state["spent_usd"] > budget_usd:
-                raise BudgetExceeded(f"spent ${state['spent_usd']:.4f} > budget ${budget_usd:.2f}")
+            if not fake and state["spent_usd"] > budget["usd"] + grace:
+                raise BudgetExceeded(
+                    f"runaway cell: spent ${state['spent_usd']:.4f} > budget "
+                    f"${budget['usd']:.2f} + ${grace:.2f} grace"
+                )
             return rec
 
         return run_session
@@ -1194,6 +1307,8 @@ def run_dispatch(
         from model_routing.dispatch import grading
         from model_routing.dispatch.sandbox import Sandbox
 
+        if mode == "verifier":
+            return _ladder_verifier(task, sandbox)
         if mode == "hidden":
             with tempfile.TemporaryDirectory() as tmp:
                 copy = Path(tmp) / "sandbox"
@@ -1224,6 +1339,50 @@ def run_dispatch(
                 run_state = "cancelled"
                 stop_message = "cancelled"
                 break
+            adopt_budget_override()
+            if not fake and state["spent_usd"] >= budget["usd"]:
+                with (out_dir / "pauses.jsonl").open("a") as pf:
+                    pf.write(
+                        json.dumps(
+                            {
+                                "at": time.time(),
+                                "policy": policy_spec["name"],
+                                "task_id": task.id,
+                                "trial": trial,
+                                "reason": "budget",
+                                "detail": (
+                                    f"spent ${state['spent_usd']:.2f} of ${budget['usd']:.2f}"
+                                ),
+                            }
+                        )
+                        + "\n"
+                    )
+                waited = 0.0
+                run_state = "paused"
+                while state["spent_usd"] >= budget["usd"]:
+                    if waited >= budget_wait_s or (cancel is not None and cancel.is_set()):
+                        break
+                    emit_progress(
+                        f"{task.id} · {policy_spec['name']} · trial {trial}",
+                        f"budget ${budget['usd']:.2f} reached; waiting for it to be raised",
+                    )
+                    if verbose:
+                        print(
+                            f"PAUSED: budget ${budget['usd']:.2f} reached "
+                            f"(spent ${state['spent_usd']:.2f}); raise it with "
+                            f"`model-routing dispatch-budget {out_dir} --usd N`"
+                        )
+                    wait = min(PAUSE_POLL_S, budget_wait_s - waited)
+                    sleep(wait)
+                    waited += wait
+                    adopt_budget_override()
+                if state["spent_usd"] >= budget["usd"]:
+                    stop_message = (
+                        f"budget ${budget['usd']:.2f} reached (spent ${state['spent_usd']:.2f}); "
+                        f"resume with --resume {out_dir} --budget-usd <higher>"
+                    )
+                    break
+                run_state = "running"
             emit_progress(f"{task.id} · {policy_spec['name']} · trial {trial}", "starting")
             cell_ctx = policies_mod.PolicyRunContext(
                 cfg=cfg,
@@ -1318,6 +1477,45 @@ def run_dispatch(
 
     summarize(out_dir)
     return out_dir
+
+
+VERIFIER_DIR = ".verifier"
+
+
+def _ladder_verifier(task: AgentTask, sandbox: Any) -> tuple[bool, str]:
+    """exp06's deployable verifier for the ladder's handoff trigger: something
+    in scope changed, nothing out of scope changed, the visible suite passes,
+    and the tests the working model wrote for the brief (under ``.verifier/``)
+    exist and pass.  Hidden tests are never run or shown here."""
+    from model_routing.dispatch import grading
+
+    path = Path(sandbox.path)
+    try:
+        changed = grading.changed_files(path)
+    except (subprocess.CalledProcessError, OSError):
+        changed = None
+    if changed is not None:
+        if not changed:
+            return False, "No files were changed; the task is not done."
+        allowed = task.grader.get("allowed_paths") or ["*"]
+        if not grading.check_scope(changed, allowed):
+            return False, f"Files changed outside the allowed scope: {', '.join(changed)}"
+    cmd = task.grader.get("visible_cmd") or grading.default_visible_cmd()
+    ok, tail = grading.run_cmd(list(cmd), path, 300)
+    if not ok:
+        return False, f"The visible test suite fails:\n{tail}"
+    gen = sorted(
+        str(p.relative_to(path)) for p in (path / VERIFIER_DIR).glob("test_*.py") if p.is_file()
+    )
+    if not gen:
+        return False, (
+            f"No generated acceptance tests found: write tests for the brief's stated "
+            f"behaviour as {VERIFIER_DIR}/test_*.py."
+        )
+    ok, tail = grading.run_cmd([*grading.default_visible_cmd(), *gen], path, 300)
+    if not ok:
+        return False, f"Your acceptance tests in {VERIFIER_DIR}/ fail:\n{tail}"
+    return True, "all checks passed"
 
 
 def auth_status() -> dict[str, dict[str, Any]]:

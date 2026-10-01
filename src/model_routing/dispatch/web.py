@@ -26,6 +26,15 @@ from typing import Any
 from model_routing.dispatch import api
 from model_routing.dispatch.types import Progress
 
+
+def _write_json_atomic(path: Path, record: dict[str, Any]) -> None:
+    """Job files are read by the HTTP handlers and the tests while the run
+    thread rewrites them; an in-place write is briefly empty or partial."""
+    tmp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    tmp.write_text(json.dumps(record, indent=2))
+    tmp.replace(path)
+
+
 AUTH_CACHE_SECONDS = 60.0
 
 
@@ -91,7 +100,7 @@ class DispatchLab:
                 record["state"] = "interrupted"
                 record["error"] = "Server restarted; run is partial"
                 record["finished_at"] = datetime.now(UTC).isoformat()
-                path.write_text(json.dumps(record, indent=2))
+                _write_json_atomic(path, record)
 
     # -- job persistence ----------------------------------------------
 
@@ -99,7 +108,7 @@ class DispatchLab:
         return self.jobs_dir / f"{job_id}.json"
 
     def _save_job(self, record: dict[str, Any]) -> None:
-        self._job_path(record["id"]).write_text(json.dumps(record, indent=2))
+        _write_json_atomic(self._job_path(record["id"]), record)
 
     def _load_job(self, job_id: str) -> dict[str, Any] | None:
         path = self._job_path(job_id)

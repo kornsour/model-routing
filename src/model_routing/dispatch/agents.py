@@ -95,6 +95,7 @@ class ClaudeAgentProvider:
         fork: bool,
         tools: bool,
         max_budget_usd: float,
+        advisor: str | None = None,
     ) -> list[str]:
         args = [
             self.binary,
@@ -117,6 +118,11 @@ class ClaudeAgentProvider:
         ]
         if effort:
             args += ["--effort", effort]
+        if advisor:
+            # Claude Code's advisor tool (the L2 rung): a stronger model the
+            # session may consult; its tokens are reported as a separate
+            # ``modelUsage`` entry and priced by the runner.
+            args += ["--advisor", advisor]
         if resume_session:
             args += ["--resume", resume_session]
             if fork:
@@ -146,6 +152,7 @@ class ClaudeAgentProvider:
         tools: bool = True,
         max_budget_usd: float = 2.0,
         timeout_s: int = 1200,
+        advisor: str | None = None,
     ) -> AgentResult:
         args = self.build_args(
             model,
@@ -157,6 +164,7 @@ class ClaudeAgentProvider:
             fork=fork,
             tools=tools,
             max_budget_usd=max_budget_usd,
+            advisor=advisor,
         )
         t0 = time.monotonic()
         try:
@@ -264,6 +272,7 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
     ``--tools ""`` disables tools there.
     """
     tool_calls = 0
+    advisor_calls = 0
     result_event: dict[str, Any] | None = None
     for line in stdout.splitlines():
         line = line.strip()
@@ -280,6 +289,13 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
                 1
                 for block in content
                 if isinstance(block, dict) and block.get("type") == "tool_use"
+            )
+            advisor_calls += sum(
+                1
+                for block in content
+                if isinstance(block, dict)
+                and block.get("type") in ("tool_use", "server_tool_use")
+                and block.get("name") == "advisor"
             )
         elif kind == "result":
             result_event = ev
@@ -306,10 +322,7 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
         cache_write_1h=int((u.get("cache_creation") or {}).get("ephemeral_1h_input_tokens", 0)),
     )
     model_usage = data.get("modelUsage") or {}
-    resolved = None
-    if model_usage:
-        key = list(model_usage)[-1]
-        resolved = model_usage[key].get("canonicalModel") or key
+    resolved, other_usage = _split_model_usage(model_usage, usage)
     error = None
     reset: float | None = None
     if data.get("is_error"):
@@ -345,8 +358,50 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             "modelUsage": model_usage or None,
             "permission_denials": len(data.get("permission_denials") or []),
             "usage_limit_reset_at": reset,
+            "advisor_calls": advisor_calls,
+            "other_model_usage": other_usage or None,
         },
     )
+
+
+def _split_model_usage(
+    model_usage: dict[str, Any], usage: Usage
+) -> tuple[str | None, dict[str, dict[str, int]]]:
+    """The session's own model, and the token usage of every *other* model.
+
+    The ``result`` event's ``usage`` covers only the session's main model; an
+    advisor (or any other model the CLI called) appears as an extra
+    ``modelUsage`` entry.  The main model is the entry whose output and cache
+    reads match ``usage``; with a single entry it is that entry.  (Before the
+    advisor rung every recorded session had exactly one entry.)
+    """
+    if not model_usage:
+        return None, {}
+    keys = list(model_usage)
+    main = keys[0]
+    if len(keys) > 1:
+        for key in keys:
+            mu = model_usage[key]
+            if (
+                int(mu.get("outputTokens", -1)) == usage.output_tokens
+                and int(mu.get("cacheReadInputTokens", -1)) == usage.cache_read
+            ):
+                main = key
+                break
+    resolved = model_usage[main].get("canonicalModel") or main
+    others: dict[str, dict[str, int]] = {}
+    for key in keys:
+        if key == main:
+            continue
+        mu = model_usage[key]
+        name = mu.get("canonicalModel") or key
+        others[name] = {
+            "input_tokens": int(mu.get("inputTokens", 0)),
+            "cache_read": int(mu.get("cacheReadInputTokens", 0)),
+            "cache_write": int(mu.get("cacheCreationInputTokens", 0)),
+            "output_tokens": int(mu.get("outputTokens", 0)),
+        }
+    return resolved, others
 
 
 # --------------------------------------------------------------------------- #
@@ -890,6 +945,7 @@ class FakeAgentProvider:
         tools: bool = True,
         max_budget_usd: float = 2.0,
         timeout_s: int = 1200,
+        advisor: str | None = None,
     ) -> AgentResult:
         del max_budget_usd, timeout_s  # no real spend or wall clock to bound
         tier = _tier_rank(model)

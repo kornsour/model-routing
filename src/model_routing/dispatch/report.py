@@ -510,8 +510,14 @@ def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     by_policy: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"usage_limit": 0, "provider_outage": 0, "wasted_usd": 0.0}
     )
+    budget_pauses = 0
     for p in _load_jsonl(run_dir / "pauses.jsonl"):
-        by_policy[p["policy"]][p.get("reason", "usage_limit")] += 1
+        reason = p.get("reason", "usage_limit")
+        if reason == "budget":
+            # A budget pause happens between cells: nothing is redone or set aside.
+            budget_pauses += 1
+            continue
+        by_policy[p["policy"]][reason] += 1
     for o in _load_jsonl(run_dir / "outcomes.poisoned.jsonl"):
         errs = [s.get("error") for s in o.get("sessions", [])]
         reason = "provider_outage" if any(is_provider_outage(e) for e in errs) else "usage_limit"
@@ -531,6 +537,7 @@ def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
         "usage_limit": sum(v["usage_limit"] for v in rows.values()),
         "provider_outage": sum(v["provider_outage"] for v in rows.values()),
         "wasted_usd": sum(v["wasted_usd"] for v in rows.values()),
+        "budget_pauses": budget_pauses,
         "by_policy": rows,
     }
 

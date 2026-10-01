@@ -67,6 +67,12 @@ dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE
 		$(if $(SAMPLE),--sample $(SAMPLE)) $(if $(TRIALS),--trials $(TRIALS)) $(if $(POLICIES),--policies $(POLICIES)) \
 		$(if $(RESUME),--resume $(RESUME))
 
+docs-export: ## Markdown -> Word/PDF into exports/docs/ (DOCS="a.md b.md", default every experiment's paper.md/results.md; FORMATS=docx,pdf)
+	uv run --extra export python -m model_routing.export $(DOCS) $(if $(FORMATS),--formats $(FORMATS))
+
+dispatch-budget: ## Raise a running/paused dispatch run's budget without restarting (RUN=results/<exp>/<stamp>, BUDGET=usd)
+	$(PY) model-routing dispatch-budget $(RUN) --usd $(BUDGET)
+
 dispatch-sim: ## Full fake dispatch run end to end, no spend (EXP=..., SAMPLE=n)
 	$(PY) model-routing dispatch-run $(or $(EXP),experiments/exp05-dispatch/exp05_dispatch.toml) \
 		--fake --budget-usd 1000 $(if $(SAMPLE),--sample $(SAMPLE))

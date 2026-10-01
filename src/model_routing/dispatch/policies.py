@@ -24,6 +24,7 @@ import json
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from model_routing.dispatch.types import (
@@ -452,6 +453,205 @@ def _policy_d(
         ctx.cleanup([sandbox])
 
 
+# --------------------------------------------------------------------------- #
+# exp06: the escalation ladder (docs/experiments/exp06-route-on-evidence/paper.md, sec. 4)
+# --------------------------------------------------------------------------- #
+
+VERIFIER_CONFTEST = (
+    '"""Put the fixture repo\'s src/ on the path for the acceptance tests."""\n\n'
+    "import sys\nfrom pathlib import Path\n\n"
+    'sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))\n'
+)
+
+LADDER_TESTS_NOTE = (
+    "- Before you change any code, write acceptance tests for the behaviour the brief asks "
+    "for as `.verifier/test_*.py` (pytest; `.verifier/conftest.py` already puts `src/` on the "
+    "import path). They check your own work and are not part of the deliverable. Your work "
+    "is only accepted when the visible test suite and these tests pass."
+)
+LADDER_ADVISOR_NOTE = (
+    "- You have an advisor tool backed by a stronger model. Consult it before committing to an "
+    "approach, when an error keeps recurring, and always before you declare the task done."
+)
+LADDER_ESCALATE_NOTE = (
+    "- If you conclude that this task needs a stronger model than you (for example you cannot "
+    "get your acceptance tests to pass, or the advisor recommends it), stop and make the last "
+    "line of your final message `ESCALATE: <one-line reason>`."
+)
+FORCED_CHECK_PROMPT = (
+    "Before you finish: consult the advisor now to review your changes against the brief, "
+    "apply any guidance it gives, re-run the tests, and then finish."
+)
+VERIFIER_RETRY_PROMPT = (
+    "Your work was checked and not accepted:\n{tail}\n\nFix the problem and finish the task."
+)
+HANDOFF_PROMPT = (
+    "{brief}\n\n---\nContext: an earlier attempt at this task by another agent did not "
+    "succeed, and the task was handed to you. What it ended with:\n{reason}\n\n{tree}"
+)
+_ESCALATE_RE = re.compile(r"^\s*ESCALATE:\s*(.*)$", re.MULTILINE)
+
+
+def _escalation_request(output: str) -> str | None:
+    m = _ESCALATE_RE.search(output or "")
+    return m.group(1).strip() or "escalation requested" if m else None
+
+
+def _policy_ladder(
+    name: str, spec: dict[str, Any], task: AgentTask, trial: int, ctx: PolicyRunContext
+) -> DispatchOutcome:
+    """The exp06 ladder and its ablations (one policy kind, switched by the spec).
+
+    * ``worker``: the mid-tier candidate that starts every session.  A worker
+      candidate with an ``advisor`` gets the L2 advisor rung (Claude Code's
+      advisor tool: same session, same cache).
+    * ``forced_check``: if the worker never consulted the advisor, resume the
+      same session once and require a consultation before it finishes.
+    * ``verifier``: ``"verifier"`` (deployable: scope + visible tests + the
+      worker's own ``.verifier/`` acceptance tests), ``"hidden"`` (the hidden
+      tests: the non-deployable ``ladder_ideal``), or absent (no check).
+    * ``k``: verifier failures before a handoff; each earlier failure resumes
+      the worker with the failure tail.
+    * ``handoff``: ``"clean"`` (fresh sandbox), ``"carry"`` (same working tree)
+      or absent (no L3 rung).  The handoff fires on K verifier failures, on a
+      worker session that ended in an error (the turn cap stands in for "no
+      progress in N turns"), or on an ``ESCALATE:`` line when ``escalate`` is on.
+    """
+    worker = spec["worker"]
+    frontier = spec.get("frontier")
+    verifier = spec.get("verifier")
+    k = int(spec.get("k", 1))
+    handoff = spec.get("handoff")
+    honor_escalate = bool(spec.get("escalate", False))
+    has_advisor = bool(ctx.cfg.candidates[worker].extra.get("advisor"))
+    notes = []
+    if verifier:
+        notes.append(LADDER_TESTS_NOTE)
+    if has_advisor:
+        notes.append(LADDER_ADVISOR_NOTE)
+    if honor_escalate and handoff:
+        notes.append(LADDER_ESCALATE_NOTE)
+    brief = _brief(task, spec)
+    prompt = brief + ("\n\nHow to work:\n" + "\n".join(notes) if notes else "")
+
+    sandbox = ctx.new_sandbox(task)
+    sandboxes = [sandbox]
+    sessions: list[SessionRecord] = []
+    log: list[dict[str, Any]] = []
+    try:
+        if verifier:
+            vdir = Path(sandbox.path) / ".verifier"
+            vdir.mkdir(exist_ok=True)
+            (vdir / "conftest.py").write_text(VERIFIER_CONFTEST)
+        rec = ctx.run_session(worker, role="worker", prompt=prompt, workdir=sandbox.path)
+        sessions.append(rec)
+        session_id = rec.session_id
+
+        def note(rec: SessionRecord, step: str) -> None:
+            log.append(
+                {
+                    "event": step,
+                    "advisor_calls": int((rec.raw or {}).get("advisor_calls") or 0),
+                    "error": rec.error,
+                    "turns": rec.num_turns,
+                }
+            )
+
+        note(rec, "worker")
+        escalate = _escalation_request(rec.output) if honor_escalate else None
+        if (
+            spec.get("forced_check")
+            and has_advisor
+            and not rec.error
+            and not escalate
+            and not sum(e["advisor_calls"] for e in log)
+        ):
+            rec = ctx.run_session(
+                worker,
+                role="worker",
+                prompt=FORCED_CHECK_PROMPT,
+                workdir=sandbox.path,
+                resume_session=session_id,
+                resumed_from=session_id,
+            )
+            sessions.append(rec)
+            session_id = rec.session_id or session_id
+            note(rec, "forced_check")
+            if honor_escalate:
+                escalate = _escalation_request(rec.output)
+        accepted = verifier is None
+        reason = ""
+        failures = 0
+        while verifier and not escalate and not rec.error:
+            ok, tail = ctx.run_visible_checker(task, sandbox, verifier)
+            log.append({"event": "verifier", "ok": ok, "reason": tail[-500:]})
+            if ok:
+                accepted = True
+                break
+            failures += 1
+            reason = tail
+            if failures >= k:
+                break
+            rec = ctx.run_session(
+                worker,
+                role="worker",
+                prompt=VERIFIER_RETRY_PROMPT.format(tail=tail[-3000:]),
+                workdir=sandbox.path,
+                resume_session=session_id,
+                resumed_from=session_id,
+            )
+            sessions.append(rec)
+            session_id = rec.session_id or session_id
+            note(rec, "verifier_retry")
+            if honor_escalate:
+                escalate = _escalation_request(rec.output)
+        trigger = None
+        if escalate:
+            trigger, reason = "escalate", f"It asked for a stronger model: {escalate}"
+        elif rec.error:
+            trigger, reason = "no_progress", f"Its session stopped before finishing: {rec.error}"
+        elif verifier and not accepted:
+            trigger, reason = "verifier", f"Its work failed the acceptance checks:\n{reason}"
+        chosen = worker
+        escalations = 0
+        final_sandbox = sandbox
+        if trigger and handoff and frontier:
+            if handoff == "clean":
+                final_sandbox = ctx.new_sandbox(task)
+                sandboxes.append(final_sandbox)
+                tree = "You are starting from a clean checkout; none of its changes are present."
+            else:
+                tree = (
+                    "Its changes are still in the working tree. Review them critically before "
+                    "building on them."
+                )
+            hrec = ctx.run_session(
+                frontier,
+                role="escalation",
+                prompt=HANDOFF_PROMPT.format(brief=brief, reason=reason[-3000:], tree=tree),
+                workdir=final_sandbox.path,
+            )
+            sessions.append(hrec)
+            log.append({"event": "handoff", "trigger": trigger, "mode": handoff})
+            chosen = frontier
+            escalations = 1
+        elif trigger:
+            log.append({"event": "trigger_without_handoff", "trigger": trigger})
+        grade = ctx.grade(task, final_sandbox)
+        return _outcome(
+            task,
+            name,
+            trial,
+            sessions,
+            grade,
+            chosen=chosen,
+            escalations=escalations,
+            cascade_checks=log,
+        )
+    finally:
+        ctx.cleanup(sandboxes)
+
+
 _DISPATCH = {
     "in_session": _policy_in_session,
     "spawn_static": _policy_spawn_static,
@@ -459,6 +659,7 @@ _DISPATCH = {
     "spawn_parent_pick_inline": _policy_c1_inline,
     "spawn_classifier": _policy_c2,
     "spawn_cascade": _policy_d,
+    "spawn_ladder": _policy_ladder,
 }
 
 
