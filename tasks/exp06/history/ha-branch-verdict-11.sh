@@ -4,6 +4,10 @@
 # including a script-based AWS deploy. Runs inside the sandbox after its first
 # commit. Deterministic: fixed identities and dates.
 set -euo pipefail
+# The sandbox's first commit carries today's date; back-date it so the history
+# below is never older than its own root (clock skew breaks `git rev-list A..B`).
+GIT_COMMITTER_DATE="2026-07-01T09:00:00Z" git -c user.name=sandbox -c user.email=sandbox@local \
+  commit -q --amend --no-edit --date="2026-07-01T09:00:00Z"
 export GIT_AUTHOR_NAME="Packlight Dev" GIT_AUTHOR_EMAIL="dev@packlight.example"
 export GIT_COMMITTER_NAME="Packlight Dev" GIT_COMMITTER_EMAIL="dev@packlight.example"
 n=0

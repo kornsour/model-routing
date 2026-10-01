@@ -3,6 +3,10 @@
 # one commit (S3/CloudFront infra plus a contact page and its script) off an
 # old main; main has moved 27 commits on and deploys with GitHub Pages.
 set -euo pipefail
+# The sandbox's first commit carries today's date; back-date it so the history
+# below is never older than its own root (clock skew breaks `git rev-list A..B`).
+GIT_COMMITTER_DATE="2026-07-01T09:00:00Z" git -c user.name=sandbox -c user.email=sandbox@local \
+  commit -q --amend --no-edit --date="2026-07-01T09:00:00Z"
 export GIT_AUTHOR_NAME="Folio Owner" GIT_AUTHOR_EMAIL="owner@folio.example"
 export GIT_COMMITTER_NAME="Folio Owner" GIT_COMMITTER_EMAIL="owner@folio.example"
 n=0
