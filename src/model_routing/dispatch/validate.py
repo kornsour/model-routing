@@ -13,12 +13,11 @@ CI enforces this through ``tests/test_dispatch_tasks.py``.  Run directly with
 
 from __future__ import annotations
 
-import shutil
 import tempfile
 from pathlib import Path
 
 from model_routing.dispatch.grading import grade_sandbox
-from model_routing.dispatch.sandbox import Sandbox
+from model_routing.dispatch.sandbox import Sandbox, apply_solution_overlay
 from model_routing.dispatch.tasks import load_agent_tasks
 from model_routing.dispatch.types import AgentTask
 
@@ -26,8 +25,7 @@ TASKS_JSONL = Path(__file__).resolve().parents[3] / "tasks" / "agentic" / "tasks
 
 
 def _apply_solution(task: AgentTask, sandbox: Sandbox) -> None:
-    solution = Path(task.grader["solution_overlay"])
-    shutil.copytree(solution, sandbox.path, dirs_exist_ok=True)
+    apply_solution_overlay(Path(task.grader["solution_overlay"]), sandbox.path)
 
 
 def check_untouched(task: AgentTask, root: Path) -> list[str]:

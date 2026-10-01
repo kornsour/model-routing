@@ -1,0 +1,12 @@
+{
+  "name": "ts-starter",
+  "version": "1.4.0",
+  "private": false,
+  "type": "module",
+  "description": "A minimal TypeScript starter: strict tsconfig, node:test, Biome, CI.",
+  "scripts": {
+    "test": "node --test",
+    "check": "biome check ."
+  },
+  "license": "MIT"
+}

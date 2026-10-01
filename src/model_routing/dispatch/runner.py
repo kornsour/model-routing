@@ -1155,6 +1155,8 @@ def run_dispatch(
             )
         )
 
+    extra_bash = {t.id: t.agent_bash for t in loaded_tasks if t.agent_bash}
+
     def make_run_session(
         policy_name: str, trial: int, task_id: str
     ) -> Callable[..., SessionRecord]:
@@ -1199,6 +1201,7 @@ def run_dispatch(
                 max_budget_usd=cfg.max_budget_per_session_usd,
                 timeout_s=1200,
                 **({"advisor": advisor} if advisor else {}),
+                **({"extra_bash": extra_bash[task_id]} if extra_bash.get(task_id) else {}),
             )
             if (
                 result.error == "usage_limit"
