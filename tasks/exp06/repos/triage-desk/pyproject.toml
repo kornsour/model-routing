@@ -1,0 +1,8 @@
+[project]
+name = "triage-desk"
+version = "0.7.0"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

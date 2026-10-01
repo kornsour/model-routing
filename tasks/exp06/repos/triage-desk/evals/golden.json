@@ -1,0 +1,1 @@
+[{"ticket": {"id": "T1", "subject": "VPN drops", "body": "every hour"}, "expect_source": "vpn"}, {"ticket": {"id": "T2", "subject": "Printer queue stuck", "body": "nothing prints"}, "expect_source": "printers"}]
