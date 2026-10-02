@@ -178,3 +178,28 @@ Before the run:
 3. Run `make dispatch-estimate` as usual. The new tasks' briefs are longer
    than the first batch's (median 1,032 vs 780 tokens), and stratum B has
    twice the turn cap.
+
+## Grader corrections during the calibration run (2026-10-01)
+
+The calibration run `results/exp06_calibrate_ext/20261001-195346` started at
+19:53 EDT. After its first 28 cells, every failure was read against its grade
+detail, as for the first batch. Four failures were genuine model misses. Two
+tasks had a key problem that both models hit the same way:
+
+- **`ha-claims-audit-13`, `web_ui`.** The key said VERIFIED; both models said
+  GAP. The fixture's `web/` pages exist but are static stubs (no data, no-op
+  buttons), so "covers the flows described" is arguable and GAP is, if
+  anything, the more careful answer. Both verdicts are now accepted.
+- **`ha-ruleset-sweep-10`, `echoform`.** The key listed
+  `ci / DB migration check` as a required context no job produces. The job
+  exists in the shared workflow but is skipped by an `if:`. On GitHub a
+  skipped job still reports its check name and satisfies a required check, so
+  leaving it out is defensible. Listing it or not is now accepted.
+
+Both changes only accept an additional reading; neither tightens a grade.
+They took effect for every cell graded after 20:25 EDT. The four cells already
+graded under the old key (each task's first trial, Sonnet and Opus) failed
+**only** on the disputed item; every other hidden check passed (from the
+recorded grade detail). They are re-graded as passes after the run, with the
+original outcome kept alongside. The task file and its hash are unchanged;
+only `hidden/` tests changed.

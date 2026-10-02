@@ -36,7 +36,10 @@ EXPECTED = {
     "approval_gate_server_side": "VERIFIED",
     "rag_data_governance": "GAP",
     "eval_gates_ci": "GAP",
-    "web_ui": "VERIFIED",
+    # The web/ pages exist but are static stubs, so "covers the flows" is
+    # genuinely arguable; either verdict is accepted (corrected 2026-10-01,
+    # after the first calibration cells; see the stage0-ext findings note).
+    "web_ui": ("VERIFIED", "GAP"),
     "runs_offline": "VERIFIED",
 }
 
@@ -44,7 +47,8 @@ EXPECTED = {
 @pytest.mark.parametrize("capability", sorted(EXPECTED))
 def test_capability(capability):
     got = norm_verdict(report_json()["capabilities"][capability])
-    assert got == EXPECTED[capability], f"{capability}: {got}"
+    want = EXPECTED[capability]
+    assert got in want if isinstance(want, tuple) else got == want, f"{capability}: {got}"
 
 
 def test_open_issue_overlap():
