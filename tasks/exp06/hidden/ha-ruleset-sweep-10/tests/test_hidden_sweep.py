@@ -49,8 +49,23 @@ def test_no_enforcement():
     assert _repos(report_json()["no_enforcement"]) == _repos(ANSWER["no_enforcement"])
 
 
+# A required check whose job exists but is skipped by an ``if:`` (echoform's
+# "ci / DB migration check") still reports its name on GitHub, so listing it or
+# not are both defensible; either is accepted (corrected 2026-10-01, after the
+# first calibration cells; see the stage0-ext findings note).
+OPTIONAL = {"echoform": {"ci / DB migration check"}}
+
+
 def test_mismatched_contexts():
-    assert _mapping(report_json()["mismatched_contexts"]) == _mapping(ANSWER["mismatched_contexts"])
+    got = _mapping(report_json()["mismatched_contexts"])
+    want = _mapping(ANSWER["mismatched_contexts"])
+    for repo, contexts in OPTIONAL.items():
+        for mapping in (got, want):
+            if repo in mapping:
+                mapping[repo] = mapping[repo] - contexts
+                if not mapping[repo]:
+                    del mapping[repo]
+    assert got == want
 
 
 def test_strict_policy():
