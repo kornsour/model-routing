@@ -10,8 +10,14 @@ against the right controls.
 | --- | --- | --- | --- |
 | lower cost per completed task on Sonnet than Opus in exp05, at equal completion | extra saving a perfect per-task router could have added on top of that (1.4% choosing per trial) | times Copilot Auto upgraded the model when told a task was complex, in Michelin's audit | tasks in exp05 that only the frontier model could solve. The number this study must first change |
 
-Andrew Kaiserauer. September 2026. **Version 0.3** (protocol revised; not yet
-registered, not yet tested).
+Andrew Kaiserauer. September 2026. **Version 0.3** (protocol revised; never
+registered).
+
+> **Status, 2 October 2026: exp06 is closed.** Stage 0 found 0 of 15 tasks
+> hard, then 5 of 55 after the one allowed extension, against a bar of 10.
+> By the stopping rule in Section 7.1 the study stops there; the ladder was
+> not revised to v0.4 or registered. Results, including the idle cost of
+> each ladder rung: `results.md` (v1.2).
 Companion to "Cheapest per token is not cheapest per task" (exp05, v1.0).
 Harness: github.com/kornsour/model-routing. Study id: **exp06**.
 

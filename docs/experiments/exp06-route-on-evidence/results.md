@@ -4,14 +4,16 @@
 
 Results of running the exp06 protocol (`docs/experiments/exp06-route-on-evidence/paper.md`,
 v0.3) on the current Claude models: a headroom gate, then five routing arms
-on the same fifteen tasks.
+on the same fifteen tasks, then the one task-set extension the protocol
+allows (40 drawn tasks, headroom gate only). **exp06 is closed:** the gate
+failed twice.
 
-| 0 / 15 | 2.7× | $0.26 | 0.30× |
+| 5 / 55 | 2.7× | $0.26 | 0.30× |
 |---|---|---|---|
-| tasks the frontier model could do and the mid-tier model could not (the study needed 10) | cost per completed task of the full escalation ladder against plain Sonnet, for the same completion | average cost of one consultation of the frontier advisor, about what Sonnet charges to do the whole task | cost of Sonnet 5.5 and Opus 5.5 against their 5.0 predecessors on the same tasks |
+| tasks the frontier model could do and the mid-tier model could not, over two draws (the study needed 10) | cost per completed task of the full escalation ladder against plain Sonnet, for the same completion | average cost of one consultation of the frontier advisor, about what Sonnet charges to do the whole task | cost of Sonnet 5.5 and Opus 5.5 against their 5.0 predecessors on the same tasks |
 
-Andrew Kaiserauer. 30 September 2026, revised 1 October 2026. **Version 1.1
-(exploratory; not registered).** Companion to "Route on evidence, not on the prompt" (exp06
+Andrew Kaiserauer. 30 September 2026, revised 1 and 2 October 2026. **Version 1.2
+(exploratory; not registered; exp06 closed).** Companion to "Route on evidence, not on the prompt" (exp06
 hypothesis paper, v0.3) and "Cheapest per token is not cheapest per task"
 (exp05, v1.0). Harness: github.com/kornsour/model-routing. Study id: **exp06**.
 
@@ -36,6 +38,17 @@ that work and ran them three times each on Haiku 4.5, Sonnet 5.5 and Opus
 headroom was between Haiku and Sonnet, and even a perfect, free trigger
 from Haiku to Sonnet would have cost 2.3 times always-Sonnet, because Haiku
 spends most of its turn budget on the tasks it fails.
+
+The protocol allows one extension, so we drew forty more tasks from the
+sources most likely to hold frontier-only work: real handoffs from the
+author's own sessions, long-horizon work across several packages, briefs
+with a requirement left out, and read-only investigation. Sonnet completed
+99 of 120 attempts and Opus 109 of 120. **Five of the pooled 55 tasks were
+frontier-only, against a bar of ten,** and two of those five hang on a
+grader or brief choice. A perfect, free Sonnet-to-Opus trigger would buy
+about 8 points of completion for 14% more than plain Sonnet. The headroom
+gate has failed twice, and by its own stopping rule the study ends there
+(Section 3.2).
 
 We then ran the ladder anyway, with the user's approval and labelled as
 exploratory, to measure the one thing this task set can measure: **what the
@@ -73,8 +86,9 @@ mid-tier model the default and stop. If a safety net is wanted, use the
 cheap one: a handoff triggered by failing checks. Do not attach a
 frontier advisor to every session, and do not force a consultation before
 every finish; if an advisor rung is used at all, gate it on the same evidence
-as the handoff. The ladder's ability to help on genuinely hard work remains
-untested, because we could not find any.
+as the handoff. The ladder's ability to help on genuinely hard work was
+never tested, because across two draws there was too little of it to test
+on.
 
 A side finding matters more for budgets than any routing rule: **on the same
 tasks, Sonnet 5.5 and Opus 5.5 cost about 30% of what Sonnet 5 and Opus 5
@@ -169,6 +183,8 @@ deviation).
 
 ## 3. Stage 0: is there frontier-only work?
 
+### 3.1 The first batch: 15 written tasks
+
 | model | passed | cost per completed task [95% CI] | median turns | sessions at the 40-turn cap |
 |---|---:|---:|---:|---:|
 | Haiku 4.5 | 12/45 (27%) | $1.45 [$0.82, $3.92] | 38 | 21 |
@@ -192,10 +208,71 @@ a Sonnet rerun exactly when Haiku failed (a perfect, free trigger) gives
 exp05 found the same, 2.2× ($0.221 against $0.099), on Sonnet 5 and a
 different task set.
 
-Per the stopping rule, H0 has failed once. The perfect-trigger reference
-values that would have gone into the registration are therefore trivial:
-with no hard tasks, a perfect Sonnet-to-Opus trigger never fires and costs
+After the first batch H0 had failed once, which triggered the one allowed
+extension (3.2). On the first batch alone the perfect-trigger reference
+values are trivial: with no hard tasks, a perfect Sonnet-to-Opus trigger never fires and costs
 exactly what plain Sonnet costs.
+
+### 3.2 The extension: 40 drawn tasks, and the pooled 55
+
+The one extension (`extension-plan.md`) changed the task source and shape,
+not the bar. Forty new tasks in four strata, built, validated and frozen
+before any model saw them (`findings/2026-10-01-exp06-stage0-ext-taskset.md`),
+run on Sonnet 5.5 and Opus 5.5 at 3 trials, 80 turns for the long-horizon
+stratum and 40 elsewhere. Haiku was dropped (Appendix C). 240 cells cost
+$88.48 at list price. Full note: `findings/2026-10-02-exp06-stage0-ext.md`.
+
+| stratum | tasks | Sonnet passed | Opus passed | Sonnet $/completed | Opus $/completed | easy | medium | hard | unsolved |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| first batch (3.1) | 15 | 44/45 | 45/45 | $0.264 | $0.496 | 14 | 1 | 0 | 0 |
+| A. harvested real handoffs | 16 | 40/48 | 41/48 | $0.282 | $0.552 | 12 | 1 | 1 | 2 |
+| B. long-horizon, multi-package | 12 | 29/36 | 34/36 | $0.496 | $0.827 | 9 | 0 | 3 | 0 |
+| C. ambiguous brief | 6 | 12/18 | 16/18 | $0.199 | $0.281 | 4 | 0 | 1 | 1 |
+| D. read-only investigation | 6 | 18/18 | 18/18 | $0.100 | $0.188 | 6 | 0 | 0 | 0 |
+| **pooled** | **55** | **143/165** | **154/165** | | | **45** | **2** | **5** | **3** |
+
+**MEASURED** Labels by the protocol's rule (hard: Opus at least 2 of 3,
+Sonnet at most 1 of 3). **5 hard against a bar of 10: H0 is not met, for
+the second time.** Counting every unsolved task as hard would give 8.
+
+The five hard tasks, each failure read against its grade detail:
+
+- **Clean capability gaps (2).** On an ambiguous brief, Sonnet invented its
+  own JSON format three times where the repo's docs pointed at the existing
+  one; on a long-horizon task it fixed the symptom (month bucketing) and
+  left the stored timestamps outside the store's UTC contract, three times.
+- **A soft judgement gap (1).** On a claims audit, each failed Sonnet trial
+  got one different verdict wrong.
+- **Borderline grader or brief (2).** On one, every failed cell, Opus's
+  included, raised `KeyError` where the test wanted `ValueError`; on the
+  other the brief did not say which function owned a default path.
+
+So the frontier-only work in 55 tasks is between 2 and 5 tasks. It
+concentrates in long-horizon work (3 of 12), the only stratum near the 25%
+rate the extension needed; real handoffs gave 1 of 16 and read-only
+investigation none. Raising the long-horizon cap to 80 turns changed
+nothing: one Sonnet session of 72 went past 40 turns, and it failed.
+
+Four tasks had a defective test that rejected a defensible reading; 16
+cells that failed only that test were re-graded as passes, with the
+originals kept (Appendix C). Before re-grading the extension stood at 91
+and 101 of 120. No correction made a grade stricter, and the hard set is
+the same five tasks before and after re-grading.
+
+Reference values on the 52 tasks that are not unsolved (95% task-clustered
+intervals):
+
+| arm | completion | cost per completed task | vs plain Sonnet |
+|---|---:|---:|---:|
+| plain Sonnet 5.5 | 91% [84, 97] | $0.277 [$0.236, $0.324] | 1.00× |
+| plain Opus 5.5 | 98% [96, 100] | $0.497 [$0.430, $0.568] | 1.79× |
+| perfect Sonnet-to-Opus trigger, free | 99% [97, 100] | $0.317 [$0.250, $0.395] | 1.14× |
+
+That is the ceiling for any escalation ladder on this work: 8 points of
+completion for 14% more cost, with an oracle trigger. The measured ladder's
+idle cost alone (Section 4) is 1.85× to 2.63× plain Sonnet for every arm
+with an advisor, so no advisor-based ladder could have reached that ceiling
+here; the handoff-only arm, idle at 1.00×, is the only rung that could.
 
 ## 4. What the ladder costs when nothing needs escalating
 
@@ -344,45 +421,46 @@ this study adds four things.
    running the frontier model outright. If an advisor rung is used, it
    should be triggered by the same evidence as the handoff (a failing check,
    a recurring error), not by a standing instruction. That is a change to the
-   ladder's design, not only its parameters (Section 9).
+   ladder's design, not only its parameters. With exp06 closed it is
+   recorded as the answer to the hypothesis paper's Appendix C question on
+   the forced check, not carried into a v0.4.
 4. **Before building routing, move to the current models.** The generation
    change cut cost by about 70% with no routing at all.
 
-What this does not show is that escalation never pays. It shows that we
-could not find, in fifteen tasks built for the purpose, coding work that the
-current mid-tier model cannot do, and that the ladder as specified is
+What this does not show is that escalation never pays. It shows that in
+55 tasks built or drawn for the purpose, the current mid-tier model failed
+where the frontier model succeeded on at most five, so a perfect trigger is
+worth about 8 points of completion for 14% more cost, and that the ladder as specified is
 expensive when it has nothing to do. Anyone deploying it should expect most
 of their traffic to look like this study's, and price the idle cost first.
 
 ## 7. What was answered and what was not
 
-The run settled the questions that depend on easy work and left open every
-question that depends on hard work. The split is by task source, not by
-chance: the first batch could not produce hard tasks, so nothing that needs
-them was tested.
+The runs settled the questions that depend on easy work and the headroom
+question itself. Every question that depends on hard work stays open, and
+by the stopping rule it stays open in this study: two draws found too
+little hard work to test it on.
 
 | hypothesis | status | what the run showed |
 |---|---|---|
-| **H0** headroom exists | **not met, once** | 0 of 15 measured hard against a bar of 10. The stopping rule allows one extension of the task set before the finding stands (`extension-plan.md`). |
-| **L1 c1** ladder helps on hard tasks | **open** | no hard stratum to test on |
+| **H0** headroom exists | **not met, twice: exp06 closed** | 0 of 15 in the first batch; 5 of 55 pooled after the one allowed extension, against a bar of 10 (Section 3.2). The finding stands for this class of work. |
+| **L1 c1** ladder helps on hard tasks | **not testable here** | 5 hard tasks; a perfect free trigger is the ceiling, 1.14× plain Sonnet for 8 points of completion |
 | **L1 c2** ladder costs at most 1.5× plain Sonnet on easy tasks | **answered: not supported** for every arm with an advisor (1.85× to 2.63×); **supported** for the handoff-only arm (1.00×) |
 | **L1 c3** ladder costs less than plain Opus over the set | **answered: not supported** for the full ladder (1.47×) and the advisor arm (1.35×); **supported** for the handoff-only arm (0.56×) |
 | **L2** advisor rung does most of the work, escalations land where needed | **half answered** | precision measured at 0% on easy work (every consultation unnecessary); recall open, needs hard tasks |
 | **L3** evidence beats a prompt classifier on cost | **open** | `C2_trained` not run (no tuning split) |
 | **L4** clean checkout beats carrying the failed attempt | **open** | no handoff fired |
-| **L5** clarifying reduces handoffs | **open** | no ambiguous stratum |
+| **L5** clarifying reduces handoffs | **open** | ambiguous stratum built and calibrated on static arms (1 hard of 6); the scripted user was never run |
 | **L6** the trigger carries information | **open** | handoff rate 0%, so the random-matched baseline equals plain Sonnet |
 | Appendix C: forced check vs the 1.5× bound | **answered** | the forced check alone adds about $0.46 per session; it cannot coexist with the bound. Drop the check. |
 | Side finding: generation change | **measured** | about 0.30× cost per task from 5.0 to 5.5, same completion |
 
 Two things the design did not cloud: the idle-cost numbers are measured on
 the stratum they apply to, with tight task-clustered intervals, and would not
-change under any other task set. Two things it did: whether frontier-only
-work exists at all is a statement about tasks written by the model family
-under test and shaped to fit one session, and the strata most likely to carry
-headroom (real handoffs, long-horizon and multi-repository work, ambiguous
-briefs, non-coding work) were never built. The extension plan addresses the
-second without re-running the first.
+change under any other task set. One thing it still does: every fixture and
+hidden test, in both draws, was written by the model family under test
+(Section 8). The extension removed the other first-batch caveat, that the
+strata most likely to carry headroom were never built.
 
 ## 8. Threats to validity
 
@@ -390,9 +468,9 @@ second without re-running the first.
   forced-check rule) were chosen before the run but not on a tuning split,
   and the decision rules were applied after the fact. The results are
   descriptive.
-- **No headroom, so no test of the ladder's benefit.** Everything in Section
-  4 is about idle cost. Condition 1 of L1, L2's recall, L4 and L6 remain
-  open.
+- **Too little headroom, so no test of the ladder's benefit.** Everything
+  in Section 4 is about idle cost. Condition 1 of L1, L2's recall, L4 and L6
+  remain open, and with 5 hard tasks of 55 they cannot be resolved here.
 - **Single author, and the author's assistant wrote the tasks.** The tasks
   and reference solutions were written by an Opus-class model working for the
   author, the same model family that was tested. Tasks written by the tested
@@ -401,9 +479,22 @@ second without re-running the first.
   because turning them into deterministically graded fixtures was out of
   scope for this batch; building tasks on third-party open-source libraries
   was attempted and not pursued, because running downloaded code was blocked
-  in this environment.
-- **Fifteen tasks.** The intervals are task-clustered and honest about it,
-  but a set this small can miss a class of hard work entirely.
+  in this environment. The extension used 16 real handoffs, but their
+  fixtures, hidden tests and reference solutions, and every task in the
+  other three strata, were again written by Claude Opus 5.5; the planned
+  cross-family re-derivation was not done.
+- **Filtered real handoffs.** 26 of the 42 handoffs drawn were skipped
+  because no offline deterministic grader could be written or the content
+  was private. Work that needs the network, a UI or a live service, plausibly
+  where headroom lives, is under-represented.
+- **Graders corrected after the run.** Four tests rejected a defensible
+  reading and were widened after the extension ran; 16 cells were re-graded
+  (Appendix C). The hard set did not change. Two of the five hard tasks still
+  hang on a grader or brief choice.
+- **Fifty-five tasks, fifteen in the first batch.** The intervals are
+  task-clustered and honest about it, but a set this small can miss a class
+  of hard work entirely. Long-horizon work (3 hard of 12) is the stratum a
+  larger study should draw from.
 - **Grader strictness.** Both Sonnet misses in Stage 0 and one of the two
   verifier false accepts involve the same ambiguous sentence in one brief.
   Strict graders on ambiguous briefs understate the mid-tier model slightly;
@@ -423,24 +514,27 @@ second without re-running the first.
 
 ## 9. Next steps
 
-1. **Extend the task set once, as the stopping rule allows, with work drawn
-   rather than written:** harvested real handoffs converted to fixtures with
-   deterministic graders, multi-repository or long-horizon tasks that
-   exceed a single session, an ambiguous stratum and a read-only
-   investigation stratum. The plan is `extension-plan.md`: a Stage 0 only
-   run of 40 new tasks, H0 evaluated on the pooled 55. If the extension also
-   finds no hard tasks, H0 has failed twice and the finding stands for this
-   class of work.
-2. **Revise the ladder (v0.4) before any registration.** Drop the forced
-   check. Gate the advisor on evidence (first verifier failure, a recurring
-   error) instead of a standing "before you finish" instruction, and test
-   the cheapest possible form of it against the explore-then-handoff arm.
-   Record this as the answer to the hypothesis paper's Appendix C question on
-   the forced check.
+exp06 is closed. The ladder is not revised to v0.4, not registered, and the
+confirmatory run does not happen; the protocol's answer for this class of
+work is that there is too little frontier-only work for an escalation ladder
+to earn its idle cost.
+
+1. **exp07 is re-scoped to the question the idle-cost data left open:** can a
+   cheap external gate suppress unjustified escalation requests (advisor
+   consultations on easy work, about $0.26 each, made on 42% to 76% of
+   tasks) without blocking the few that are needed? That needs no hard
+   stratum to be worth answering. See
+   `../exp07-jev-gate/preregistration.md`.
+2. **Use the evidence-gated handoff as the default safety net** where one is
+   wanted. It is the only rung that was free when idle.
 3. **Re-state L1 condition 2 as the deployment test it turned out to be.**
    The idle cost of every rung, measured on easy work, should be a gate
    before any claim about hard work is tested.
-4. **Keep measuring generations.** Re-run Stage 0 whenever the default
+4. **If headroom is studied again, start from long-horizon work.** It was
+   the only stratum near the rate a ladder study needs, and a separate study
+   should draw it at scale and have a different model family write the
+   graders.
+5. **Keep measuring generations.** Re-run Stage 0 whenever the default
    models change; the cost of a task moved more between two model releases
    than between any two policies in this study.
 
@@ -481,8 +575,21 @@ uv run python -m model_routing.dispatch.exp06 \
     --ladder results/exp06_ladder/<stamp> --out exp06_analysis.md
 ```
 
+Extension: task set `tasks/exp06/tasks_ext.jsonl` (40 tasks; build with the
+same script, validate with `scripts/validate_agentic_tasks.py`), config
+`exp06_calibrate_ext.toml`, Claude Code 2.1.285, seed 20261001.
+
+```bash
+make dispatch-run EXP=experiments/exp06-route-on-evidence/exp06_calibrate_ext.toml BUDGET=150
+uv run python -m model_routing.dispatch.exp06 \
+    --calibration results/exp06_calibrate/<first stamp> results/exp06_calibrate_ext/<stamp> \
+    --out exp06_pooled_analysis.md
+```
+
 Run directories are git-ignored and backed up (`make backup`); the Stage 0
-note is `docs/experiments/exp06-route-on-evidence/findings/2026-09-30-exp06-stage0.md`.
+notes are `findings/2026-09-30-exp06-stage0.md`,
+`findings/2026-10-01-exp06-stage0-ext-taskset.md` and
+`findings/2026-10-02-exp06-stage0-ext.md`.
 
 ## Appendix C. Deviations from the v0.3 protocol
 
@@ -497,9 +604,19 @@ note is `docs/experiments/exp06-route-on-evidence/findings/2026-09-30-exp06-stag
 | Arms `sonnet_effort`, `ladder_noL0`, `C2_trained`, `ladder_ideal`, `explore_handoff_carry` | Not run | Effort cannot change mid-session in headless mode; no ambiguous stratum; no tuning split to train on; with no handoffs, `ideal` and `carry` would equal their counterparts |
 | Handoff after N turns without progress | The 40-turn cap stands in for N | Never triggered in the ladder run |
 | Forced advisor check "before the model declares done" | Harness resumes the session once if it made no advisor call at all | A session that consulted early but not at the end was not forced; the forced check still ran on 26/45 ladder cells |
+| Extension: three models in calibration | Sonnet and Opus only; Haiku dropped | Haiku-to-Sonnet answered twice; H0 needs only Sonnet and Opus |
+| Extension: 40-turn cap | 80 for the long-horizon stratum, 40 elsewhere | None: one session of 72 went past 40, and it failed |
+| Extension: reference solutions re-derived by another model family | Not done; every fixture and test written by Claude Opus 5.5 | Same-family authorship threat stands (Section 8) |
+| Ambiguous stratum with a scripted user | Static arms only; no scripted user | L5 untested |
+| Graders frozen before the run | Four tests widened after the run to accept a defensible reading; 16 cells re-graded, originals kept | Pass counts up 8 per model; hard set unchanged |
 | One hour between paid runs | Kept between calibration, smoke and ladder runs; calibration itself was stopped and resumed once at a cell boundary to take a harness change (budget pauses) | None on outcomes |
 
 ## Appendix D. Version history
+
+**v1.2 (2 October 2026).** Added the Stage 0 extension (Section 3.2): 40
+drawn tasks, 5 of 55 hard pooled, H0 not met twice, exp06 closed. Updated the
+summary, ledger, threats, next steps and appendices. Section 4 numbers
+unchanged.
 
 **v1.1 (1 October 2026).** Added Section 7, the ledger of answered and open
 hypotheses, and pointed the next steps at `extension-plan.md`. No numbers

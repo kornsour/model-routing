@@ -1,8 +1,9 @@
 # exp06 Stage 0 extension: one more draw for frontier-only work
 
-Status: **task set built and validated (2026-10-01,
-`findings/2026-10-01-exp06-stage0-ext-taskset.md`); not yet run.** Exploratory until the v0.3 protocol is
-registered. Written 2026-10-01 after the first Stage 0 batch
+Status: **run 2026-10-01/02; H0 not met (5 of 55 hard pooled); exp06
+closed.** Task set: `findings/2026-10-01-exp06-stage0-ext-taskset.md`.
+Result: `findings/2026-10-02-exp06-stage0-ext.md` and `results.md` v1.2.
+The "If H0 fails" branch below is the one taken. Written 2026-10-01 after the first Stage 0 batch
 (`findings/2026-09-30-exp06-stage0.md`) and the results paper
 (`results.md`, v1.1) found no measured-hard task.
 
