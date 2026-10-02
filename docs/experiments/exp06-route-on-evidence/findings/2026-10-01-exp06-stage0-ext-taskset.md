@@ -232,10 +232,20 @@ task, was read against its grade detail:
   covers).
 
 Re-graded cells keep their original outcome under `regrade` in
-`outcomes.jsonl`; the untouched file is `outcomes.pre-regrade.jsonl`. With 16
-cells re-graded in total (4 on 2026-10-01, 12 here), the pooled labels from
-`dispatch-calibration --write` over both runs are: first batch 13 medium /
-2 easy; extension 31 easy / 5 medium / 3 hard / 1 unsolved (grader defect).
-**Pooled, 3 of 55 tasks are measured hard against a bar of 10. H0 is not met
-for the second time.** No correction in either direction can change that:
-even counting the defective task as hard gives 4.
+`outcomes.jsonl`; the untouched file is `outcomes.pre-regrade.jsonl`.
+
+**H0, by the protocol's definition** (`model_routing.dispatch.exp06`, paper
+§7.1: hard = Sonnet passes at most 1 of 3 and Opus at least 2 of 3), over both
+calibration runs: **5 of 55 tasks are hard** (`ha-claims-audit-04`,
+`hb-config-layers-09`, `hb-incidents-11`, `hb-money-ledger-01`,
+`hc-run-json-04`), 3 are unsolved (`ha-archive-birchwood-05`,
+`ha-verify-suite-16`, `hc-history-csv-05`), 2 medium and 45 easy. The bar is
+10. **H0 is not met for the second time.** No grader correction can change
+that: the re-graded tasks went from unsolved to easy, and counting every
+unsolved task as hard would still give 8.
+
+The `difficulty` labels written into `tasks/exp06/tasks*.jsonl` by
+`dispatch-calibration --write` use that tool's own rule (relative to the
+cheapest model in each run, so Haiku for the first batch), not the §7.1
+definition. They record per-model pass rates under `measured`. Use
+`model_routing.dispatch.exp06` for H0.
