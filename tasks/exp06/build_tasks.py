@@ -105,8 +105,26 @@ def parse(path: Path) -> dict:
     return row
 
 
+def _measured(name: str) -> dict[str, dict]:
+    """Labels written by ``dispatch-calibration --write``, kept across rebuilds."""
+    path = HERE / name
+    if not path.exists():
+        return {}
+    out = {}
+    for line in path.read_text().splitlines():
+        row = json.loads(line)
+        if "measured" in row:
+            out[row["id"]] = {
+                k: row[k] for k in ("difficulty", "measured", "difficulty_human") if k in row
+            }
+    return out
+
+
 def main() -> None:
     rows = [parse(p) for p in sorted((HERE / "briefs").glob("*.md"))]
+    kept = {**_measured("tasks.jsonl"), **_measured("tasks_ext.jsonl")}
+    for row in rows:
+        row.update(kept.get(row["id"], {}))
     first = [r for r in rows if "stratum" not in r]
     ext = sorted((r for r in rows if "stratum" in r), key=lambda r: (r["stratum"], r["id"]))
     for name, batch in (("tasks.jsonl", first), ("tasks_ext.jsonl", ext)):
