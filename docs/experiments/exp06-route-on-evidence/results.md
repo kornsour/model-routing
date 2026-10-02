@@ -519,12 +519,12 @@ confirmatory run does not happen; the protocol's answer for this class of
 work is that there is too little frontier-only work for an escalation ladder
 to earn its idle cost.
 
-1. **exp07 is re-scoped to the question the idle-cost data left open:** can a
-   cheap external gate suppress unjustified escalation requests (advisor
-   consultations on easy work, about $0.26 each, made on 42% to 76% of
-   tasks) without blocking the few that are needed? That needs no hard
-   stratum to be worth answering. See
-   `../exp07-jev-gate/preregistration.md`.
+1. **Two follow-ups take the question the idle-cost data left open:** the
+   advisor consultations on easy work, about $0.26 each, made on 42% to 76%
+   of tasks. exp07 tests whether allowing consultation only on evidence
+   removes them (`../exp07-evidence-prompt/preregistration.md`); exp08
+   tests a Jev gate on the requests (`../exp08-jev-gate/preregistration.md`).
+   Neither needs a hard stratum.
 2. **Use the evidence-gated handoff as the default safety net** where one is
    wanted. It is the only rung that was free when idle.
 3. **Re-state L1 condition 2 as the deployment test it turned out to be.**
