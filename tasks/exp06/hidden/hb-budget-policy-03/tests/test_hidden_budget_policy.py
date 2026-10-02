@@ -75,7 +75,9 @@ def test_v1_converts_without_rewriting(tmp_path):
 def test_save_writes_v2(tmp_path, cfg_path):
     out = tmp_path / "out.json"
     budget.save_budgets(out, budget.load_budgets(cfg_path))
-    assert out.read_text() == json.dumps(json.loads(out.read_text()), indent=2, sort_keys=True)
+    # A trailing newline is allowed: the brief only asks for sorted keys and a
+    # 2-space indent (corrected 2026-10-02 after calibration; see findings).
+    assert out.read_text().rstrip("\n") == json.dumps(json.loads(out.read_text()), indent=2, sort_keys=True)
     assert json.loads(out.read_text())["version"] == 2
 
 
