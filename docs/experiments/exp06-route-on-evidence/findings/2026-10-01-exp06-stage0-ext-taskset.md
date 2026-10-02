@@ -203,3 +203,39 @@ graded under the old key (each task's first trial, Sonnet and Opus) failed
 recorded grade detail). They are re-graded as passes after the run, with the
 original outcome kept alongside. The task file and its hash are unchanged;
 only `hidden/` tests changed.
+
+## Second grader review, after the run (2026-10-02)
+
+The run finished at 240 cells for $88.48 list price (Opus $58.66, Sonnet
+$29.83). Every task that neither model ever passed, and every new "hard"
+task, was read against its grade detail:
+
+- **`hb-budget-policy-03`**: all six cells failed only `test_save_writes_v2`,
+  which rejected a trailing newline the brief never forbade (11 of 12 hidden
+  checks passed every time). Corrected; the six cells are re-graded as passes.
+- **`hc-humanize-01`**: all six cells produced the legacy format exactly and
+  failed only "negative durations raise". That rule was in the answer key but
+  not in `docs/runner-logs.md`, where the stratum's design says the missing
+  requirement must be recoverable. Removed from the test and the answer key;
+  the six cells are re-graded as passes.
+- **`ha-verify-suite-16`**: the hidden tests demand the pre-push header
+  comment verbatim (the brief asks only to preserve its design), and the
+  scratch copy they run in has no `node_modules`, so a sensible "dependencies
+  missing" guard fails. Cells fail several checks at once, so they cannot be
+  re-graded from the record. The task stays measured as unsolved and is
+  treated as a grader defect, not a hard task.
+- **Real misses, kept:** `hc-run-json-04` (Sonnet invented its own JSON shape
+  each time instead of finding the run-file format); `hb-incidents-11` (Sonnet
+  fixed the month but left `started_at` non-UTC, against the store's
+  documented contract); `hc-history-csv-05` (borderline: the misses come from
+  a record carrying a +02:00 offset that the brief's "UTC months" rule
+  covers).
+
+Re-graded cells keep their original outcome under `regrade` in
+`outcomes.jsonl`; the untouched file is `outcomes.pre-regrade.jsonl`. With 16
+cells re-graded in total (4 on 2026-10-01, 12 here), the pooled labels from
+`dispatch-calibration --write` over both runs are: first batch 13 medium /
+2 easy; extension 31 easy / 5 medium / 3 hard / 1 unsolved (grader defect).
+**Pooled, 3 of 55 tasks are measured hard against a bar of 10. H0 is not met
+for the second time.** No correction in either direction can change that:
+even counting the defective task as hard gives 4.

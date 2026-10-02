@@ -16,9 +16,9 @@ def test_humanize(seconds, text):
     assert humanize(seconds) == text
 
 
-def test_negative_rejected():
-    with pytest.raises(ValueError):
-        humanize(-1)
+# Negative durations are not graded: docs/runner-logs.md, where the format is
+# meant to be found, says nothing about them (removed 2026-10-02 after
+# calibration; see findings).
 
 
 def test_line_matches_shipper_pattern():

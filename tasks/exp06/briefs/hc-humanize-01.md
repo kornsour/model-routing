@@ -8,7 +8,7 @@ tags: [ambiguous, format, logs]
 stratum: C
 max_turns: 40
 missing_requirement: "The exact duration format (which units, how many, rounding, zero) is not stated; docs/runner-logs.md has the legacy runner's samples and rounding note."
-answer_key: {"question": "What exact format should the durations use (units, how many units, rounding, zero)?", "answer": "Exactly what the legacy runner printed (docs/runner-logs.md): from whole seconds rounded down, the largest non-zero unit of d/h/m/s plus the next smaller unit even when it is zero (1d 0h, 1m 0s); under a minute is just seconds (45s); zero is 0s. Negative durations are an error."}
+answer_key: {"question": "What exact format should the durations use (units, how many units, rounding, zero)?", "answer": "Exactly what the legacy runner printed (docs/runner-logs.md): from whole seconds rounded down, the largest non-zero unit of d/h/m/s plus the next smaller unit even when it is zero (1d 0h, 1m 0s); under a minute is just seconds (45s); zero is 0s."}
 harvest_shape: "small, self-contained change that must stay compatible with an existing consumer (harvested #14: copy change with an e2e assertion that must match exactly)"
 authorship: "Brief drafted from the shape of harvested chips by Claude Opus 5.5; fixture, hidden tests and reference solution by Claude Opus 5.5 (same family as the models under test)."
 ---
