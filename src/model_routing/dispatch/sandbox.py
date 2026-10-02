@@ -3,8 +3,12 @@
 Each sandbox is a fresh directory: a copy of ``task.repo`` (plus any
 ``grader["setup_overlay"]``), initialized as its own git repo with one
 commit, so grading can use ``git diff``/``git status`` to see exactly what
-an agent session changed. When ``simulate=True`` (used by the fake provider
-for free, no-network runs), the task's solution overlay is also copied in
+an agent session changed. A task whose subject *is* git history (branch
+triage, stale refs) sets ``grader["history_script"]``: a bash script run in
+the sandbox after that commit to build branches, a local ``origin`` and the
+like. It lives outside the fixture repo, so the agent never sees it. When
+``simulate=True`` (used by the fake provider for free, no-network runs), the
+task's solution overlay is also copied in
 under ``.fake_solution/`` - never part of a real run, and always excluded
 from scope checks (see ``grading.py``).
 """
@@ -20,6 +24,10 @@ from pathlib import Path
 from model_routing.dispatch.types import AgentTask
 
 FAKE_SOLUTION_DIRNAME = ".fake_solution"
+DELETE_MANIFEST = ".overlay-delete"
+"""A file in a solution overlay listing repo-relative paths (one per line) the
+solution removes - overlays can only add files, and some tasks (archiving
+docs) are moves."""
 
 _IGNORED_COPY_NAMES = {".git", "__pycache__", ".pytest_cache", ".ruff_cache", FAKE_SOLUTION_DIRNAME}
 
@@ -32,6 +40,21 @@ def _copytree_overlay(src: Path, dst: Path) -> None:
         dirs_exist_ok=True,
         ignore=shutil.ignore_patterns(*_IGNORED_COPY_NAMES),
     )
+
+
+def apply_solution_overlay(overlay: Path, workdir: Path) -> None:
+    """Apply a solution overlay to ``workdir``: delete what its
+    ``DELETE_MANIFEST`` lists, then copy every other file over the repo."""
+    manifest = overlay / DELETE_MANIFEST
+    if manifest.is_file():
+        for line in manifest.read_text().splitlines():
+            if line.strip():
+                (workdir / line.strip()).unlink(missing_ok=True)
+    for src in overlay.rglob("*"):
+        if src.is_file() and src != manifest:
+            dest = workdir / src.relative_to(overlay)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
 
 
 def _git(args: list[str], cwd: Path) -> None:
@@ -81,6 +104,16 @@ class Sandbox:
             ],
             cwd=workdir,
         )
+
+        history_script = task.grader.get("history_script")
+        if history_script:
+            subprocess.run(
+                ["bash", str(history_script)],
+                cwd=workdir,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
 
         if simulate:
             solution_overlay = task.grader.get("solution_overlay")

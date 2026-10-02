@@ -1,0 +1,8 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  ci:
+    uses: Copperline/.github-private/.github/workflows/ci.yml@6c1d2a9e0f4b3c8d7e5a1f2b9c0d4e6a8b7f3c21 # main

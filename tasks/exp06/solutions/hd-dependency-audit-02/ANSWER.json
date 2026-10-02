@@ -1,0 +1,9 @@
+{
+  "runtime_imports": {"ledger": ["orchestra", "toolbelt"], "orchestra": ["toolbelt"], "toolbelt": []},
+  "declared": {"ledger": ["orchestra", "toolbelt"], "orchestra": [], "toolbelt": []},
+  "undeclared": {"ledger": [], "orchestra": ["toolbelt"], "toolbelt": []},
+  "unused_declared": {"ledger": [], "orchestra": [], "toolbelt": []},
+  "private_imports": ["ledger.inflight:toolbelt.durations._td"],
+  "type_checking_only": ["toolbelt.text:orchestra.model.JobSpec"],
+  "orchestra_cli_works_with_declared_deps_only": false
+}

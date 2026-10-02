@@ -53,7 +53,9 @@ class AgentTask:
          "allowed_paths": ["src/invoice/*.py", "tests/*.py"]}
 
     ``difficulty`` is a human label (easy|medium|hard) used only by the
-    report; no policy may read it.
+    report; no policy may read it.  ``agent_bash`` adds ``Bash(...)`` patterns
+    to the agent's tool allowlist for tasks whose work is not Python (git
+    history, Go, Node); empty for every first-batch task.
     """
 
     id: str
@@ -67,6 +69,7 @@ class AgentTask:
     category: str = "general"
     max_turns: int = 30
     tags: tuple[str, ...] = ()
+    agent_bash: tuple[str, ...] = ()
 
 
 @dataclass

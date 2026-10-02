@@ -1,6 +1,7 @@
 # exp06 Stage 0 extension: one more draw for frontier-only work
 
-Status: **draft plan, not yet run.** Exploratory until the v0.3 protocol is
+Status: **task set built and validated (2026-10-01,
+`findings/2026-10-01-exp06-stage0-ext-taskset.md`); not yet run.** Exploratory until the v0.3 protocol is
 registered. Written 2026-10-01 after the first Stage 0 batch
 (`findings/2026-09-30-exp06-stage0.md`) and the results paper
 (`results.md`, v1.1) found no measured-hard task.
@@ -72,7 +73,8 @@ range for stratum B.
 
 Config: `experiments/exp06-route-on-evidence/exp06_calibrate_ext.toml`,
 copied from `exp06_calibrate.toml` with the new task file, a new seed,
-per-stratum `max_turns`, and the `static_haiku` policy removed. Models pinned by exact id; Claude Code version
+per-stratum `max_turns` (`per_task_max_turns = true`, the caps live in the
+task file), and the `static_haiku` policy removed. Models pinned by exact id; Claude Code version
 recorded. Randomized block order, sequential, one run at a time, one hour
 after any other paid run.
 

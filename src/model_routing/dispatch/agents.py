@@ -35,6 +35,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from model_routing.dispatch.sandbox import apply_solution_overlay
 from model_routing.dispatch.types import AgentProvider, AgentResult
 from model_routing.types import Usage
 
@@ -96,6 +97,7 @@ class ClaudeAgentProvider:
         tools: bool,
         max_budget_usd: float,
         advisor: str | None = None,
+        extra_bash: tuple[str, ...] = (),
     ) -> list[str]:
         args = [
             self.binary,
@@ -129,7 +131,12 @@ class ClaudeAgentProvider:
                 # --fork-session only makes sense alongside --resume/--continue.
                 args.append("--fork-session")
         if tools:
-            args += ["--allowedTools", *CLAUDE_AGENT_FILE_TOOLS, *CLAUDE_AGENT_BASH_ALLOWLIST]
+            args += [
+                "--allowedTools",
+                *CLAUDE_AGENT_FILE_TOOLS,
+                *CLAUDE_AGENT_BASH_ALLOWLIST,
+                *(f"Bash({pattern})" for pattern in extra_bash),
+            ]
             # acceptEdits auto-approves the file edits Write/Edit would
             # otherwise prompt for; everything else stays gated by the
             # --allowedTools allowlist above, so nothing outside it runs.
@@ -153,6 +160,7 @@ class ClaudeAgentProvider:
         max_budget_usd: float = 2.0,
         timeout_s: int = 1200,
         advisor: str | None = None,
+        extra_bash: tuple[str, ...] = (),
     ) -> AgentResult:
         args = self.build_args(
             model,
@@ -165,6 +173,7 @@ class ClaudeAgentProvider:
             tools=tools,
             max_budget_usd=max_budget_usd,
             advisor=advisor,
+            extra_bash=extra_bash,
         )
         t0 = time.monotonic()
         try:
@@ -576,8 +585,11 @@ class CodexAgentProvider:
         tools: bool = True,
         max_budget_usd: float = 2.0,
         timeout_s: int = 1200,
+        extra_bash: tuple[str, ...] = (),
     ) -> AgentResult:
-        del max_budget_usd  # no native or config equivalent; see class docstring
+        # Codex runs shell commands inside its own workspace sandbox, so it has
+        # no per-command allowlist to extend.
+        del max_budget_usd, extra_bash  # no native or config equivalent; see class docstring
         args = self.build_args(
             model,
             prompt,
@@ -946,8 +958,9 @@ class FakeAgentProvider:
         max_budget_usd: float = 2.0,
         timeout_s: int = 1200,
         advisor: str | None = None,
+        extra_bash: tuple[str, ...] = (),
     ) -> AgentResult:
-        del max_budget_usd, timeout_s  # no real spend or wall clock to bound
+        del max_budget_usd, timeout_s, extra_bash  # no real spend, clock or shell
         tier = _tier_rank(model)
         mult = _TIER_TOKEN_MULT[tier]
         prompt_tokens = max(1, len(prompt) // 4)
@@ -1032,11 +1045,7 @@ class FakeAgentProvider:
         roll = _stable_unit_interval(prompt, model, resume_session or "")
         if roll >= prob:
             return False
-        for src in sol_dir.rglob("*"):
-            if src.is_file():
-                dest = workdir / src.relative_to(sol_dir)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
+        apply_solution_overlay(sol_dir, workdir)
         shutil.rmtree(sol_dir, ignore_errors=True)
         return True
 

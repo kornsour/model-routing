@@ -264,10 +264,15 @@ class DispatchConfig:
     """Seeds task sampling and, for ``order = "randomized"``, the per-block policy
     order.  Recorded in ``meta.json`` so a run can be reproduced exactly."""
     max_turns: int = 30
-    """Turn cap passed to every agent session.  ``AgentTask.max_turns`` is a
-    human guess and is *not* used: the 2026-09-22 pilot saw the cheapest model
-    need 12-23 turns on tasks labelled 8-12, so a per-task cap would create
-    failures unrelated to the model choice being measured."""
+    """Turn cap passed to every agent session.  By default ``AgentTask.max_turns``
+    is a human guess and is *not* used: the 2026-09-22 pilot saw the cheapest
+    model need 12-23 turns on tasks labelled 8-12, so a per-task cap would
+    create failures unrelated to the model choice being measured."""
+    per_task_max_turns: bool = False
+    """Opt-in: cap each session at its task's ``max_turns`` instead of
+    ``max_turns``.  For task sets whose caps are a design choice rather than a
+    guess (the exp06 Stage 0 extension gives long-horizon tasks 80 turns and
+    the rest 40).  A policy that passes its own cap for a session still wins."""
     preregistration: dict[str, Any] | None = None
     """The ``[preregistration]`` table, if any: what was frozen before the
     confirmatory run (``taskset_sha256``, ``n_tasks``, ``trials``, ``margin_pp``,
@@ -371,6 +376,7 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         task_ids=tuple(str(t) for t in exp.get("task_ids", [])),
         seed=int(exp.get("seed", 0)),
         max_turns=int(exp.get("max_turns", 30)),
+        per_task_max_turns=bool(exp.get("per_task_max_turns", False)),
         preregistration=(
             dict(data["preregistration"]) if isinstance(data.get("preregistration"), dict) else None
         ),
@@ -957,6 +963,8 @@ def _write_meta(
         "order": cfg.order,
         "seed": cfg.seed,
         "max_turns": cfg.max_turns,
+        "per_task_max_turns": cfg.per_task_max_turns,
+        "task_max_turns": ({t.id: t.max_turns for t in tasks} if cfg.per_task_max_turns else None),
         "preregistration": cfg.preregistration,
         "sample": sample,
         "budget_usd": budget_usd,
@@ -1155,6 +1163,9 @@ def run_dispatch(
             )
         )
 
+    extra_bash = {t.id: t.agent_bash for t in loaded_tasks if t.agent_bash}
+    task_turns = {t.id: t.max_turns for t in loaded_tasks} if cfg.per_task_max_turns else {}
+
     def make_run_session(
         policy_name: str, trial: int, task_id: str
     ) -> Callable[..., SessionRecord]:
@@ -1192,13 +1203,14 @@ def run_dispatch(
                 workdir=workdir,
                 system=system,
                 effort=cand.effort,
-                max_turns=max_turns or cfg.max_turns,
+                max_turns=max_turns or task_turns.get(task_id, cfg.max_turns),
                 resume_session=resume_session,
                 fork=fork,
                 tools=tools,
                 max_budget_usd=cfg.max_budget_per_session_usd,
                 timeout_s=1200,
                 **({"advisor": advisor} if advisor else {}),
+                **({"extra_bash": extra_bash[task_id]} if extra_bash.get(task_id) else {}),
             )
             if (
                 result.error == "usage_limit"

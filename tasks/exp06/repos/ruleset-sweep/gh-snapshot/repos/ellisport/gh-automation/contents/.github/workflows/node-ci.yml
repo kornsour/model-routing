@@ -1,0 +1,6 @@
+name: node-ci
+on:
+  workflow_call:
+jobs:
+  test: { name: test, runs-on: ubuntu-latest, steps: [{ run: npm test }] }
+  # example: uses: ellisport/gh-automation/.github/workflows/node-ci.yml@v1

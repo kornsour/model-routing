@@ -1,0 +1,9 @@
+[
+  {
+    "id": 31000006,
+    "name": "main",
+    "source_type": "Repository",
+    "source": "ellisport/study-cards",
+    "enforcement": "active"
+  }
+]

@@ -1,0 +1,13 @@
+name: checks
+on: [pull_request, push]
+jobs:
+  go:
+    name: go test
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
+  python:
+    name: python client
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

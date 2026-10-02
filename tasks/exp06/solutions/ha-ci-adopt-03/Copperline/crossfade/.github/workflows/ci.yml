@@ -1,0 +1,15 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  ci:
+    uses: Copperline/.github-private/.github/workflows/ci.yml@9b2e4c71d0a3f5e8c6b1a2d4e7f90c3b5a8d1e26 # main
+    with:
+      node-version: "22"
+      lint-command: pnpm lint
+      # No typecheck script in this repo; the Rust side is not built in CI.
+      run-typecheck: false

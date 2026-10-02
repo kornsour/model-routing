@@ -1,0 +1,22 @@
+name: Ingredient storage sync
+on:
+  schedule:
+    - cron: '45 6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: ingredient-storage-production-sync.yml-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # DELIBERATELY GitHub-hosted, NOT routed through USE_SELF_HOSTED_RUNNER.
+    # This job assumes the production storage sync role via OIDC; a persistent
+    # self-hosted runner could keep that token around between jobs.
+    runs-on: ubuntu-latest # allow-bare-runner: holds production AWS credentials
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: node scripts/storage-sync.mjs --env production

@@ -1,0 +1,9 @@
+{
+  "name": "echoform",
+  "private": false,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "build": "next build"
+  }
+}

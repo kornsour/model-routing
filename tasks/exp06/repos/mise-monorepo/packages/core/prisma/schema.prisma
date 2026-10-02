@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  plans        MealPlan[]
+  subscription Subscription?
+}
+
+model Recipe {
+  id          String       @id @default(cuid())
+  title       String
+  cuisine     String
+  diets       String[]
+  totalMinutes Int
+  ingredients RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id         String @id @default(cuid())
+  recipeId   String
+  recipe     Recipe @relation(fields: [recipeId], references: [id])
+  name       String
+  quantity   Float
+  unit       String
+}
+
+model MealPlan {
+  id          String           @id @default(cuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id])
+  weekStart   DateTime
+  assignments MealAssignment[]
+  @@unique([userId, weekStart])
+}
+
+model MealAssignment {
+  id        String   @id @default(cuid())
+  planId    String
+  plan      MealPlan @relation(fields: [planId], references: [id])
+  day       Int
+  slot      String
+  recipeId  String
+  servings  Int      @default(2)
+  @@unique([planId, day, slot])
+}
+
+model Subscription {
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id])
+  stripeCustomerId     String
+  stripeSubscriptionId String   @unique
+  status               String
+  currentPeriodEnd     DateTime
+}

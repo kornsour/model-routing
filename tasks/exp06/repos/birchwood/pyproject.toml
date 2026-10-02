@@ -1,0 +1,7 @@
+[project]
+name = "birchwood"
+version = "2.3.0"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

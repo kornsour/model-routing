@@ -1,0 +1,624 @@
+[
+  {
+    "repository_name": "mise",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "prisma"
+      }
+    ]
+  },
+  {
+    "repository_name": "binwise",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "drizzle"
+      }
+    ]
+  },
+  {
+    "repository_name": "packlight",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "drizzle"
+      }
+    ]
+  },
+  {
+    "repository_name": "platewise",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "echoform",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "drizzle"
+      }
+    ]
+  },
+  {
+    "repository_name": "trailhead",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "drizzle"
+      }
+    ]
+  },
+  {
+    "repository_name": "gatefit",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "cohort",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "prisma"
+      }
+    ]
+  },
+  {
+    "repository_name": "crossfade",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "mixed"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "smallco",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "mixed"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": ".github-private",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "docs"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "false"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "ledgerline",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "python"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "sqlalchemy"
+      }
+    ]
+  },
+  {
+    "repository_name": "routewise",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "python"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "tallyhub",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "quillstack",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "northstar-docs",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "docs"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "false"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "pantry-api",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "postgres"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "drizzle"
+      }
+    ]
+  },
+  {
+    "repository_name": "swatch",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "beacon",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "harbor-sim",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "python"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "kiln",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "typescript"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "none"
+      },
+      {
+        "property_name": "tier",
+        "value": "internal"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "false"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  },
+  {
+    "repository_name": "relay-bot",
+    "properties": [
+      {
+        "property_name": "stack",
+        "value": "python"
+      },
+      {
+        "property_name": "database",
+        "value": "none"
+      },
+      {
+        "property_name": "deploys",
+        "value": "aws"
+      },
+      {
+        "property_name": "tier",
+        "value": "prod"
+      },
+      {
+        "property_name": "ci-managed",
+        "value": "true"
+      },
+      {
+        "property_name": "orm",
+        "value": "none"
+      }
+    ]
+  }
+]

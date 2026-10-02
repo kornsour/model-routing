@@ -1,0 +1,50 @@
+# exp06 Stage 0 extension (docs/experiments/exp06-route-on-evidence/extension-plan.md):
+# the one allowed task-set extension. Measures per-task pass rates of the mid-tier
+# and frontier models on the 40 new tasks (strata A-D), to evaluate H0 on the pooled
+# 55. Exploratory: nothing is registered.
+#
+#   make dispatch-estimate EXP=experiments/exp06-route-on-evidence/exp06_calibrate_ext.toml
+#   make dispatch-run      EXP=experiments/exp06-route-on-evidence/exp06_calibrate_ext.toml BUDGET=150
+#
+# Copied from exp06_calibrate.toml with: the extension task file, a new seed, the
+# static_haiku policy removed (decided 2026-10-01: Haiku dropped), and per-task
+# turn caps (stratum B 80, everything else 40; the 40-turn figure for B is a
+# sensitivity row in the analysis). The grading host needs git, Go 1.22+ and
+# Node 22.18+ (see findings/2026-10-01-exp06-stage0-ext-taskset.md).
+
+[experiment]
+name = "exp06_calibrate_ext"
+kind = "dispatch"
+tasks = "tasks/exp06/tasks_ext.jsonl"
+trials = 3
+order = "randomized"
+seed = 20261001
+max_turns = 40
+per_task_max_turns = true
+hypothesis = "Stage 0 extension / H0: measured pass rate per task on Sonnet 5.5 and Opus 5.5 over 40 drawn tasks (harvested, long-horizon, ambiguous, read-only)."
+primary = { treatment = "static_sonnet", control = "static_opus" }
+margin_pp = 10
+max_budget_per_session_usd = 5.0
+parent = "sonnet"
+menu = ["sonnet", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "claude-sonnet-5-5"
+
+[candidates.opus]
+provider = "claude_cli"
+model = "claude-opus-5-5"
+
+[[policies]]
+name = "static_sonnet"
+kind = "spawn_static"
+candidate = "sonnet"
+
+[[policies]]
+name = "static_opus"
+kind = "spawn_static"
+candidate = "opus"

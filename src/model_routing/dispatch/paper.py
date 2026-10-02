@@ -82,6 +82,20 @@ SESSION_FIELDS = (
 # --------------------------------------------------------------------------
 
 
+def _turn_cap(meta: dict) -> str:
+    per_task = meta.get("task_max_turns")
+    if meta.get("per_task_max_turns") and per_task:
+        caps = sorted(set(per_task.values()))
+        return (
+            "per task ("
+            + ", ".join(
+                f"{c} for {sum(1 for v in per_task.values() if v == c)} tasks" for c in caps
+            )
+            + "), every policy"
+        )
+    return f"{meta.get('max_turns', '-')} per session for every policy"
+
+
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
         return []
@@ -417,7 +431,7 @@ def _render(
         f"number of trials ({meta.get('trials', 1)}). Ordering: `order = "
         f'"{meta.get("order", "unknown")}"`, seed `{meta.get("seed", "-")}` (a seeded '
         "randomized block per (task, trial) when randomized); sessions run strictly "
-        f"sequentially. Turn cap: {meta.get('max_turns', '-')} per session for every policy. "
+        f"sequentially. Turn cap: {_turn_cap(meta)}. "
         f"Parent model: `{meta.get('parent', '-')}`; router menu: "
         + ", ".join(f"`{m}`" for m in meta.get("menu", []))
         + "."

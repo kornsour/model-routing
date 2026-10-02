@@ -1,0 +1,9 @@
+[project]
+name = "platform"
+version = "2026.9.0"
+description = "The data platform monorepo: orchestra, toolbelt and ledger."
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["packages/toolbelt/tests", "packages/orchestra/tests", "packages/ledger/tests"]
+addopts = "--import-mode=importlib"

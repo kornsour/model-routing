@@ -1,0 +1,16 @@
+name: ci
+on:
+  workflow_call:
+    inputs:
+      run-lint: { type: boolean, default: true }
+      run-typecheck: { type: boolean, default: true }
+      run-build: { type: boolean, default: true }
+      migration-check: { type: boolean, default: false }
+      security-scan: { type: boolean, default: false }
+jobs:
+  lint: { name: "Lint & format (Biome)", if: inputs.run-lint, runs-on: ubuntu-latest, steps: [{ run: pnpm check }] }
+  typecheck: { name: Type check, if: inputs.run-typecheck, runs-on: ubuntu-latest, steps: [{ run: pnpm exec tsc --noEmit }] }
+  test: { name: Unit tests (Vitest), runs-on: ubuntu-latest, steps: [{ run: pnpm test }] }
+  build: { name: Build, if: inputs.run-build, runs-on: ubuntu-latest, steps: [{ run: pnpm build }] }
+  migrations: { name: DB migration check, if: inputs.migration-check, runs-on: ubuntu-latest, steps: [{ run: ./migration-check.sh }] }
+  semgrep: { name: Security scan (Semgrep), if: inputs.security-scan, runs-on: ubuntu-latest, steps: [{ run: semgrep scan }] }

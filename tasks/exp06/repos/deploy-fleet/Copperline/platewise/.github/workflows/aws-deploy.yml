@@ -1,0 +1,26 @@
+name: AWS deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: aws-deploy.yml-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    # DELIBERATELY GitHub-hosted, NOT routed through USE_SELF_HOSTED_RUNNER.
+    # This job assumes the production AWS deploy role via OIDC; a persistent
+    # self-hosted runner could keep that token around between jobs.
+    runs-on: ubuntu-latest # allow-bare-runner: holds production AWS credentials
+    environment: production
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-2
+      - run: ./scripts/deploy-aws.sh production

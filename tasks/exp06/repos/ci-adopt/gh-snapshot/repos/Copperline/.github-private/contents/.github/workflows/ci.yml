@@ -1,0 +1,72 @@
+name: ci
+# Reusable CI for Copperline TypeScript apps. Callers pass inputs; job names are
+# fixed so org rulesets can require them as `<caller job id> / <job name>`.
+on:
+  workflow_call:
+    inputs:
+      node-version: { type: string, default: "22" }
+      run-lint: { type: boolean, default: true }
+      lint-command: { type: string, default: "pnpm check" }
+      run-typecheck: { type: boolean, default: true }
+      typecheck-command: { type: string, default: "pnpm exec tsc --noEmit" }
+      test-command: { type: string, default: "pnpm test" }
+      run-build: { type: boolean, default: true }
+      migration-check: { type: boolean, default: false }
+      security-scan: { type: boolean, default: false }
+      orm: { type: string, default: "none" }
+      generate-client: { type: boolean, default: false }
+      prisma-schema-path: { type: string, default: "prisma/schema.prisma" }
+      postgres-service: { type: boolean, default: false }
+permissions:
+  contents: read
+jobs:
+  lint:
+    name: Lint & format (Biome)
+    if: inputs.run-lint
+    runs-on: ${{ fromJSON(vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: { node-version: "${{ inputs.node-version }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: ${{ inputs.lint-command }}
+  typecheck:
+    name: Type check
+    if: inputs.run-typecheck
+    runs-on: ${{ fromJSON(vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - run: pnpm install --frozen-lockfile
+      - run: ${{ inputs.typecheck-command }}
+  test:
+    name: Unit tests (Vitest)
+    runs-on: ${{ fromJSON(vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - run: pnpm install --frozen-lockfile
+      - run: ${{ inputs.test-command }}
+  build:
+    name: Build
+    if: inputs.run-build
+    runs-on: ${{ fromJSON(vars.USE_SELF_HOSTED_RUNNER == 'true' && github.event.repository.private && '["self-hosted","Linux"]' || '["ubuntu-latest"]') }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - run: pnpm install --frozen-lockfile && pnpm build
+  migrations:
+    name: DB migration check
+    if: inputs.migration-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: ./.github/scripts/migration-check.sh "${{ inputs.orm }}"
+  semgrep:
+    name: Security scan (Semgrep)
+    if: inputs.security-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+      - run: pipx run semgrep==1.172.0 scan --config p/default --error

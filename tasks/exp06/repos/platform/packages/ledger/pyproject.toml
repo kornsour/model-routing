@@ -1,0 +1,5 @@
+[project]
+name = "ledger"
+version = "0.9.0"
+requires-python = ">=3.12"
+dependencies = ["orchestra", "toolbelt"]

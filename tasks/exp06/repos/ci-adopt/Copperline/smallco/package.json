@@ -1,0 +1,10 @@
+{
+  "name": "smallco",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json"
+  }
+}

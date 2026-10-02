@@ -1,0 +1,7 @@
+name: checks
+on: [pull_request, push]
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok

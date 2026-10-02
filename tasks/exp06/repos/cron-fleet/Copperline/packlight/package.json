@@ -1,0 +1,10 @@
+{
+  "name": "packlight",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "check": "biome check .",
+    "build": "pnpm db:deploy && next build"
+  }
+}

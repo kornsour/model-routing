@@ -1,0 +1,9 @@
+{
+  "truncate_fix_commit": "fix(text): truncate counts the ellipsis in the width",
+  "truncate_at_v0_1_0": "abcdef...",
+  "numbers_commit_count": 3,
+  "pct_na_first_tag": "v0.3.0",
+  "iterutil_first_tag": "v0.2.0",
+  "slugify_last_author": "Chris Ito",
+  "commits_v0_3_0_to_v0_4_0": 4
+}

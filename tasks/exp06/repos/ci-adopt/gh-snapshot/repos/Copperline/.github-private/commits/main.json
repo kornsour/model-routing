@@ -1,0 +1,6 @@
+{
+  "sha": "9b2e4c71d0a3f5e8c6b1a2d4e7f90c3b5a8d1e26",
+  "commit": {
+    "message": "ci: semgrep 1.172.0 (#131)"
+  }
+}

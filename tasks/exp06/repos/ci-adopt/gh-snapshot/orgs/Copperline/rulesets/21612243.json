@@ -1,0 +1,49 @@
+{
+  "id": 21612243,
+  "name": "crossfade main",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": {
+    "repository_name": {
+      "include": [
+        "crossfade"
+      ]
+    },
+    "ref_name": {
+      "include": [
+        "~DEFAULT_BRANCH"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "required_status_checks": [
+          {
+            "context": "Unit tests"
+          },
+          {
+            "context": "Lint"
+          },
+          {
+            "context": "Build"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -7,6 +7,7 @@ resolves every path a task references relative to the JSONL's directory:
 * ``grader["hidden_tests"]``    -> ``hidden/<id>``                 (auto, if present)
 * ``grader["setup_overlay"]``   -> ``setup/<id>``                  (auto, if present)
 * ``grader["mutation_overlay"]``-> ``mutants/<id>``                (auto, if present)
+* ``grader["history_script"]``  -> ``history/<id>.sh``             (auto, if present)
 * ``grader["solution_overlay"]``-> ``solutions/<id>``              (required)
 
 A task's own ``grader`` dict may set any of the ``hidden_tests`` /
@@ -108,6 +109,12 @@ def _build_task(raw: dict, jsonl_dir: Path) -> AgentTask:
     mutation = _resolve_overlay(jsonl_dir, "mutants", task_id, grader.get("mutation_overlay"))
     if mutation:
         grader["mutation_overlay"] = mutation
+    history = grader.get("history_script") or f"{task_id}.sh"
+    history_path = Path(history) if Path(history).is_absolute() else jsonl_dir / "history" / history
+    if history_path.is_file():
+        grader["history_script"] = str(history_path.resolve())
+    elif "history_script" in grader:
+        raise ValueError(f"{task_id}: history script not found: {history_path}")
     solution = jsonl_dir / "solutions" / task_id
     if not solution.is_dir():
         raise ValueError(f"{task_id}: solution overlay not found: {solution}")
@@ -125,6 +132,7 @@ def _build_task(raw: dict, jsonl_dir: Path) -> AgentTask:
         category=raw.get("category", "general"),
         max_turns=int(raw.get("max_turns", 30)),
         tags=tuple(raw.get("tags", ())),
+        agent_bash=tuple(raw.get("agent_bash", ())),
     )
 
 

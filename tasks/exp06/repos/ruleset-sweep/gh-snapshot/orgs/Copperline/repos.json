@@ -1,0 +1,170 @@
+[
+  {
+    "name": "mise",
+    "full_name": "Copperline/mise",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "binwise",
+    "full_name": "Copperline/binwise",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "packlight",
+    "full_name": "Copperline/packlight",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "platewise",
+    "full_name": "Copperline/platewise",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "echoform",
+    "full_name": "Copperline/echoform",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "trailhead",
+    "full_name": "Copperline/trailhead",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "gatefit",
+    "full_name": "Copperline/gatefit",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "cohort",
+    "full_name": "Copperline/cohort",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "crossfade",
+    "full_name": "Copperline/crossfade",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "smallco",
+    "full_name": "Copperline/smallco",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": ".github-private",
+    "full_name": "Copperline/.github-private",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "ledgerline",
+    "full_name": "Copperline/ledgerline",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "routewise",
+    "full_name": "Copperline/routewise",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "tallyhub",
+    "full_name": "Copperline/tallyhub",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "quillstack",
+    "full_name": "Copperline/quillstack",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "northstar-docs",
+    "full_name": "Copperline/northstar-docs",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "pantry-api",
+    "full_name": "Copperline/pantry-api",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "swatch",
+    "full_name": "Copperline/swatch",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "beacon",
+    "full_name": "Copperline/beacon",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "harbor-sim",
+    "full_name": "Copperline/harbor-sim",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "kiln",
+    "full_name": "Copperline/kiln",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "relay-bot",
+    "full_name": "Copperline/relay-bot",
+    "private": true,
+    "archived": false,
+    "default_branch": "main"
+  },
+  {
+    "name": "old-landing",
+    "full_name": "Copperline/old-landing",
+    "private": true,
+    "archived": true,
+    "default_branch": "main"
+  },
+  {
+    "name": "proto-2025",
+    "full_name": "Copperline/proto-2025",
+    "private": true,
+    "archived": true,
+    "default_branch": "main"
+  }
+]
