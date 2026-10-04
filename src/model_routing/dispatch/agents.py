@@ -260,6 +260,26 @@ turn cap, the wall-clock ``timeout`` and the per-session budget cap, which are
 graded outcomes under intention to treat."""
 
 
+_AUTH_FAILURE_RE = re.compile(
+    r"Failed to authenticate"
+    r"|OAuth (?:session|token)[^\n]{0,40}(?:expired|invalid|revoked|could not be refreshed)"
+    r"|authentication_error"
+    r"|invalid (?:x-api-key|api[ _-]key)"
+    r"|Please run /login"
+    r"|\bNot logged in\b",
+    re.IGNORECASE,
+)
+"""The CLI's login is gone (seen 2026-10-04: "Failed to authenticate: OAuth
+session expired and could not be refreshed"). Every session fails instantly at
+$0; grading those cells would record task failures that measure the login,
+not the model, so the runner pauses until someone logs in again."""
+
+
+def is_auth_failure(text: str | None) -> bool:
+    """True when ``text`` (a session's error) says the CLI is not authenticated."""
+    return bool(text) and _AUTH_FAILURE_RE.search(text or "") is not None
+
+
 def is_provider_outage(text: str | None) -> bool:
     """True when ``text`` (an error message or stderr) reports a provider outage."""
     return bool(text) and _PROVIDER_OUTAGE_RE.search(text or "") is not None

@@ -505,10 +505,10 @@ def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     the list-price spend on attempts that no graded outcome uses.  Sources:
     ``pauses.jsonl`` (live pauses) and ``outcomes.poisoned.jsonl`` (cells
     graded by an older harness and set aside on ``--resume``)."""
-    from model_routing.dispatch.agents import is_provider_outage
+    from model_routing.dispatch.agents import is_auth_failure, is_provider_outage
 
     by_policy: dict[str, dict[str, Any]] = defaultdict(
-        lambda: {"usage_limit": 0, "provider_outage": 0, "wasted_usd": 0.0}
+        lambda: {"usage_limit": 0, "provider_outage": 0, "auth": 0, "wasted_usd": 0.0}
     )
     budget_pauses = 0
     for p in _load_jsonl(run_dir / "pauses.jsonl"):
@@ -520,7 +520,12 @@ def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
         by_policy[p["policy"]][reason] += 1
     for o in _load_jsonl(run_dir / "outcomes.poisoned.jsonl"):
         errs = [s.get("error") for s in o.get("sessions", [])]
-        reason = "provider_outage" if any(is_provider_outage(e) for e in errs) else "usage_limit"
+        if any(is_auth_failure(e) for e in errs):
+            reason = "auth"
+        elif any(is_provider_outage(e) for e in errs):
+            reason = "provider_outage"
+        else:
+            reason = "usage_limit"
         by_policy[o["policy"]][reason] += 1
 
     def key(s: dict[str, Any]) -> tuple[Any, ...]:
@@ -536,6 +541,7 @@ def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "usage_limit": sum(v["usage_limit"] for v in rows.values()),
         "provider_outage": sum(v["provider_outage"] for v in rows.values()),
+        "auth": sum(v["auth"] for v in rows.values()),
         "wasted_usd": sum(v["wasted_usd"] for v in rows.values()),
         "budget_pauses": budget_pauses,
         "by_policy": rows,

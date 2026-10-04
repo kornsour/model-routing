@@ -430,3 +430,78 @@ def test_labels_match_the_preregistration():
     for v in labels.values():
         counts[v["label"]] = counts.get(v["label"], 0) + 1
     assert counts == {"easy": 45, "medium": 2, "hard": 5, "unsolved": 3}
+
+
+# --------------------------------------------------------------------------- #
+# Logged-out CLI pauses instead of grading failures
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Failed to authenticate: OAuth session expired and could not be refreshed", True),
+        ("OAuth token has expired", True),
+        ("authentication_error: invalid x-api-key", True),
+        ("Not logged in. Please run /login", True),
+        ("Reached maximum number of turns (40)", False),
+        ("API Error: 529 overloaded", False),
+        (None, False),
+    ],
+)
+def test_is_auth_failure(text: str | None, expected: bool):
+    from model_routing.dispatch.agents import is_auth_failure
+
+    assert is_auth_failure(text) is expected
+
+
+def test_logged_out_cli_pauses_and_retries_the_cell(tmp_path: Path):
+    from test_dispatch_runner import (
+        RecordingProvider,
+        _write_cfg,
+        always_pass_grader,
+        fake_sandbox_factory,
+    )
+
+    from model_routing.dispatch.runner import run_dispatch
+    from model_routing.dispatch.types import AgentResult
+    from model_routing.types import Usage
+
+    class LoggedOutOnce(RecordingProvider):
+        def run(self, model: str, prompt: str, **kw: Any) -> AgentResult:
+            if not self.calls:
+                self.calls.append({"model": model})
+                return AgentResult(
+                    output="",
+                    usage=Usage(),
+                    duration_ms=1,
+                    error="Failed to authenticate: OAuth session expired",
+                )
+            return super().run(model, prompt, **kw)
+
+    cfg = load_dispatch_config(
+        _write_cfg(
+            tmp_path,
+            '[[policies]]\nname = "B"\nkind = "spawn_static"\ncandidate = "opus"\n',
+            treatment="B",
+            control="B",
+        )
+    )
+    slept: list[float] = []
+    out = tmp_path / "run"
+    run_dispatch(
+        cfg,
+        out_dir=out,
+        budget_usd=100.0,
+        task_loader=lambda path, sample=None, seed=0: [make_task("t1"), make_task("t2")],
+        sandbox_factory=fake_sandbox_factory,
+        grader=always_pass_grader,
+        agent_provider_factory=lambda name, env=None: LoggedOutOnce(),
+        verbose=False,
+        sleep=slept.append,
+    )
+    outcomes = _outcomes(out)
+    assert [o["passed"] for o in outcomes] == [True, True]  # nothing graded as a failure
+    assert len(slept) == 1
+    pauses = [json.loads(line) for line in (out / "pauses.jsonl").read_text().splitlines()]
+    assert pauses[0]["reason"] == "auth"

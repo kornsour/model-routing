@@ -39,6 +39,7 @@ from typing import Any
 from model_routing import __version__
 from model_routing.auth import AuthConfig, parse_auth
 from model_routing.dispatch import policies as policies_mod
+from model_routing.dispatch.agents import is_auth_failure
 from model_routing.dispatch.report import summarize
 from model_routing.dispatch.types import (
     AgentResult,
@@ -74,6 +75,15 @@ class ProviderOutage(UsageLimitHit):
 
     def __init__(self, detail: str = ""):
         RuntimeError.__init__(self, f"provider outage {detail}".strip())
+        self.reset_at = None
+
+
+class AuthFailure(UsageLimitHit):
+    """The CLI is logged out. Handled like a usage limit: the cell is abandoned,
+    never graded, and retried every ``PAUSE_POLL_S`` until a login fixes it."""
+
+    def __init__(self, detail: str = ""):
+        RuntimeError.__init__(self, f"CLI not authenticated {detail}".strip())
         self.reset_at = None
 
 
@@ -183,10 +193,15 @@ def _spent_so_far(run_dir: Path) -> float:
 def _is_limit_error(error: str | None) -> bool:
     """An account limit or a provider outage: either way the cell measured the
     provider, not the model, and ``--resume`` redoes it."""
-    from model_routing.dispatch.agents import is_provider_outage, usage_limit_reset_at
+    from model_routing.dispatch.agents import (
+        is_auth_failure,
+        is_provider_outage,
+        usage_limit_reset_at,
+    )
 
     return (
-        error == "usage_limit"
+        is_auth_failure(error)
+        or error == "usage_limit"
         or usage_limit_reset_at(error or "") is not None
         or is_provider_outage(error)
     )
@@ -1247,6 +1262,10 @@ def run_dispatch(
                 from model_routing.dispatch.advisor_log import read_and_clear
 
                 result.raw["advisor_hook_requests"] = read_and_clear(workdir)
+            if result.error and is_auth_failure(result.error):
+                if verbose:
+                    print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} NOT LOGGED IN")
+                raise AuthFailure(f"{policy_name}/{task_id}/{role}: {result.error[:200]}")
             if (
                 result.error == "usage_limit"
                 or (result.raw or {}).get("usage_limit_reset_at") is not None
@@ -1487,7 +1506,9 @@ def run_dispatch(
                                     "task_id": task.id,
                                     "trial": trial,
                                     "reason": (
-                                        "provider_outage"
+                                        "auth"
+                                        if isinstance(hit, AuthFailure)
+                                        else "provider_outage"
                                         if isinstance(hit, ProviderOutage)
                                         else "usage_limit"
                                     ),
