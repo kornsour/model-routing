@@ -10,7 +10,7 @@ separate experiments with separate registrations and budgets.
 exp06 measured what a frontier advisor costs when the work does not need
 it (`../exp06-route-on-evidence/results.md`, v1.2, Section 4). With the
 advisor available, Sonnet 5.5 consulted it on 42% to 76% of easy tasks, at
-about $0.26 a consultation, and every advisor arm cost 1.85× to 2.63× plain
+about $0.26 to $0.34 a consultation (results v1.3), and every advisor arm cost 1.85× to 2.63× plain
 Sonnet for the same completion. Those figures come from the 15 first-batch
 tasks.
 
@@ -246,7 +246,7 @@ It cannot claim:
 | 1. Hook smoke | **Done, 2026-10-04** (`results/exp07_hook_smoke/20261004-160648`, $2.95; a first attempt is void: the CLI login had expired, which also led to auth failures now pausing the run instead of being graded). Claude Code 2.1.285 **does not run `PreToolUse` hooks for the server-side advisor tool**: 0 hook entries against 9 advisor calls, while a probe showed the same `--settings` hook fires for client tools (`Read`, `Edit`). No cost effect: hook on $1.51, off $1.45 over 2 cells each (5 and 4 advisor calls). Consequence: requests, turns, recent output and the evidence label come from the session stream (all 9 captured); the diff at request time comes from a `PostToolUse` hook on the file-changing tools, matched to each request by `tool_use_id`. |
 | 2. Analysis dry run | Done. `model_routing.dispatch.exp07` on a full fake run of `exp07.toml` (468 cells): every table and verdict computes. Fake numbers are meaningless (the fake agent never consults or writes `.verifier` tests). |
 | 3. Planning values | Done (above). |
-| 4. Pilot | Config ready (`exp07_pilot.toml`: 5 tasks × 1 trial, both advisor arms); not run. |
+| 4. Pilot | **Done, 2026-10-04** (`results/exp07_pilot/20261004-162112`, 10 cells, $5.17; excluded from analysis). Request logging works on real sessions: 5 requests, each with turn, label and a diff (11,000 to 19,000 characters) from the snapshot hook. `ladder_evidence` consulted 0 times in 5 cells, `ladder_noforce` 5 times in 3. It found and fixed two things before registration: (a) the "same error line twice" rule fired on source code read from files (`raise NotImplementedError`), so an error line must now *start* like error output (rule **exp07-v2**; the pilot's 2 false labels become `no_evidence`, its 1 genuine one stays); (b) some advisor consultations were counted more than once (the same block emitted twice), so calls and requests now count distinct block ids, every advisor block is recorded, and the analysis reports advisor input tokens per counted request as a check. (b) also corrected exp06's per-consultation figure (results v1.3). |
 | 5. Estimate, budget, go-ahead | Waiting for the operator. |
 | 6. CLI frozen | Frozen at Claude Code 2.1.285 since 2026-10-04. |
 

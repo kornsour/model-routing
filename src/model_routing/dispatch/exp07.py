@@ -124,6 +124,12 @@ def load(runs: Iterable[str | Path]) -> tuple[dict[str, dict[tuple[str, int], Ce
             c["requests"] = len(reqs)
             c["evidence_requests"] = sum(r["label"] == "evidence_present" for r in reqs)
             c["escalate"] = c["trigger"] == "escalate"
+            c["advisor_input_tokens"] = sum(
+                int(u.get("input_tokens", 0))
+                for s in o.get("sessions") or []
+                for m, u in ((s.get("raw") or {}).get("other_model_usage") or {}).items()
+                if "opus" in m
+            )
             for s in o.get("sessions") or []:
                 raw = s.get("raw") or {}
                 hook_counts["hook"] += len(raw.get("advisor_hook_requests") or [])
@@ -279,6 +285,17 @@ def analyze(runs: list[str | Path], task_files: Iterable[str | Path] = TASK_FILE
                 "zero_share": sum(1 for x in reqs if x == 0) / len(reqs) if reqs else None,
             },
             "advisor_cost_share": sum(c["advisor_cost"] for c in all_cs) / cost if cost else None,
+            # Sanity check on the request count: a real advisor read costs at least
+            # ~31k input tokens, so a median well below that means double counting.
+            "advisor_input_per_call": (
+                statistics.median(
+                    c["advisor_input_tokens"] / c["advisor_calls"]
+                    for c in all_cs
+                    if c["advisor_calls"]
+                )
+                if any(c["advisor_calls"] for c in all_cs)
+                else None
+            ),
             "handoff_rate": sum(c["handoff"] for c in all_cs) / len(all_cs) if all_cs else None,
             "escalate_rate": sum(c["escalate"] for c in all_cs) / len(all_cs) if all_cs else None,
             "easy_evidence_share": (
@@ -437,6 +454,11 @@ def render(a: dict[str, Any]) -> str:
         lines.append(
             f"| {row['task']} | {row['label']} | {_p(row['calibrated_sonnet_rate'])} | {cells} |"
         )
+    lines += ["", "Advisor input tokens per counted request (median per cell; a real read is"]
+    lines += ["at least ~31k, so much lower values mean the requests are over-counted):", ""]
+    for arm, st_ in a["arms"].items():
+        v = st_["advisor_input_per_call"]
+        lines.append(f"- {arm}: {'n/a' if v is None else f'{v:,.0f}'}")
     src = a["request_sources"]
     lines += [
         "",
