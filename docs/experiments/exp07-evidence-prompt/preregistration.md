@@ -243,7 +243,7 @@ It cannot claim:
 
 | Gate | Status |
 | --- | --- |
-| 1. Hook smoke | Built, not run. The hook (`model_routing.dispatch.advisor_log`) is a pass-through `PreToolUse` command installed with `--settings`; it is unverified whether Claude Code runs it for the server-side advisor tool. If it does not fire, requests still come from the session's stream-json (turn, recent output, label) and only the diff is missing, which exp08's replay needs. Config: `experiments/exp07-evidence-prompt/exp07_hook_smoke.toml` (2 tasks × 1 trial, hook on and off). |
+| 1. Hook smoke | **Done, 2026-10-04** (`results/exp07_hook_smoke/20261004-160648`, $2.95; a first attempt is void: the CLI login had expired, which also led to auth failures now pausing the run instead of being graded). Claude Code 2.1.285 **does not run `PreToolUse` hooks for the server-side advisor tool**: 0 hook entries against 9 advisor calls, while a probe showed the same `--settings` hook fires for client tools (`Read`, `Edit`). No cost effect: hook on $1.51, off $1.45 over 2 cells each (5 and 4 advisor calls). Consequence: requests, turns, recent output and the evidence label come from the session stream (all 9 captured); the diff at request time comes from a `PostToolUse` hook on the file-changing tools, matched to each request by `tool_use_id`. |
 | 2. Analysis dry run | Done. `model_routing.dispatch.exp07` on a full fake run of `exp07.toml` (468 cells): every table and verdict computes. Fake numbers are meaningless (the fake agent never consults or writes `.verifier` tests). |
 | 3. Planning values | Done (above). |
 | 4. Pilot | Config ready (`exp07_pilot.toml`: 5 tasks × 1 trial, both advisor arms); not run. |

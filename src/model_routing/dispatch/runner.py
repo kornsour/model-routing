@@ -1259,9 +1259,17 @@ def run_dispatch(
                 **({"request_log": True} if request_log else {}),
             )
             if request_log and result.raw is not None:
-                from model_routing.dispatch.advisor_log import read_and_clear
+                from model_routing.dispatch.advisor_log import (
+                    attach_diffs,
+                    read_and_clear,
+                    read_snapshots_and_clear,
+                )
 
                 result.raw["advisor_hook_requests"] = read_and_clear(workdir)
+                attach_diffs(
+                    result.raw.get("advisor_requests") or [],
+                    read_snapshots_and_clear(workdir),
+                )
             if result.error and is_auth_failure(result.error):
                 if verbose:
                     print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} NOT LOGGED IN")

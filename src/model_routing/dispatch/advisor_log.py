@@ -4,16 +4,19 @@ Every advisor request a worker makes is recorded with what the worker had
 seen when it asked. Two sources, both pass-through (nothing here can block or
 change a request):
 
-* **Hook** (``hook_main``): a Claude Code ``PreToolUse`` hook on the advisor
-  tool, installed per session with ``--settings`` (``hook_settings``). It
-  appends one JSON line per request to ``<sandbox>/.advisor_log/requests.jsonl``
-  with the brief, the working-tree diff and the recent output, read from the
-  session transcript. It is the only source of the diff (exp08's offline
-  replay needs it). Whether Claude Code runs ``PreToolUse`` hooks for the
-  server-side advisor tool is what exp07's first gate checks.
 * **Stream** (``requests_from_stream``): the session's own
-  ``--output-format stream-json`` events. Always available; gives the turn and
-  the recent output, not the diff.
+  ``--output-format stream-json`` events give every request, its turn, the
+  recent output and the ids of the tool calls before it.
+* **Snapshot hook** (``snapshot_main``): a ``PostToolUse`` hook on the tools
+  that change files (``Edit``, ``Write``, ``MultiEdit``, ``NotebookEdit``,
+  ``Bash``) records the working-tree diff after each call, keyed by its
+  ``tool_use_id``, whenever it changed. ``attach_diffs`` then gives each
+  request the diff after the last tool call before it: the state the worker
+  asked about (exp08's offline replay needs it).
+* **Advisor hook** (``hook_main``): a ``PreToolUse`` hook on the advisor tool.
+  exp07's gate 1 (2026-10-04, Claude Code 2.1.285) found Claude Code does not
+  run ``PreToolUse`` hooks for the server-side advisor tool, while it does for
+  client tools; it stays installed in case a later version does.
 
 ``evidence_label`` is the deterministic rule exp07 registers: a request is
 ``evidence_present`` when the last 4,000 characters of output before it show
@@ -24,6 +27,7 @@ twice. It labels what the worker had seen, not whether help was needed.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -33,6 +37,9 @@ from typing import Any
 
 LOG_DIR = ".advisor_log"
 LOG_FILE = "requests.jsonl"
+SNAPSHOT_FILE = "snapshots.jsonl"
+LAST_HASH_FILE = "last_snapshot.sha"
+EDIT_TOOLS = "Edit|Write|MultiEdit|NotebookEdit|Bash"
 ADVISOR_TOOL = "advisor"
 TAIL_CHARS = 4000
 DIFF_CHARS = 24000
@@ -146,6 +153,7 @@ def requests_from_stream(stdout: str) -> list[dict[str, Any]]:
     text) and the evidence label."""
     requests: list[dict[str, Any]] = []
     seen: list[str] = []
+    tool_ids: list[str] = []
     assistant_turn = 0
     first_user = True
     for role, blocks in _messages(_parse_lines(stdout)):
@@ -162,9 +170,13 @@ def requests_from_stream(stdout: str) -> list[dict[str, Any]]:
                         "tail": tail,
                         "label": evidence_label(tail),
                         "rule": RULE_VERSION,
+                        "prior_tool_use_ids": list(tool_ids),
                     }
                 )
                 continue
+            is_tool_use = isinstance(block, dict) and block.get("type") == "tool_use"
+            if role == "assistant" and is_tool_use and block.get("id"):
+                tool_ids.append(str(block["id"]))
             if (
                 role == "user"
                 and first_user
@@ -185,22 +197,23 @@ def requests_from_stream(stdout: str) -> list[dict[str, Any]]:
 
 
 def hook_settings(python: str | None = None) -> dict[str, Any]:
-    """``--settings`` JSON installing the pass-through PreToolUse hook."""
+    """``--settings`` JSON installing both pass-through hooks."""
     exe = python or sys.executable
+    module = f'"{exe}" -m model_routing.dispatch.advisor_log'
     return {
         "hooks": {
             "PreToolUse": [
                 {
                     "matcher": ADVISOR_TOOL,
-                    "hooks": [
-                        {
-                            "type": "command",
-                            "command": f'"{exe}" -m model_routing.dispatch.advisor_log hook',
-                            "timeout": 30,
-                        }
-                    ],
+                    "hooks": [{"type": "command", "command": f"{module} hook", "timeout": 30}],
                 }
-            ]
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": EDIT_TOOLS,
+                    "hooks": [{"type": "command", "command": f"{module} snapshot", "timeout": 30}],
+                }
+            ],
         }
     }
 
@@ -299,6 +312,71 @@ def hook_main(stdin_text: str) -> int:
     return 0  # exit 0, no output: the request proceeds unchanged
 
 
+def record_snapshot(payload: dict[str, Any]) -> bool:
+    """Append the working-tree diff after a tool call if it changed; never raises."""
+    try:
+        cwd = Path(payload.get("cwd") or ".")
+        diff = _git_diff(cwd)
+        digest = hashlib.sha256(diff.encode()).hexdigest()
+        log = cwd / LOG_DIR
+        log.mkdir(exist_ok=True)
+        last = log / LAST_HASH_FILE
+        if last.exists() and last.read_text() == digest:
+            return False
+        with (log / SNAPSHOT_FILE).open("a") as fh:
+            fh.write(
+                json.dumps(
+                    {
+                        "tool_use_id": payload.get("tool_use_id"),
+                        "tool_name": payload.get("tool_name"),
+                        "diff": diff,
+                    }
+                )
+                + "\n"
+            )
+        last.write_text(digest)
+        return True
+    except Exception:  # a logging failure must never affect the session
+        return False
+
+
+def snapshot_main(stdin_text: str) -> int:
+    try:
+        payload = json.loads(stdin_text or "{}")
+    except json.JSONDecodeError:
+        return 0
+    if isinstance(payload, dict):
+        record_snapshot(payload)
+    return 0
+
+
+def attach_diffs(requests: list[dict[str, Any]], snapshots: list[dict[str, Any]]) -> None:
+    """Give each stream request the diff after the last tool call before it (empty
+    if nothing had changed yet), and drop its tool-id list."""
+    by_id = {s.get("tool_use_id"): s.get("diff", "") for s in snapshots if s.get("tool_use_id")}
+    for r in requests:
+        diff = ""
+        for tid in reversed(r.pop("prior_tool_use_ids", []) or []):
+            if tid in by_id:
+                diff = by_id[tid]
+                break
+        r["diff"] = diff
+
+
+def read_snapshots_and_clear(sandbox: str | Path) -> list[dict[str, Any]]:
+    log = Path(sandbox) / LOG_DIR
+    path = log / SNAPSHOT_FILE
+    rows: list[dict[str, Any]] = []
+    if path.exists():
+        for line in path.read_text().splitlines():
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        path.unlink()
+    return rows
+
+
 def read_and_clear(sandbox: str | Path) -> list[dict[str, Any]]:
     """Requests the hook logged in this sandbox since the last call."""
     path = Path(sandbox) / LOG_DIR / LOG_FILE
@@ -317,5 +395,7 @@ def read_and_clear(sandbox: str | Path) -> list[dict[str, Any]]:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "hook":
         sys.exit(hook_main(sys.stdin.read()))
-    print("usage: python -m model_routing.dispatch.advisor_log hook < payload.json")
+    if len(sys.argv) > 1 and sys.argv[1] == "snapshot":
+        sys.exit(snapshot_main(sys.stdin.read()))
+    print("usage: python -m model_routing.dispatch.advisor_log hook|snapshot < payload.json")
     sys.exit(2)

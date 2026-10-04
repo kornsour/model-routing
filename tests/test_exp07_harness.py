@@ -196,6 +196,9 @@ def test_hook_settings_and_cli_args():
     hook = settings["hooks"]["PreToolUse"][0]
     assert hook["matcher"] == "advisor"
     assert hook["hooks"][0]["command"] == '"/py" -m model_routing.dispatch.advisor_log hook'
+    post = settings["hooks"]["PostToolUse"][0]
+    assert post["matcher"] == "Edit|Write|MultiEdit|NotebookEdit|Bash"
+    assert post["hooks"][0]["command"].endswith("advisor_log snapshot")
     common: dict[str, Any] = dict(
         system=None,
         effort=None,
@@ -505,3 +508,50 @@ def test_logged_out_cli_pauses_and_retries_the_cell(tmp_path: Path):
     assert len(slept) == 1
     pauses = [json.loads(line) for line in (out / "pauses.jsonl").read_text().splitlines()]
     assert pauses[0]["reason"] == "auth"
+
+
+# --------------------------------------------------------------------------- #
+# Diff snapshots (the advisor tool itself does not run PreToolUse hooks)
+# --------------------------------------------------------------------------- #
+
+
+def test_snapshots_record_only_changes_and_attach_to_requests(tmp_path: Path):
+    repo = _git_repo(tmp_path)
+    assert advisor_log.snapshot_main(json.dumps({"cwd": str(repo), "tool_use_id": "t0"})) == 0
+    (repo / "a.py").write_text("x = 2\n")
+    assert advisor_log.record_snapshot({"cwd": str(repo), "tool_use_id": "t1"}) is True
+    assert advisor_log.record_snapshot({"cwd": str(repo), "tool_use_id": "t2"}) is False
+    (repo / "a.py").write_text("x = 3\n")
+    assert advisor_log.record_snapshot({"cwd": str(repo), "tool_use_id": "t3"}) is True
+    snaps = advisor_log.read_snapshots_and_clear(repo)
+    assert [s["tool_use_id"] for s in snaps] == ["t0", "t1", "t3"]
+    assert snaps[0]["diff"] == ""
+    requests = [
+        {"prior_tool_use_ids": []},
+        {"prior_tool_use_ids": ["t0", "t1", "t2"]},
+        {"prior_tool_use_ids": ["t0", "t1", "t2", "t3", "t4"]},
+    ]
+    advisor_log.attach_diffs(requests, snaps)
+    assert requests[0]["diff"] == ""
+    assert "+x = 2" in requests[1]["diff"]
+    assert "+x = 3" in requests[2]["diff"]
+    assert all("prior_tool_use_ids" not in r for r in requests)
+    assert advisor_log.read_snapshots_and_clear(repo) == []
+
+
+def test_stream_requests_carry_prior_tool_ids():
+    stdout = _stream(
+        _user({"type": "text", "text": "brief"}),
+        _assistant({"type": "tool_use", "id": "toolu_1", "name": "Edit", "input": {}}),
+        _user({"type": "tool_result", "tool_use_id": "toolu_1", "content": "ok"}),
+        _assistant({"type": "server_tool_use", "id": "srv_1", "name": "advisor", "input": {}}),
+        _assistant({"type": "tool_use", "id": "toolu_2", "name": "Bash", "input": {}}),
+        _assistant({"type": "server_tool_use", "id": "srv_2", "name": "advisor", "input": {}}),
+    )
+    reqs = advisor_log.requests_from_stream(stdout)
+    assert [r["prior_tool_use_ids"] for r in reqs] == [["toolu_1"], ["toolu_1", "toolu_2"]]
+
+
+def test_snapshot_never_fails_the_session(tmp_path: Path):
+    assert advisor_log.snapshot_main("garbage") == 0
+    assert advisor_log.record_snapshot({"cwd": str(tmp_path / "nope")}) is False
