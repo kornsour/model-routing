@@ -8,11 +8,11 @@ on the same fifteen tasks, then the one task-set extension the protocol
 allows (40 drawn tasks, headroom gate only). **exp06 is closed:** the gate
 failed twice.
 
-| 5 / 55 | 2.7× | $0.26 | 0.30× |
+| 5 / 55 | 2.7× | $0.26–0.34 | 0.30× |
 |---|---|---|---|
-| tasks the frontier model could do and the mid-tier model could not, over two draws (the study needed 10) | cost per completed task of the full escalation ladder against plain Sonnet, for the same completion | average cost of one consultation of the frontier advisor, about what Sonnet charges to do the whole task | cost of Sonnet 5.5 and Opus 5.5 against their 5.0 predecessors on the same tasks |
+| tasks the frontier model could do and the mid-tier model could not, over two draws (the study needed 10) | cost per completed task of the full escalation ladder against plain Sonnet, for the same completion | average cost of one consultation of the frontier advisor, at least what Sonnet charges to do the whole task (corrected in v1.3) | cost of Sonnet 5.5 and Opus 5.5 against their 5.0 predecessors on the same tasks |
 
-Andrew Kaiserauer. 30 September 2026, revised 1 and 2 October 2026. **Version 1.2
+Andrew Kaiserauer. 30 September 2026, revised 1, 2 and 4 October 2026. **Version 1.3
 (exploratory; not registered; exp06 closed).** Companion to "Route on evidence, not on the prompt" (exp06
 hypothesis paper, v0.3) and "Cheapest per token is not cheapest per task"
 (exp05, v1.0). Harness: github.com/kornsour/model-routing. Study id: **exp06**.
@@ -73,7 +73,7 @@ The two rungs behave completely differently when nothing goes wrong:
   its own acceptance tests and handing off only if they fail cost the same as
   plain Sonnet and never fired. It passes the cost condition.
 - **The advisor is not.** Every consultation re-reads the whole transcript at
-  frontier prices, uncached, and costs about $0.26, as much as Sonnet charges
+  frontier prices, uncached, and costs $0.26 to $0.34 (v1.3), at least what Sonnet charges
   to do the entire task. Sonnet consulted it voluntarily on 42% to 76% of
   tasks that did not need it, and the forced check added one more
   consultation on every session that had not. The full ladder cost 2.6 times
@@ -278,7 +278,7 @@ here; the handoff-only arm, idle at 1.00×, is the only rung that could.
 
 ### 4.1 Completion and cost
 
-| arm | completion [95% CI] | cost per completed task [95% CI] | median wall time per task | advisor consultations | handoffs |
+| arm | completion [95% CI] | cost per completed task [95% CI] | median wall time per task | advisor consultations (counted; v1.3: an upper bound) | handoffs |
 |---|---:|---:|---:|---:|---:|
 | `static_sonnet` | 100% [100, 100] | $0.271 [$0.242, $0.300] | 73 s | 0 | 0 |
 | `explore_handoff_clean` | 98% [93, 100] | $0.279 [$0.261, $0.299] | 69 s | 0 | 0 |
@@ -311,8 +311,11 @@ because it had nothing to prove on condition 1.
 
 **The advisor is half the bill.** **MEASURED** Opus's advisor tokens were
 50% of the full ladder's spend and 49% of `sonnet_advisor`'s. Across all
-arms, one advisor consultation cost **$0.259** on average (153
-consultations). That is the size of a whole plain-Sonnet task ($0.271). The
+arms, one advisor consultation cost **$0.26 to $0.34** on average: $39.57
+of advisor tokens over 117 to 153 consultations (v1.3 correction: v1.0
+reported $0.259 over 153, but the parser counted some consultations more
+than once; Appendix D). That is at least the size of a whole plain-Sonnet
+task ($0.271). The
 advisor tool reads the full transcript each time at the frontier model's
 input price, with no caching (**VENDOR**, Claude Code documentation; our
 token counts agree). A consultation late in a session, which is when the
@@ -520,7 +523,7 @@ work is that there is too little frontier-only work for an escalation ladder
 to earn its idle cost.
 
 1. **Two follow-ups take the question the idle-cost data left open:** the
-   advisor consultations on easy work, about $0.26 each, made on 42% to 76%
+   advisor consultations on easy work, about $0.26 to $0.34 each, made on 42% to 76%
    of tasks. exp07 tests whether allowing consultation only on evidence
    removes them (`../exp07-evidence-prompt/preregistration.md`); exp08
    tests a Jev gate on the requests (`../exp08-jev-gate/preregistration.md`).
@@ -612,6 +615,24 @@ notes are `findings/2026-09-30-exp06-stage0.md`,
 | One hour between paid runs | Kept between calibration, smoke and ladder runs; calibration itself was stopped and resumed once at a cell boundary to take a harness change (budget pauses) | None on outcomes |
 
 ## Appendix D. Version history
+
+**v1.3 (4 October 2026). Correction to the advisor consultation count.**
+exp07's pilot found that the stream parser counted some advisor
+consultations more than once: Claude Code can emit the same advisor block
+more than once in a session. In the exp06 ladder run, sessions counted
+with 2 or 3 consultations billed the same total advisor input (median about
+47,000 tokens) as sessions counted with one, although a second read of a
+longer transcript would have cost at least another 30,000; their input per
+counted consultation (15,000 to 24,000) is below the smallest single read
+ever seen (37,000). The 153 counted consultations were made in 117
+sessions, so the true number is between 117 and 153 and most likely near
+117, and the cost per consultation between $0.26 and $0.34, most likely near
+$0.34. Corrected where the per-consultation cost appears; the counts in
+Section 4.1 are marked as upper bounds. No cost per completed task, ratio,
+interval or verdict changes: they come from billed tokens, not from the
+count. The share of cells in which Sonnet consulted at all (42% to 76%) is
+also unaffected. The parser now counts distinct advisor block ids (exp07
+harness).
 
 **v1.2 (2 October 2026).** Added the Stage 0 extension (Section 3.2): 40
 drawn tasks, 5 of 55 hard pooled, H0 not met twice, exp06 closed. Updated the

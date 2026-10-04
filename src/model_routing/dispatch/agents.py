@@ -311,6 +311,8 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
     """
     tool_calls = 0
     advisor_calls = 0
+    advisor_ids: set[str] = set()
+    advisor_blocks: list[dict[str, Any]] = []
     result_event: dict[str, Any] | None = None
     for line in stdout.splitlines():
         line = line.strip()
@@ -328,13 +330,22 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
                 for block in content
                 if isinstance(block, dict) and block.get("type") == "tool_use"
             )
-            advisor_calls += sum(
-                1
-                for block in content
-                if isinstance(block, dict)
-                and block.get("type") in ("tool_use", "server_tool_use")
-                and block.get("name") == "advisor"
-            )
+            for block in content:
+                if (
+                    isinstance(block, dict)
+                    and block.get("type") in ("tool_use", "server_tool_use")
+                    and block.get("name") == "advisor"
+                ):
+                    # The same advisor block can be emitted more than once (exp07
+                    # pilot: sessions billed one advisor read but showed 2-3 blocks),
+                    # so count distinct block ids.
+                    bid = block.get("id") or f"anon-{len(advisor_blocks)}"
+                    advisor_blocks.append(
+                        {"message": (ev.get("message") or {}).get("id"), "id": block.get("id")}
+                    )
+                    if bid not in advisor_ids:
+                        advisor_ids.add(bid)
+                        advisor_calls += 1
         elif kind == "result":
             result_event = ev
     if result_event is None:
@@ -397,6 +408,7 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             "permission_denials": len(data.get("permission_denials") or []),
             "usage_limit_reset_at": reset,
             "advisor_calls": advisor_calls,
+            "advisor_blocks": advisor_blocks or None,
             "other_model_usage": other_usage or None,
             "advisor_requests": _stream_requests(stdout) if advisor_calls else None,
         },

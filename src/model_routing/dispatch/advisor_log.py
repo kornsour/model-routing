@@ -64,18 +64,24 @@ FAILURE_PATTERNS: tuple[str, ...] = (
     r"was checked and not accepted",
 )
 _FAILURE_RE = re.compile("|".join(f"(?:{p})" for p in FAILURE_PATTERNS), re.MULTILINE)
-# "ValueError: ...", "error: ...", "Traceback ...": no word boundary before the
-# keyword, so exception class names match.
-_ERROR_LINE_RE = re.compile(r"(?:error|exception|traceback)\b", re.IGNORECASE)
+# An error *output* line: it starts like one ("ValueError: ...", a bare
+# "NotImplementedError", "Traceback (most recent call last):", "error: ...",
+# "fatal: ...", "panic: ..."). Source code read from files ("raise X",
+# "except X:", "class X(Error)") does not count (pilot, 2026-10-04).
+_ERROR_LINE_RE = re.compile(
+    r"^(?:[\w.]*(?:Error|Exception)(?::|$)"
+    r"|Traceback \(most recent call last\):"
+    r"|(?:error|fatal|panic)(?:\[[\w-]+\])?:)"
+)
 
-RULE_VERSION = "exp07-v1"
+RULE_VERSION = "exp07-v2"
 
 
 def repeated_error_line(text: str) -> bool:
     seen: set[str] = set()
     for line in text.splitlines():
         line = line.strip()
-        if len(line) < 8 or not _ERROR_LINE_RE.search(line):
+        if len(line) < 8 or not _ERROR_LINE_RE.match(line):
             continue
         if line in seen:
             return True
@@ -154,6 +160,7 @@ def requests_from_stream(stdout: str) -> list[dict[str, Any]]:
     requests: list[dict[str, Any]] = []
     seen: list[str] = []
     tool_ids: list[str] = []
+    advisor_ids: set[str] = set()
     assistant_turn = 0
     first_user = True
     for role, blocks in _messages(_parse_lines(stdout)):
@@ -161,6 +168,11 @@ def requests_from_stream(stdout: str) -> list[dict[str, Any]]:
             assistant_turn += 1
         for block in blocks:
             if role == "assistant" and _is_advisor_call(block):
+                bid = block.get("id")
+                if bid and bid in advisor_ids:
+                    continue  # the same block emitted again, not a new request
+                if bid:
+                    advisor_ids.add(bid)
                 tail = "\n".join(seen)[-TAIL_CHARS:]
                 requests.append(
                     {
