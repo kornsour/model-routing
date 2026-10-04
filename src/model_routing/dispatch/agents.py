@@ -98,6 +98,7 @@ class ClaudeAgentProvider:
         max_budget_usd: float,
         advisor: str | None = None,
         extra_bash: tuple[str, ...] = (),
+        request_log: bool = False,
     ) -> list[str]:
         args = [
             self.binary,
@@ -125,6 +126,12 @@ class ClaudeAgentProvider:
             # session may consult; its tokens are reported as a separate
             # ``modelUsage`` entry and priced by the runner.
             args += ["--advisor", advisor]
+        if request_log:
+            # Pass-through PreToolUse hook that logs each advisor request (exp07).
+            # --settings still applies under --setting-sources "".
+            from model_routing.dispatch.advisor_log import hook_settings
+
+            args += ["--settings", json.dumps(hook_settings())]
         if resume_session:
             args += ["--resume", resume_session]
             if fork:
@@ -161,6 +168,7 @@ class ClaudeAgentProvider:
         timeout_s: int = 1200,
         advisor: str | None = None,
         extra_bash: tuple[str, ...] = (),
+        request_log: bool = False,
     ) -> AgentResult:
         args = self.build_args(
             model,
@@ -174,6 +182,7 @@ class ClaudeAgentProvider:
             max_budget_usd=max_budget_usd,
             advisor=advisor,
             extra_bash=extra_bash,
+            request_log=request_log,
         )
         t0 = time.monotonic()
         try:
@@ -249,6 +258,26 @@ not the model, so the runner pauses and redoes the cell like a usage limit.
 Deliberately excludes 4xx (a request the harness or the model made bad), the
 turn cap, the wall-clock ``timeout`` and the per-session budget cap, which are
 graded outcomes under intention to treat."""
+
+
+_AUTH_FAILURE_RE = re.compile(
+    r"Failed to authenticate"
+    r"|OAuth (?:session|token)[^\n]{0,40}(?:expired|invalid|revoked|could not be refreshed)"
+    r"|authentication_error"
+    r"|invalid (?:x-api-key|api[ _-]key)"
+    r"|Please run /login"
+    r"|\bNot logged in\b",
+    re.IGNORECASE,
+)
+"""The CLI's login is gone (seen 2026-10-04: "Failed to authenticate: OAuth
+session expired and could not be refreshed"). Every session fails instantly at
+$0; grading those cells would record task failures that measure the login,
+not the model, so the runner pauses until someone logs in again."""
+
+
+def is_auth_failure(text: str | None) -> bool:
+    """True when ``text`` (a session's error) says the CLI is not authenticated."""
+    return bool(text) and _AUTH_FAILURE_RE.search(text or "") is not None
 
 
 def is_provider_outage(text: str | None) -> bool:
@@ -369,8 +398,15 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             "usage_limit_reset_at": reset,
             "advisor_calls": advisor_calls,
             "other_model_usage": other_usage or None,
+            "advisor_requests": _stream_requests(stdout) if advisor_calls else None,
         },
     )
+
+
+def _stream_requests(stdout: str) -> list[dict[str, Any]]:
+    from model_routing.dispatch.advisor_log import requests_from_stream
+
+    return requests_from_stream(stdout)
 
 
 def _split_model_usage(
@@ -959,8 +995,9 @@ class FakeAgentProvider:
         timeout_s: int = 1200,
         advisor: str | None = None,
         extra_bash: tuple[str, ...] = (),
+        request_log: bool = False,
     ) -> AgentResult:
-        del max_budget_usd, timeout_s, extra_bash  # no real spend, clock or shell
+        del max_budget_usd, timeout_s, extra_bash, request_log  # no spend, clock or shell
         tier = _tier_rank(model)
         mult = _TIER_TOKEN_MULT[tier]
         prompt_tokens = max(1, len(prompt) // 4)

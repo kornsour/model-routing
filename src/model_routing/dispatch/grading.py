@@ -26,6 +26,7 @@ _IGNORED_DIR_NAMES = {
     ".pytest_cache",
     ".ruff_cache",
     ".verifier",
+    ".advisor_log",
     FAKE_SOLUTION_DIRNAME,
 }
 

@@ -473,6 +473,15 @@ LADDER_ADVISOR_NOTE = (
     "- You have an advisor tool backed by a stronger model. Consult it before committing to an "
     "approach, when an error keeps recurring, and always before you declare the task done."
 )
+LADDER_ADVISOR_EVIDENCE_NOTE = (
+    "- You have an advisor tool backed by a stronger model. Consult it only when you have "
+    "evidence you cannot resolve alone: a check that still fails after you have tried to fix "
+    "it, or the same error recurring. Do not consult it to confirm an approach or before "
+    "finishing."
+)
+"""exp07's evidence-gated wording (frozen at registration): the only difference
+between the ``ladder_evidence`` and ``ladder_noforce`` arms."""
+ADVISOR_NOTES = {"standard": LADDER_ADVISOR_NOTE, "evidence": LADDER_ADVISOR_EVIDENCE_NOTE}
 LADDER_ESCALATE_NOTE = (
     "- If you conclude that this task needs a stronger model than you (for example you cannot "
     "get your acceptance tests to pass, or the advisor recommends it), stop and make the last "
@@ -528,7 +537,7 @@ def _policy_ladder(
     if verifier:
         notes.append(LADDER_TESTS_NOTE)
     if has_advisor:
-        notes.append(LADDER_ADVISOR_NOTE)
+        notes.append(ADVISOR_NOTES[spec.get("advisor_note", "standard")])
     if honor_escalate and handoff:
         notes.append(LADDER_ESCALATE_NOTE)
     brief = _brief(task, spec)

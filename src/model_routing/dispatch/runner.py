@@ -39,6 +39,7 @@ from typing import Any
 from model_routing import __version__
 from model_routing.auth import AuthConfig, parse_auth
 from model_routing.dispatch import policies as policies_mod
+from model_routing.dispatch.agents import is_auth_failure
 from model_routing.dispatch.report import summarize
 from model_routing.dispatch.types import (
     AgentResult,
@@ -74,6 +75,15 @@ class ProviderOutage(UsageLimitHit):
 
     def __init__(self, detail: str = ""):
         RuntimeError.__init__(self, f"provider outage {detail}".strip())
+        self.reset_at = None
+
+
+class AuthFailure(UsageLimitHit):
+    """The CLI is logged out. Handled like a usage limit: the cell is abandoned,
+    never graded, and retried every ``PAUSE_POLL_S`` until a login fixes it."""
+
+    def __init__(self, detail: str = ""):
+        RuntimeError.__init__(self, f"CLI not authenticated {detail}".strip())
         self.reset_at = None
 
 
@@ -183,10 +193,15 @@ def _spent_so_far(run_dir: Path) -> float:
 def _is_limit_error(error: str | None) -> bool:
     """An account limit or a provider outage: either way the cell measured the
     provider, not the model, and ``--resume`` redoes it."""
-    from model_routing.dispatch.agents import is_provider_outage, usage_limit_reset_at
+    from model_routing.dispatch.agents import (
+        is_auth_failure,
+        is_provider_outage,
+        usage_limit_reset_at,
+    )
 
     return (
-        error == "usage_limit"
+        is_auth_failure(error)
+        or error == "usage_limit"
         or usage_limit_reset_at(error or "") is not None
         or is_provider_outage(error)
     )
@@ -256,6 +271,12 @@ class DispatchConfig:
     """Restrict the task set to these human difficulty labels (calibration runs,
     e.g. "can the cheapest model already pass the hard tasks?").  Policies still
     never see the label; this only chooses which tasks run."""
+    extra_tasks: tuple[Path, ...] = ()
+    """More task files pooled with ``tasks`` (exp07 runs exp06's two files as one
+    set).  Each resolves its fixtures relative to its own directory."""
+    exclude_task_ids: tuple[str, ...] = ()
+    """Drop these ids from the pooled set (e.g. tasks measured unsolved); an
+    unknown id is an error."""
     task_ids: tuple[str, ...] = ()
     """Restrict the task set to these ids (smoke runs that must hit specific
     tasks, e.g. ones the cheapest model fails so a cascade escalates).  Applied
@@ -323,6 +344,10 @@ class DispatchConfig:
                     raise ValueError(f"policy {p['name']!r}: unknown {key} {p[key]!r}")
             if p.get("kind") == "spawn_ladder" and "worker" not in p:
                 raise ValueError(f"policy {p['name']!r}: spawn_ladder needs a worker")
+            if p.get("advisor_note", "standard") not in ("standard", "evidence"):
+                raise ValueError(
+                    f"policy {p['name']!r}: advisor_note must be 'standard' or 'evidence'"
+                )
             classifier = p.get("classifier")
             if classifier and classifier != "heuristic" and classifier not in self.candidates:
                 raise ValueError(f"policy {p['name']!r}: unknown classifier {classifier!r}")
@@ -353,12 +378,13 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         )
         for name, spec in data.get("candidates", {}).items()
     }
-    tasks_path = Path(exp["tasks"])
-    if not tasks_path.is_absolute():
-        root = next(
-            (p for p in path.resolve().parents if (p / "pyproject.toml").exists()), Path.cwd()
-        )
-        tasks_path = root / tasks_path
+    root = next((p for p in path.resolve().parents if (p / "pyproject.toml").exists()), Path.cwd())
+
+    def _resolve(p: str) -> Path:
+        q = Path(p)
+        return q if q.is_absolute() else root / q
+
+    tasks_path = _resolve(exp["tasks"])
     cfg = DispatchConfig(
         name=exp["name"],
         tasks=tasks_path,
@@ -374,6 +400,8 @@ def load_dispatch_config(path: str | Path) -> DispatchConfig:
         max_budget_per_session_usd=float(exp.get("max_budget_per_session_usd", 2.0)),
         difficulties=tuple(str(d) for d in exp.get("difficulties", [])),
         task_ids=tuple(str(t) for t in exp.get("task_ids", [])),
+        extra_tasks=tuple(_resolve(str(t)) for t in exp.get("extra_tasks", [])),
+        exclude_task_ids=tuple(str(t) for t in exp.get("exclude_task_ids", [])),
         seed=int(exp.get("seed", 0)),
         max_turns=int(exp.get("max_turns", 30)),
         per_task_max_turns=bool(exp.get("per_task_max_turns", False)),
@@ -552,9 +580,21 @@ def _select_policies(cfg: DispatchConfig, policies: list[str] | None) -> list[di
 def _select_tasks(
     cfg: DispatchConfig, loader: Callable[..., list[Any]], sample: int | None
 ) -> list[Any]:
-    if not cfg.difficulties and not cfg.task_ids:
+    pooled = bool(cfg.extra_tasks or cfg.exclude_task_ids)
+    if not cfg.difficulties and not cfg.task_ids and not pooled:
         return loader(cfg.tasks, sample=sample, seed=cfg.seed)
     tasks = loader(cfg.tasks, sample=None, seed=cfg.seed)
+    for extra in cfg.extra_tasks:
+        tasks = tasks + loader(extra, sample=None, seed=cfg.seed)
+    ids = [t.id for t in tasks]
+    dupes = sorted({i for i in ids if ids.count(i) > 1})
+    if dupes:
+        raise ValueError(f"task ids appear in more than one task file: {dupes}")
+    if cfg.exclude_task_ids:
+        unknown = sorted(set(cfg.exclude_task_ids) - set(ids))
+        if unknown:
+            raise ValueError(f"exclude_task_ids not in the task set: {unknown}")
+        tasks = [t for t in tasks if t.id not in cfg.exclude_task_ids]
     if cfg.task_ids:
         missing = sorted(set(cfg.task_ids) - {t.id for t in tasks})
         if missing:
@@ -568,7 +608,7 @@ def _select_tasks(
 def _estimate_task_count(
     cfg: DispatchConfig, sample: int | None, task_loader: Callable[..., list[Any]] | None
 ) -> int:
-    if sample and not cfg.difficulties and not cfg.task_ids:
+    if sample and not cfg.difficulties and not cfg.task_ids and not cfg.extra_tasks:
         return sample
     loader = task_loader
     if loader is None:
@@ -831,6 +871,10 @@ def _with_harness_python(env: dict[str, str] | None) -> dict[str, str]:
     env = dict(os.environ if env is None else env)
     bin_dir = str(Path(sys.executable).parent)
     env["PATH"] = bin_dir + os.pathsep + env.get("PATH", "")
+    # Sessions run with --setting-sources "", so the user's settings (where
+    # `make cli-freeze` turns updates off) never reach them: a background
+    # update during a run would change the CLI version mid-experiment.
+    env["DISABLE_AUTOUPDATER"] = "1"
     return env
 
 
@@ -1197,6 +1241,7 @@ def run_dispatch(
             state["seq"] += 1
             started = time.time()
             advisor = cand.extra.get("advisor")
+            request_log = bool(cand.extra.get("request_log"))
             result: AgentResult = provider.run(
                 cand.model,
                 prompt,
@@ -1211,7 +1256,24 @@ def run_dispatch(
                 timeout_s=1200,
                 **({"advisor": advisor} if advisor else {}),
                 **({"extra_bash": extra_bash[task_id]} if extra_bash.get(task_id) else {}),
+                **({"request_log": True} if request_log else {}),
             )
+            if request_log and result.raw is not None:
+                from model_routing.dispatch.advisor_log import (
+                    attach_diffs,
+                    read_and_clear,
+                    read_snapshots_and_clear,
+                )
+
+                result.raw["advisor_hook_requests"] = read_and_clear(workdir)
+                attach_diffs(
+                    result.raw.get("advisor_requests") or [],
+                    read_snapshots_and_clear(workdir),
+                )
+            if result.error and is_auth_failure(result.error):
+                if verbose:
+                    print(f"  [{state['seq']:4d}] {task_id:<20} {policy_name:<16} NOT LOGGED IN")
+                raise AuthFailure(f"{policy_name}/{task_id}/{role}: {result.error[:200]}")
             if (
                 result.error == "usage_limit"
                 or (result.raw or {}).get("usage_limit_reset_at") is not None
@@ -1342,6 +1404,10 @@ def run_dispatch(
 
     outcomes: list[DispatchOutcome] = []
     done_cells = len(skip)
+    cli_providers = sorted(
+        {c.provider for c in cfg.candidates.values() if c.provider in ("claude_cli", "codex_cli")}
+    )
+    start_versions = {} if fake else {p: _tool_version(p) for p in cli_providers}
     try:
         plan = _build_plan(cfg.order, selected_policies, loaded_tasks, run_trials, cfg.seed)
         for policy_spec, task, trial in plan:
@@ -1350,6 +1416,32 @@ def run_dispatch(
             if cancel is not None and cancel.is_set():
                 run_state = "cancelled"
                 stop_message = "cancelled"
+                break
+            now = {p: _tool_version(p) for p, v in start_versions.items() if v}
+            drift = {p: (start_versions[p], v) for p, v in now.items() if v != start_versions[p]}
+            if drift:
+                # One CLI version per run: a mid-run change is a deviation, so stop
+                # cleanly between cells instead of mixing versions silently.
+                detail = "; ".join(f"{p} {a} -> {b}" for p, (a, b) in drift.items())
+                with (out_dir / "pauses.jsonl").open("a") as pf:
+                    pf.write(
+                        json.dumps(
+                            {
+                                "at": time.time(),
+                                "policy": policy_spec["name"],
+                                "task_id": task.id,
+                                "trial": trial,
+                                "reason": "cli_version",
+                                "detail": detail,
+                            }
+                        )
+                        + "\n"
+                    )
+                run_state = "paused"
+                stop_message = (
+                    f"CLI version changed mid-run ({detail}); record a deviation or "
+                    f"restore the version, then --resume {out_dir}"
+                )
                 break
             adopt_budget_override()
             if not fake and state["spent_usd"] >= budget["usd"]:
@@ -1422,7 +1514,9 @@ def run_dispatch(
                                     "task_id": task.id,
                                     "trial": trial,
                                     "reason": (
-                                        "provider_outage"
+                                        "auth"
+                                        if isinstance(hit, AuthFailure)
+                                        else "provider_outage"
                                         if isinstance(hit, ProviderOutage)
                                         else "usage_limit"
                                     ),

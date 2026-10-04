@@ -132,7 +132,40 @@ need. Every claim about it is worded that way.
   bound is half of exp06's 1.5 allowance: the idle overhead of a safety net
   that, on exp06's evidence, almost never has hard work to rescue.
 - These planning values are recomputed from the exp06 cell data and
-  recorded here before registration.
+  recorded here before registration (below).
+
+**Planning values, recomputed 2026-10-04 (gate 3).** Method: the 14 easy
+first-batch tasks of the exp06 ladder run
+(`results/exp06_ladder/20260930-044605`), resampled to 45 tasks with
+replacement (each task keeps its 3 cells), 2,000 draws; the median and the
+2.5/97.5 percentiles of the statistic are the expected estimate and interval
+at 45 tasks. Sonnet's cost comes from both exp06 calibration runs on the 52
+tasks.
+
+| Quantity | 14 tasks (measured) | 45 tasks (projected) | Half-width at 45 |
+| --- | --- | --- | --- |
+| `ladder_noforce` / `static_sonnet`, cost ratio | 1.85 [1.57, 2.16] | 1.85 [1.68, 2.02] | 0.17 |
+| no-advisor handoff arm / `static_sonnet`, cost ratio | 1.00 [0.93, 1.10] | 1.00 [0.96, 1.05] | 0.05 |
+| no-advisor handoff arm / `ladder_noforce`, cost ratio (E1 if the note removes nearly every consultation) | 0.54 [0.47, 0.63] | 0.54 [0.50, 0.59] | 0.05 |
+| completion, no-advisor handoff arm − `ladder_noforce` (points) | −2.4 [−7.1, 0.0] | −2.2 [−5.2, 0.0] | 2.6 |
+
+What follows from them:
+- **E1 cost** is powered: it is supported if the evidence note brings
+  `ladder_evidence` to about 0.9× `ladder_noforce` or below.
+- **E1 completion is the weak part.** Both arms complete close to 100% of
+  easy tasks, so one or two failed cells move the lower bound across −5:
+  the projection's lower bound is −5.2. A completion verdict of
+  "inconclusive" is a likely outcome even if the note costs nothing in
+  quality. The −5 margin is unchanged; this is recorded so that the
+  outcome is not a surprise.
+- **E2** is powered if `ladder_evidence` comes in under about 1.15× plain
+  Sonnet (half-width about 0.05 to 0.1).
+- **Consultation rates in exp06 (easy, first batch):** `ladder_noforce`
+  consulted voluntarily in 62% of cells, 0.79 calls per cell, $0.515 per
+  cell; plain Sonnet $0.271.
+- **Cost:** plain Sonnet averages $0.252 per cell on the 52 tasks, so about
+  $40 for 156 cells; `ladder_noforce` at about 1.9× is about $75;
+  `ladder_evidence` between 1.0× and 1.5× is $40 to $60.
 
 **Few-events rule.** E3 needs requests in both arms. If `ladder_evidence`
 logs fewer than 20 requests on easy tasks, E3 is reported descriptively,
@@ -201,6 +234,32 @@ It cannot claim:
    from analysis, to check request logging and the label regexes.
 5. `make dispatch-estimate`, then `--budget-usd` set, then the operator's
    go-ahead. Register, commit, then run.
+6. **One Claude Code version:** `make cli-freeze` before the first paid
+   check, and **`make cli-unfreeze` as soon as the experiment's last run
+   ends** (or is abandoned). The runner also sets `DISABLE_AUTOUPDATER=1` on
+   every CLI session and stops between cells if the CLI version changes.
+
+**Gate status (2026-10-04).**
+
+| Gate | Status |
+| --- | --- |
+| 1. Hook smoke | **Done, 2026-10-04** (`results/exp07_hook_smoke/20261004-160648`, $2.95; a first attempt is void: the CLI login had expired, which also led to auth failures now pausing the run instead of being graded). Claude Code 2.1.285 **does not run `PreToolUse` hooks for the server-side advisor tool**: 0 hook entries against 9 advisor calls, while a probe showed the same `--settings` hook fires for client tools (`Read`, `Edit`). No cost effect: hook on $1.51, off $1.45 over 2 cells each (5 and 4 advisor calls). Consequence: requests, turns, recent output and the evidence label come from the session stream (all 9 captured); the diff at request time comes from a `PostToolUse` hook on the file-changing tools, matched to each request by `tool_use_id`. |
+| 2. Analysis dry run | Done. `model_routing.dispatch.exp07` on a full fake run of `exp07.toml` (468 cells): every table and verdict computes. Fake numbers are meaningless (the fake agent never consults or writes `.verifier` tests). |
+| 3. Planning values | Done (above). |
+| 4. Pilot | Config ready (`exp07_pilot.toml`: 5 tasks × 1 trial, both advisor arms); not run. |
+| 5. Estimate, budget, go-ahead | Waiting for the operator. |
+| 6. CLI frozen | Frozen at Claude Code 2.1.285 since 2026-10-04. |
+
+**Task-set note found by gate 2.** One extension fixture failed to build
+in a fresh checkout: `tasks/exp06/history/ha-branch-triage-02.sh` moves a
+file into `docs/archive/`, which existed only as an empty, untracked
+directory in the worktree where the task set was authored and calibrated
+(git does not record empty directories). The script now creates the
+directory first, which reproduces the calibrated state exactly; all 55
+tasks validate from a fresh checkout. Three other empty directories existed
+only in that worktree (`github-private/.github/workflows`,
+`packlight-app/public`, `platform/docs`); they change nothing a grader
+checks and are not recreated.
 
 ## Sample size and budget
 

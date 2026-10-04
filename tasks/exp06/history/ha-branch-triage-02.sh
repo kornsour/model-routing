@@ -96,6 +96,9 @@ git("switch", "-q", "main")
 on_main_until(49)
 def archive_domains():
     text = Path("docs/AWS-DOMAIN-INVENTORY.md").read_text()
+    # git does not track empty directories; the fixture was authored with an
+    # empty docs/archive/ on disk, so create it (same resulting history).
+    Path("docs/archive").mkdir(parents=True, exist_ok=True)
     git("mv", "docs/AWS-DOMAIN-INVENTORY.md", "docs/archive/AWS-DOMAIN-INVENTORY-2026-08.md")
     write("docs/DOMAINS.md", "# Domains (current)\n\nSuperset of the August inventory, kept current.\n\n| domain | registrar | hosted zone | used by |\n|---|---|---|---|\n| copperline.example | Route 53 | Z01 | marketing site |\n| mise.example | Route 53 | Z02 | mise |\n" + "".join(DOMAIN_ROWS) + "| folio.example | Cloudflare | - | personal site |\n")
 main_commit("docs: archive the August domain inventory, add docs/DOMAINS.md (#64)", archive_domains)
