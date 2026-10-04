@@ -513,9 +513,9 @@ def _set_aside(run_dir: Path, outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     budget_pauses = 0
     for p in _load_jsonl(run_dir / "pauses.jsonl"):
         reason = p.get("reason", "usage_limit")
-        if reason == "budget":
-            # A budget pause happens between cells: nothing is redone or set aside.
-            budget_pauses += 1
+        if reason in ("budget", "cli_version"):
+            # Budget and CLI-version stops happen between cells: nothing is redone.
+            budget_pauses += reason == "budget"
             continue
         by_policy[p["policy"]][reason] += 1
     for o in _load_jsonl(run_dir / "outcomes.poisoned.jsonl"):

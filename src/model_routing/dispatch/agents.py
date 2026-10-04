@@ -98,6 +98,7 @@ class ClaudeAgentProvider:
         max_budget_usd: float,
         advisor: str | None = None,
         extra_bash: tuple[str, ...] = (),
+        request_log: bool = False,
     ) -> list[str]:
         args = [
             self.binary,
@@ -125,6 +126,12 @@ class ClaudeAgentProvider:
             # session may consult; its tokens are reported as a separate
             # ``modelUsage`` entry and priced by the runner.
             args += ["--advisor", advisor]
+        if request_log:
+            # Pass-through PreToolUse hook that logs each advisor request (exp07).
+            # --settings still applies under --setting-sources "".
+            from model_routing.dispatch.advisor_log import hook_settings
+
+            args += ["--settings", json.dumps(hook_settings())]
         if resume_session:
             args += ["--resume", resume_session]
             if fork:
@@ -161,6 +168,7 @@ class ClaudeAgentProvider:
         timeout_s: int = 1200,
         advisor: str | None = None,
         extra_bash: tuple[str, ...] = (),
+        request_log: bool = False,
     ) -> AgentResult:
         args = self.build_args(
             model,
@@ -174,6 +182,7 @@ class ClaudeAgentProvider:
             max_budget_usd=max_budget_usd,
             advisor=advisor,
             extra_bash=extra_bash,
+            request_log=request_log,
         )
         t0 = time.monotonic()
         try:
@@ -369,8 +378,15 @@ def parse_claude_stream(stdout: str, wall_ms: int, stderr: str = "") -> AgentRes
             "usage_limit_reset_at": reset,
             "advisor_calls": advisor_calls,
             "other_model_usage": other_usage or None,
+            "advisor_requests": _stream_requests(stdout) if advisor_calls else None,
         },
     )
+
+
+def _stream_requests(stdout: str) -> list[dict[str, Any]]:
+    from model_routing.dispatch.advisor_log import requests_from_stream
+
+    return requests_from_stream(stdout)
 
 
 def _split_model_usage(
@@ -959,8 +975,9 @@ class FakeAgentProvider:
         timeout_s: int = 1200,
         advisor: str | None = None,
         extra_bash: tuple[str, ...] = (),
+        request_log: bool = False,
     ) -> AgentResult:
-        del max_budget_usd, timeout_s, extra_bash  # no real spend, clock or shell
+        del max_budget_usd, timeout_s, extra_bash, request_log  # no spend, clock or shell
         tier = _tier_rank(model)
         mult = _TIER_TOKEN_MULT[tier]
         prompt_tokens = max(1, len(prompt) // 4)

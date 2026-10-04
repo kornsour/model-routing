@@ -1,0 +1,64 @@
+# exp07 gate 4 PILOT (excluded from analysis): request logging and the label
+# regexes on real sessions, 5 tasks (easy, medium, hard mix) x 1 trial, both advisor arms.
+
+[experiment]
+name = "exp07_pilot"
+kind = "dispatch"
+tasks = "tasks/exp06/tasks.jsonl"
+extra_tasks = ["tasks/exp06/tasks_ext.jsonl"]
+# exp06 protocol label "unsolved" (neither model above 1/3), findings 2026-10-02.
+task_ids = ["tb-semver-01", "tb-glob-04", "or-retries-02", "hb-incidents-11", "ha-runner-class-01"]
+exclude_task_ids = ["ha-archive-birchwood-05", "ha-verify-suite-16", "hc-history-csv-05"]
+trials = 1
+order = "randomized"
+seed = 20261006
+max_turns = 40
+per_task_max_turns = true
+hypothesis = "E1: the evidence-gated advisor note lowers cost per completed task against exp06's note on easy tasks, with completion non-inferior within 5 points."
+primary = { treatment = "ladder_evidence", control = "ladder_noforce" }
+margin_pp = 5
+max_budget_per_session_usd = 5.0
+parent = "sonnet"
+menu = ["sonnet", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "claude-sonnet-5-5"
+
+[candidates.sonnet_adv]
+provider = "claude_cli"
+model = "claude-sonnet-5-5"
+advisor = "claude-opus-5-5"
+request_log = true
+
+[candidates.opus]
+provider = "claude_cli"
+model = "claude-opus-5-5"
+
+# Budget priority if a pause hits (preregistration): ladder_evidence, then
+# ladder_noforce, then static_sonnet.
+
+[[policies]]
+name = "ladder_evidence"
+kind = "spawn_ladder"
+worker = "sonnet_adv"
+frontier = "opus"
+advisor_note = "evidence"
+verifier = "verifier"
+k = 2
+handoff = "clean"
+escalate = true
+
+[[policies]]
+name = "ladder_noforce"
+kind = "spawn_ladder"
+worker = "sonnet_adv"
+frontier = "opus"
+advisor_note = "standard"
+verifier = "verifier"
+k = 2
+handoff = "clean"
+escalate = true

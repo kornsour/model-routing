@@ -70,6 +70,18 @@ dispatch-run: ## Run a dispatch experiment (EXP=..., BUDGET=usd required, SAMPLE
 docs-export: ## Markdown -> Word/PDF into exports/docs/ (DOCS="a.md b.md", default every experiment's paper.md/results.md; FORMATS=docx,pdf)
 	uv run --extra export python -m model_routing.export $(DOCS) $(if $(FORMATS),--formats $(FORMATS))
 
+cli-freeze: ## Turn Claude Code auto-updates OFF before a paid run (one CLI version per run)
+	$(PY) python -m model_routing.cli_freeze freeze
+
+cli-unfreeze: ## Turn Claude Code auto-updates back ON after every run
+	$(PY) python -m model_routing.cli_freeze unfreeze
+
+cli-status: ## Show whether Claude Code auto-updates are frozen, and the CLI version
+	$(PY) python -m model_routing.cli_freeze status
+
+exp07-analysis: ## exp07 E1-E3 and descriptive tables (RUNS="results/exp07_evidence_prompt/<stamp>", OUT=path.md)
+	$(PY) python -m model_routing.dispatch.exp07 --runs $(RUNS) $(if $(OUT),--out $(OUT))
+
 dispatch-budget: ## Raise a running/paused dispatch run's budget without restarting (RUN=results/<exp>/<stamp>, BUDGET=usd)
 	$(PY) model-routing dispatch-budget $(RUN) --usd $(BUDGET)
 

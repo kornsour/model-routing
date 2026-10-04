@@ -1,0 +1,79 @@
+# exp07: an evidence-gated advisor instruction
+# (docs/experiments/exp07-evidence-prompt/preregistration.md).
+#
+#   make cli-freeze                      # one Claude Code version for the whole run
+#   make dispatch-estimate EXP=experiments/exp07-evidence-prompt/exp07.toml
+#   make dispatch-run      EXP=experiments/exp07-evidence-prompt/exp07.toml BUDGET=...
+#   make cli-unfreeze                    # after the run: auto-update back on
+#
+# Pooled exp06 set (both task files) minus the 3 tasks measured unsolved: 52 tasks
+# x 3 trials x 3 arms = 468 cells. The two advisor arms differ only in
+# `advisor_note`; both advisor candidates log every advisor request
+# (`request_log`, model_routing.dispatch.advisor_log). The grading host needs
+# git, Go 1.22+ and Node 22.18+ (exp06 extension task set).
+
+[experiment]
+name = "exp07_evidence_prompt"
+kind = "dispatch"
+tasks = "tasks/exp06/tasks.jsonl"
+extra_tasks = ["tasks/exp06/tasks_ext.jsonl"]
+# exp06 protocol label "unsolved" (neither model above 1/3), findings 2026-10-02.
+exclude_task_ids = ["ha-archive-birchwood-05", "ha-verify-suite-16", "hc-history-csv-05"]
+trials = 3
+order = "randomized"
+seed = 20261004
+max_turns = 40
+per_task_max_turns = true
+hypothesis = "E1: the evidence-gated advisor note lowers cost per completed task against exp06's note on easy tasks, with completion non-inferior within 5 points."
+primary = { treatment = "ladder_evidence", control = "ladder_noforce" }
+margin_pp = 5
+max_budget_per_session_usd = 5.0
+parent = "sonnet"
+menu = ["sonnet", "opus"]
+
+[auth]
+mode = "subscription"
+
+[candidates.sonnet]
+provider = "claude_cli"
+model = "claude-sonnet-5-5"
+
+[candidates.sonnet_adv]
+provider = "claude_cli"
+model = "claude-sonnet-5-5"
+advisor = "claude-opus-5-5"
+request_log = true
+
+[candidates.opus]
+provider = "claude_cli"
+model = "claude-opus-5-5"
+
+# Budget priority if a pause hits (preregistration): ladder_evidence, then
+# ladder_noforce, then static_sonnet.
+
+[[policies]]
+name = "ladder_evidence"
+kind = "spawn_ladder"
+worker = "sonnet_adv"
+frontier = "opus"
+advisor_note = "evidence"
+verifier = "verifier"
+k = 2
+handoff = "clean"
+escalate = true
+
+[[policies]]
+name = "ladder_noforce"
+kind = "spawn_ladder"
+worker = "sonnet_adv"
+frontier = "opus"
+advisor_note = "standard"
+verifier = "verifier"
+k = 2
+handoff = "clean"
+escalate = true
+
+[[policies]]
+name = "static_sonnet"
+kind = "spawn_static"
+candidate = "sonnet"
