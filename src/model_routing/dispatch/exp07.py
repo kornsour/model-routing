@@ -11,7 +11,7 @@ Implements ``docs/experiments/exp07-evidence-prompt/preregistration.md``:
 * **E1** (primary): on easy tasks, cost per completed task of
   ``ladder_evidence`` over ``ladder_noforce`` has a 97.5% upper bound below
   1.0, and the paired completion difference has a 97.5% lower bound above
-  -5 points. Both parts must hold.
+  -10 points (the draft's -5, changed before registration). Both parts must hold.
 * **E2**: ``ladder_evidence`` over ``static_sonnet`` on easy tasks, upper bound
   below 1.25.
 * **E3**: the share of advisor requests labelled ``evidence_present`` is
@@ -46,7 +46,7 @@ STANDARD = "ladder_noforce"
 STATIC = "static_sonnet"
 ARMS = (EVIDENCE, STANDARD, STATIC)
 TASK_FILES = ("tasks/exp06/tasks.jsonl", "tasks/exp06/tasks_ext.jsonl")
-NONINF_MARGIN_PP = 5.0
+NONINF_MARGIN_PP = 10.0
 E2_BOUND = 1.25
 FEW_EVENTS = 20
 ALPHA = 0.025

@@ -90,7 +90,8 @@ tasks, `ladder_evidence` has a lower cost per completed task than
 parts must hold:
 - **Cost:** the one-sided 97.5% upper bound of the cost ratio is below 1.0.
 - **Completion:** the one-sided 97.5% lower bound of the paired completion
-  difference is above −5 points.
+  difference is above −10 points. (The draft had −5; changed before
+  registration on 2026-10-05, see the planning values.)
 
 Secondary, Holm-adjusted as one family of two:
 
@@ -152,12 +153,14 @@ tasks.
 What follows from them:
 - **E1 cost** is powered: it is supported if the evidence note brings
   `ladder_evidence` to about 0.9× `ladder_noforce` or below.
-- **E1 completion is the weak part.** Both arms complete close to 100% of
-  easy tasks, so one or two failed cells move the lower bound across −5:
-  the projection's lower bound is −5.2. A completion verdict of
-  "inconclusive" is a likely outcome even if the note costs nothing in
-  quality. The −5 margin is unchanged; this is recorded so that the
-  outcome is not a surprise.
+- **E1 completion was the weak part at the draft's −5 margin.** Both arms
+  complete close to 100% of easy tasks, so one or two failed cells move the
+  lower bound across −5: the projection's lower bound is −5.2, and a
+  completion verdict of "inconclusive" was likely even with no loss of
+  quality. **Decision (operator, 2026-10-05, before registration): the
+  margin is −10 points**, the non-inferiority margin exp05 and exp06 used.
+  At the projected interval [−5.2, 0.0] the completion part is then
+  powered; a true drop of 10 points or more still fails it.
 - **E2** is powered if `ladder_evidence` comes in under about 1.15× plain
   Sonnet (half-width about 0.05 to 0.1).
 - **Consultation rates in exp06 (easy, first batch):** `ladder_noforce`
