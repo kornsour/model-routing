@@ -1,7 +1,13 @@
 # Pre-registration: exp07, an evidence-gated advisor instruction
 
-Status: **draft, not yet registered (2026-10-02).** Every run is exploratory
-until the gates in "Before registering" are met. exp07 runs before exp08
+Status: **registered 2026-10-05T15:30Z** (drafted 2026-10-02). The
+`[preregistration]` table in `experiments/exp07-evidence-prompt/exp07.toml`
+freezes the design: task-set hash `9887abc8…` (52 tasks), 3 trials,
+randomized order, primary `ladder_evidence` vs `ladder_noforce`, margin 10
+points, harness commit `573dce5`, Claude Code 2.1.285, and the sha256 of
+`agents.py`, `policies.py`, `advisor_log.py` (evidence rule exp07-v2) and
+`exp07.py` (the analysis). A run that differs in any of these is reported
+as exploratory. exp07 runs before exp08
 (the Jev gate, `../exp08-jev-gate/preregistration.md`); the two are
 separate experiments with separate registrations and budgets.
 
@@ -250,7 +256,7 @@ It cannot claim:
 | 2. Analysis dry run | Done. `model_routing.dispatch.exp07` on a full fake run of `exp07.toml` (468 cells): every table and verdict computes. Fake numbers are meaningless (the fake agent never consults or writes `.verifier` tests). |
 | 3. Planning values | Done (above). |
 | 4. Pilot | **Done, 2026-10-04** (`results/exp07_pilot/20261004-162112`, 10 cells, $5.17; excluded from analysis). Request logging works on real sessions: 5 requests, each with turn, label and a diff (11,000 to 19,000 characters) from the snapshot hook. `ladder_evidence` consulted 0 times in 5 cells, `ladder_noforce` 5 times in 3. It found and fixed two things before registration: (a) the "same error line twice" rule fired on source code read from files (`raise NotImplementedError`), so an error line must now *start* like error output (rule **exp07-v2**; the pilot's 2 false labels become `no_evidence`, its 1 genuine one stays); (b) some advisor consultations were counted more than once (the same block emitted twice), so calls and requests now count distinct block ids, every advisor block is recorded, and the analysis reports advisor input tokens per counted request as a check. (b) also corrected exp06's per-consultation figure (results v1.3). |
-| 5. Estimate, budget, go-ahead | Waiting for the operator. |
+| 5. Estimate, budget, go-ahead | **Done, 2026-10-05.** Generic estimator $97–$580 (mid $231, which assumes handoffs and resumes in every ladder cell); planning-value estimate $160–$180. `--budget-usd 200` (about $217 of the $500 left); a budget hit pauses between cells. Operator go-ahead given. |
 | 6. CLI frozen | Frozen at Claude Code 2.1.285 since 2026-10-04. |
 
 **Task-set note found by gate 2.** One extension fixture failed to build
@@ -298,4 +304,4 @@ Its points taken here:
 
 ## Deviations
 
-None. Not yet registered.
+None.
