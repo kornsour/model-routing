@@ -280,10 +280,18 @@ def cmd_dispatch_calibration(args: argparse.Namespace) -> int:
 
 def cmd_dispatch_preregister(args: argparse.Namespace) -> int:
     from model_routing.dispatch.calibration import preregistration_block
-    from model_routing.dispatch.runner import load_dispatch_config
+    from model_routing.dispatch.runner import _git_sha, _tool_version, load_dispatch_config
 
     cfg = load_dispatch_config(args.config)
-    block = preregistration_block(cfg, n_tasks=args.n_tasks)
+    uses_claude = any(c.provider == "claude_cli" for c in cfg.candidates.values())
+    block = preregistration_block(
+        cfg,
+        n_tasks=args.n_tasks,
+        doc=args.doc,
+        harness_commit=_git_sha(),
+        cli_version=_tool_version("claude_cli") if uses_claude else None,
+        freeze=args.freeze or (),
+    )
     if args.write:
         import tomllib
 
@@ -534,6 +542,13 @@ def main(argv: list[str] | None = None) -> int:
     dp.add_argument("config")
     dp.add_argument("--n-tasks", type=int, help="registered task count (default: all tasks)")
     dp.add_argument("--write", action="store_true", help="append the table to the config file")
+    dp.add_argument("--doc", help="pre-registration doc (default: the one next to the config)")
+    dp.add_argument(
+        "--freeze",
+        action="append",
+        metavar="PATH",
+        help="also freeze this repo-relative file's sha256 (repeatable)",
+    )
     dp.set_defaults(fn=cmd_dispatch_preregister)
 
     hc = sub.add_parser(

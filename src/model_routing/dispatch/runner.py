@@ -1023,6 +1023,14 @@ def _write_meta(
         ],
         "cli_versions": {name: _tool_version(name) for name in ("claude_cli", "codex_cli")},
     }
+    frozen = (cfg.preregistration or {}).get("frozen_files") or {}
+    if frozen and cfg.source is not None:
+        from model_routing.dispatch.calibration import _repo_root, file_sha256
+
+        root = _repo_root(cfg.source.resolve().parent)
+        meta["frozen_files_at_run"] = {
+            p: (file_sha256(root / p) if (root / p).exists() else None) for p in frozen
+        }
     (out_dir / "meta.json").write_text(json.dumps(meta, indent=2, default=str))
 
 

@@ -582,3 +582,59 @@ def test_duplicate_advisor_blocks_count_once():
     assert res.raw["advisor_calls"] == 2
     assert len(res.raw["advisor_blocks"]) == 3
     assert len(advisor_log.requests_from_stream(stdout)) == 2
+
+
+# --------------------------------------------------------------------------- #
+# Registration
+# --------------------------------------------------------------------------- #
+
+
+def test_registration_block_for_a_pooled_config():
+    import tomllib
+
+    from model_routing.dispatch.calibration import file_sha256, preregistration_block
+
+    cfg = load_dispatch_config(ROOT / "experiments/exp07-evidence-prompt/exp07.toml")
+    freeze = ["src/model_routing/dispatch/exp07.py", "src/model_routing/dispatch/advisor_log.py"]
+    block = preregistration_block(
+        cfg, harness_commit="abc123", cli_version="2.1.285", freeze=freeze
+    )
+    reg = tomllib.loads(block)["preregistration"]
+    assert reg["n_tasks"] == 52
+    assert reg["doc"] == "docs/experiments/exp07-evidence-prompt/preregistration.md"
+    assert reg["margin_pp"] == 10
+    assert reg["harness_commit"] == "abc123" and reg["cli_version"] == "2.1.285"
+    assert reg["frozen_files"] == {p: file_sha256(ROOT / p) for p in freeze}
+
+
+def test_report_flags_changed_frozen_files_and_cli():
+    from model_routing.dispatch.report import preregistration_check
+
+    reg = {
+        "taskset_sha256": "t",
+        "trials": 3,
+        "margin_pp": 10,
+        "primary": {"treatment": "a", "control": "b"},
+        "order": "randomized",
+        "n_tasks": 52,
+        "cli_version": "2.1.285 (Claude Code)",
+        "frozen_files": {"x.py": "1", "y.py": "2"},
+    }
+    meta = {
+        "preregistration": reg,
+        "taskset_sha256": "t",
+        "trials": 3,
+        "margin_pp": 10,
+        "primary": {"treatment": "a", "control": "b"},
+        "order": "randomized",
+        "n_tasks": 52,
+        "policies": [{"name": "a"}, {"name": "b"}],
+        "cli_versions": {"claude_cli": "2.1.285 (Claude Code)"},
+        "frozen_files_at_run": {"x.py": "1", "y.py": "2"},
+    }
+    assert preregistration_check(meta)["confirmatory"] is True
+    meta["frozen_files_at_run"] = {"x.py": "1", "y.py": "changed"}
+    meta["cli_versions"] = {"claude_cli": "2.1.290 (Claude Code)"}
+    devs = preregistration_check(meta)["deviations"]
+    assert "frozen file y.py changed after registration" in devs
+    assert any(d.startswith("cli_version") for d in devs)
