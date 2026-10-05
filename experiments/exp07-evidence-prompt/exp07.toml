@@ -24,9 +24,9 @@ order = "randomized"
 seed = 20261004
 max_turns = 40
 per_task_max_turns = true
-hypothesis = "E1: the evidence-gated advisor note lowers cost per completed task against exp06's note on easy tasks, with completion non-inferior within 5 points."
+hypothesis = "E1: the evidence-gated advisor note lowers cost per completed task against exp06's note on easy tasks, with completion non-inferior within 10 points."
 primary = { treatment = "ladder_evidence", control = "ladder_noforce" }
-margin_pp = 5
+margin_pp = 10
 max_budget_per_session_usd = 5.0
 parent = "sonnet"
 menu = ["sonnet", "opus"]

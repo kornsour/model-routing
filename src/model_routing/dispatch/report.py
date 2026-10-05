@@ -490,6 +490,15 @@ def preregistration_check(meta: dict[str, Any]) -> dict[str, Any]:
         deviations.append("n_tasks not registered")
     elif n_run is None or int(n_run) < int(n_reg):
         deviations.append(f"n_tasks: run has {n_run!r}, registered at least {n_reg!r}")
+    frozen = reg.get("frozen_files") or {}
+    at_run = meta.get("frozen_files_at_run") or {}
+    for path, sha in frozen.items():
+        if at_run.get(path) != sha:
+            deviations.append(f"frozen file {path} changed after registration")
+    reg_cli = reg.get("cli_version")
+    run_cli = (meta.get("cli_versions") or {}).get("claude_cli")
+    if reg_cli and run_cli != reg_cli:
+        deviations.append(f"cli_version: run has {run_cli!r}, registered {reg_cli!r}")
     selected = {p.get("name") for p in meta.get("policies", []) if isinstance(p, dict)}
     primary = meta.get("primary") or {}
     for key in ("treatment", "control"):

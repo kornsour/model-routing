@@ -70,6 +70,9 @@ def test_runner_sessions_never_auto_update():
         "# fail 2",
         "Your work was checked and not accepted:\nvisible tests fail",
         "ValueError: bad input\nretrying\nValueError: bad input",
+        "NotImplementedError\nretrying\nNotImplementedError",
+        "error: cannot find module 'x'\nerror: cannot find module 'x'",
+        "panic: runtime error: index out of range\npanic: runtime error: index out of range",
     ],
 )
 def test_evidence_present(tail: str):
@@ -85,6 +88,9 @@ def test_evidence_present(tail: str):
         "I'll read the module first.",
         "ValueError: one\nValueError: two",
         "0 failed",
+        "raise NotImplementedError\nx = 1\nraise NotImplementedError",
+        "    except ValueError:\n        pass\n    except ValueError:",
+        "class PatchError(ValueError):\nclass PatchError(ValueError):",
     ],
 )
 def test_no_evidence(tail: str):
@@ -555,3 +561,80 @@ def test_stream_requests_carry_prior_tool_ids():
 def test_snapshot_never_fails_the_session(tmp_path: Path):
     assert advisor_log.snapshot_main("garbage") == 0
     assert advisor_log.record_snapshot({"cwd": str(tmp_path / "nope")}) is False
+
+
+def test_duplicate_advisor_blocks_count_once():
+    from model_routing.dispatch.agents import parse_claude_stream
+
+    block = {"type": "server_tool_use", "id": "srvtoolu_1", "name": "advisor", "input": {}}
+    events = [
+        {"type": "assistant", "message": {"id": "m1", "content": [block]}},
+        {"type": "assistant", "message": {"id": "m1", "content": [block]}},
+        {
+            "type": "assistant",
+            "message": {"id": "m2", "content": [dict(block, id="srvtoolu_2")]},
+        },
+        {"type": "result", "result": "done", "usage": {}, "num_turns": 3},
+    ]
+    stdout = "\n".join(json.dumps(e) for e in events)
+    res = parse_claude_stream(stdout, 1)
+    assert res.raw is not None
+    assert res.raw["advisor_calls"] == 2
+    assert len(res.raw["advisor_blocks"]) == 3
+    assert len(advisor_log.requests_from_stream(stdout)) == 2
+
+
+# --------------------------------------------------------------------------- #
+# Registration
+# --------------------------------------------------------------------------- #
+
+
+def test_registration_block_for_a_pooled_config():
+    import tomllib
+
+    from model_routing.dispatch.calibration import file_sha256, preregistration_block
+
+    cfg = load_dispatch_config(ROOT / "experiments/exp07-evidence-prompt/exp07.toml")
+    freeze = ["src/model_routing/dispatch/exp07.py", "src/model_routing/dispatch/advisor_log.py"]
+    block = preregistration_block(
+        cfg, harness_commit="abc123", cli_version="2.1.285", freeze=freeze
+    )
+    reg = tomllib.loads(block)["preregistration"]
+    assert reg["n_tasks"] == 52
+    assert reg["doc"] == "docs/experiments/exp07-evidence-prompt/preregistration.md"
+    assert reg["margin_pp"] == 10
+    assert reg["harness_commit"] == "abc123" and reg["cli_version"] == "2.1.285"
+    assert reg["frozen_files"] == {p: file_sha256(ROOT / p) for p in freeze}
+
+
+def test_report_flags_changed_frozen_files_and_cli():
+    from model_routing.dispatch.report import preregistration_check
+
+    reg = {
+        "taskset_sha256": "t",
+        "trials": 3,
+        "margin_pp": 10,
+        "primary": {"treatment": "a", "control": "b"},
+        "order": "randomized",
+        "n_tasks": 52,
+        "cli_version": "2.1.285 (Claude Code)",
+        "frozen_files": {"x.py": "1", "y.py": "2"},
+    }
+    meta = {
+        "preregistration": reg,
+        "taskset_sha256": "t",
+        "trials": 3,
+        "margin_pp": 10,
+        "primary": {"treatment": "a", "control": "b"},
+        "order": "randomized",
+        "n_tasks": 52,
+        "policies": [{"name": "a"}, {"name": "b"}],
+        "cli_versions": {"claude_cli": "2.1.285 (Claude Code)"},
+        "frozen_files_at_run": {"x.py": "1", "y.py": "2"},
+    }
+    assert preregistration_check(meta)["confirmatory"] is True
+    meta["frozen_files_at_run"] = {"x.py": "1", "y.py": "changed"}
+    meta["cli_versions"] = {"claude_cli": "2.1.290 (Claude Code)"}
+    devs = preregistration_check(meta)["deviations"]
+    assert "frozen file y.py changed after registration" in devs
+    assert any(d.startswith("cli_version") for d in devs)

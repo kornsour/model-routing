@@ -172,29 +172,84 @@ def render_calibration(table: dict[str, dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+DEFAULT_PREREG_DOC = "docs/experiments/exp05-dispatch/preregistration.md"
+
+
+def _repo_root(start: Path) -> Path:
+    for parent in [start, *start.parents]:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    return Path.cwd()
+
+
+def _default_doc(cfg: DispatchConfig) -> str:
+    """``docs/experiments/<dir>/preregistration.md`` for a config in
+    ``experiments/<dir>/``, when that file exists; exp05's doc otherwise."""
+    if cfg.source is not None:
+        src = cfg.source.resolve()
+        root = _repo_root(src.parent)
+        candidate = root / "docs" / "experiments" / src.parent.name / "preregistration.md"
+        if candidate.exists():
+            return str(candidate.relative_to(root))
+    return DEFAULT_PREREG_DOC
+
+
+def _selected_task_count(cfg: DispatchConfig) -> int:
+    """The tasks a run of this config actually selects (pooled files, exclusions)."""
+    try:
+        from model_routing.dispatch.runner import _select_tasks
+        from model_routing.dispatch.tasks import load_agent_tasks
+
+        return len(_select_tasks(cfg, load_agent_tasks, None))
+    except Exception:
+        return sum(1 for line in cfg.tasks.open() if line.strip() and not line.startswith("#"))
+
+
+def file_sha256(path: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def preregistration_block(
     cfg: DispatchConfig,
     *,
     n_tasks: int | None = None,
-    doc: str = "docs/experiments/exp05-dispatch/preregistration.md",
+    doc: str | None = None,
     now: datetime | None = None,
+    harness_commit: str | None = None,
+    cli_version: str | None = None,
+    freeze: list[str] | tuple[str, ...] = (),
 ) -> str:
     """The ``[preregistration]`` TOML table freezing this config's design against
     the current task set.  Paste it into the experiment TOML *before* the
-    confirmatory run; the report then checks the run against it."""
+    confirmatory run; the report then checks the run against it.  ``freeze``
+    lists repo-relative files (analysis module, worker prompts, rule code) whose
+    sha256 is frozen too; a run with any of them changed is reported as a
+    deviation, as is a different ``cli_version``."""
     stamp = (now or datetime.now(UTC)).replace(microsecond=0).isoformat()
     if n_tasks is None:
-        n_tasks = sum(1 for line in cfg.tasks.open() if line.strip() and not line.startswith("#"))
+        n_tasks = _selected_task_count(cfg)
+    doc = doc or _default_doc(cfg)
     treatment = cfg.primary.get("treatment", "C1")
     control = cfg.primary.get("control", "B")
-    return (
-        "[preregistration]\n"
-        f'registered_at = "{stamp}"\n'
-        f'doc = "{doc}"\n'
-        f'taskset_sha256 = "{taskset_sha256(cfg.tasks)}"\n'
-        f"n_tasks = {n_tasks}\n"
-        f"trials = {cfg.trials}\n"
-        f"margin_pp = {cfg.margin_pp:g}\n"
-        f'order = "{cfg.order}"\n'
-        f'primary = {{ treatment = "{treatment}", control = "{control}" }}\n'
-    )
+    lines = [
+        "[preregistration]",
+        f'registered_at = "{stamp}"',
+        f'doc = "{doc}"',
+        f'taskset_sha256 = "{taskset_sha256(cfg.tasks)}"',
+        f"n_tasks = {n_tasks}",
+        f"trials = {cfg.trials}",
+        f"margin_pp = {cfg.margin_pp:g}",
+        f'order = "{cfg.order}"',
+        f'primary = {{ treatment = "{treatment}", control = "{control}" }}',
+    ]
+    if harness_commit:
+        lines.append(f'harness_commit = "{harness_commit}"')
+    if cli_version:
+        lines.append(f'cli_version = "{cli_version}"')
+    if freeze:
+        root = _repo_root((cfg.source or Path.cwd()).resolve().parent)
+        pairs = ", ".join(f'"{p}" = "{file_sha256(root / p)}"' for p in freeze)
+        lines.append(f"frozen_files = {{ {pairs} }}")
+    return "\n".join(lines) + "\n"
