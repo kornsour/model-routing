@@ -1,6 +1,6 @@
 # Pre-registration: exp07, an evidence-gated advisor instruction
 
-Status: **registered 2026-10-05T15:30Z** (drafted 2026-10-02). The
+Status: **registered 2026-10-05T15:30Z** (drafted 2026-10-02); **run and closed 2026-10-06**, results in [`results.md`](./results.md). The
 `[preregistration]` table in `experiments/exp07-evidence-prompt/exp07.toml`
 freezes the design: task-set hash `9887abc8…` (52 tasks), 3 trials,
 randomized order, primary `ladder_evidence` vs `ladder_noforce`, margin 10
