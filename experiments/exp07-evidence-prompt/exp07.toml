@@ -77,3 +77,16 @@ escalate = true
 name = "static_sonnet"
 kind = "spawn_static"
 candidate = "sonnet"
+
+[preregistration]
+registered_at = "2026-10-05T15:30:05+00:00"
+doc = "docs/experiments/exp07-evidence-prompt/preregistration.md"
+taskset_sha256 = "9887abc875759aa78ebae855d81b883865f9a4d444b8553862b64ba968685f40"
+n_tasks = 52
+trials = 3
+margin_pp = 10
+order = "randomized"
+primary = { treatment = "ladder_evidence", control = "ladder_noforce" }
+harness_commit = "573dce58f071396199104e8d7dcc9580d6e5309b"
+cli_version = "2.1.285 (Claude Code)"
+frozen_files = { "src/model_routing/dispatch/agents.py" = "5a77b6452ff56a07acaa09aa252e07fe8767f36b5e351a05bd208e2734214523", "src/model_routing/dispatch/policies.py" = "06f22653921cebc753a62ddc03b4eaff4c28fd64d8e2f58fd2ab0990c4b70a24", "src/model_routing/dispatch/advisor_log.py" = "f199a67681b81247c8db428734bf9ff0a1046c4fd03a50b97f0aea73627b3c44", "src/model_routing/dispatch/exp07.py" = "7c2e87bffdf368d4f63cec1c3c10a60f66ec19ca412551d9498b20c2c01d52d5" }
